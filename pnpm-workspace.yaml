@@ -1,8 +1,10 @@
 autoInstallPeers: true
 allowBuilds:
   '@parcel/watcher': false
+  '@prisma/engines': true
   '@swc/core': true
   less: false
   nx: true
+  prisma: false
   sharp: false
   unrs-resolver: true
