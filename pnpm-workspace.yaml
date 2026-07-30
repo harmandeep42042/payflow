@@ -1,3 +1,8 @@
 autoInstallPeers: true
 allowBuilds:
+  '@parcel/watcher': false
+  '@swc/core': true
+  less: false
   nx: true
+  sharp: false
+  unrs-resolver: true
