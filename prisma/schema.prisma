@@ -8,16 +8,33 @@ datasource db {
 }
 
 model User {
-  id        String     @id @default(uuid())
-  email     String     @unique
-  phone     String?    @unique
-  firstName String
-  lastName  String?
-  status    UserStatus @default(ACTIVE)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id           String     @id @default(uuid())
+  email        String     @unique
+  phone        String?    @unique
+  firstName    String
+  lastName     String?
+  passwordHash String?
+  role         UserRole   @default(USER)
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
-  wallets Wallet[]
+  wallets       Wallet[]
+  refreshTokens RefreshToken[]
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Wallet {
@@ -25,13 +42,150 @@ model Wallet {
   userId    String
   currency  String       @default("INR")
   balance   Decimal      @default(0) @db.Decimal(18, 2)
+  version   Int          @default(0)
   status    WalletStatus @default(ACTIVE)
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  user              User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  ledgerAccount     LedgerAccount?
+  outgoingTransfers Transfer[]     @relation("SourceWallet")
+  incomingTransfers Transfer[]     @relation("DestinationWallet")
+  deposits          Deposit[]
+  withdrawals       Withdrawal[]
 
+  @@unique([userId, currency])
   @@index([userId])
+  @@index([status])
+}
+
+model LedgerAccount {
+  id        String              @id @default(uuid())
+  walletId  String?             @unique
+  code      String              @unique
+  name      String
+  type      LedgerAccountType
+  currency  String              @default("INR")
+  status    LedgerAccountStatus @default(ACTIVE)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  wallet  Wallet?       @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  entries LedgerEntry[]
+
+  @@index([type])
+  @@index([currency])
+  @@index([status])
+}
+
+model Transfer {
+  id                  String         @id @default(uuid())
+  idempotencyKey      String         @unique
+  sourceWalletId      String
+  destinationWalletId String
+  amount              Decimal        @db.Decimal(18, 2)
+  currency            String         @default("INR")
+  status              TransferStatus @default(PENDING)
+  description         String?
+  failureReason       String?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  completedAt         DateTime?
+
+  sourceWallet      Wallet        @relation("SourceWallet", fields: [sourceWalletId], references: [id], onDelete: Restrict)
+  destinationWallet Wallet        @relation("DestinationWallet", fields: [destinationWalletId], references: [id], onDelete: Restrict)
+  ledgerEntries     LedgerEntry[]
+
+  @@index([sourceWalletId])
+  @@index([destinationWalletId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Deposit {
+  id             String        @id @default(uuid())
+  idempotencyKey String        @unique
+  walletId       String
+  amount         Decimal       @db.Decimal(18, 2)
+  currency       String        @default("INR")
+  reference      String
+  status         DepositStatus @default(PENDING)
+  failureReason  String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  completedAt    DateTime?
+
+  wallet        Wallet        @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  ledgerEntries LedgerEntry[]
+
+  @@index([walletId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Withdrawal {
+  id             String           @id @default(uuid())
+  idempotencyKey String           @unique
+  walletId       String
+  amount         Decimal          @db.Decimal(18, 2)
+  currency       String           @default("INR")
+  reference      String
+  status         WithdrawalStatus @default(PENDING)
+  failureReason  String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  completedAt    DateTime?
+
+  wallet        Wallet        @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  ledgerEntries LedgerEntry[]
+
+  @@index([walletId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model LedgerEntry {
+  id              String          @id @default(uuid())
+  transferId      String?
+  depositId       String?
+  withdrawalId    String?
+  ledgerAccountId String
+  entryType       LedgerEntryType
+  amount          Decimal         @db.Decimal(18, 2)
+  currency        String          @default("INR")
+  createdAt       DateTime        @default(now())
+
+  transfer      Transfer?     @relation(fields: [transferId], references: [id], onDelete: Restrict)
+  deposit       Deposit?      @relation(fields: [depositId], references: [id], onDelete: Restrict)
+  withdrawal    Withdrawal?   @relation(fields: [withdrawalId], references: [id], onDelete: Restrict)
+  ledgerAccount LedgerAccount @relation(fields: [ledgerAccountId], references: [id], onDelete: Restrict)
+
+  @@index([transferId])
+  @@index([depositId])
+  @@index([withdrawalId])
+  @@index([ledgerAccountId, createdAt])
+  @@index([entryType])
+}
+
+model OutboxEvent {
+  id            String       @id @default(uuid())
+  aggregateType String
+  aggregateId   String
+  eventType     String
+  payload       Json
+  status        OutboxStatus @default(PENDING)
+  attempts      Int          @default(0)
+  createdAt     DateTime     @default(now())
+  publishedAt   DateTime?
+  lastError     String?
+
+  @@index([status, createdAt])
+  @@index([aggregateType, aggregateId])
+}
+
+enum UserRole {
+  USER
+  ADMIN
 }
 
 enum UserStatus {
@@ -44,4 +198,50 @@ enum WalletStatus {
   ACTIVE
   FROZEN
   CLOSED
+}
+
+enum LedgerAccountType {
+  CUSTOMER
+  SYSTEM
+}
+
+enum LedgerAccountStatus {
+  ACTIVE
+  FROZEN
+  CLOSED
+}
+
+enum LedgerEntryType {
+  DEBIT
+  CREDIT
+}
+
+enum TransferStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REVERSED
+}
+
+enum DepositStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REVERSED
+}
+
+enum WithdrawalStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REVERSED
+}
+
+enum OutboxStatus {
+  PENDING
+  PUBLISHED
+  FAILED
 }

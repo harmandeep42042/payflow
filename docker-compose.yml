@@ -1,68 +1,37 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16
     container_name: payflow_postgres
     restart: unless-stopped
-
     environment:
       POSTGRES_USER: payflow
       POSTGRES_PASSWORD: payflow_password
       POSTGRES_DB: payflow_db
-
     ports:
       - "5433:5432"
-
     volumes:
-      - payflow_postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
 
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U payflow -d payflow_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: payflow_rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: payflow
+      RABBITMQ_DEFAULT_PASS: payflow_password
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
 
   redis:
     image: redis:7-alpine
     container_name: payflow_redis
     restart: unless-stopped
-
     ports:
       - "6379:6379"
 
-    volumes:
-      - payflow_redis_data:/data
-
-    command: redis-server --appendonly yes
-
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  rabbitmq:
-    image: rabbitmq:4-management-alpine
-    container_name: payflow_rabbitmq
-    restart: unless-stopped
-
-    environment:
-      RABBITMQ_DEFAULT_USER: payflow
-      RABBITMQ_DEFAULT_PASS: payflow_password
-
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-
-    volumes:
-      - payflow_rabbitmq_data:/var/lib/rabbitmq
-
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
 volumes:
-  payflow_postgres_data:
-  payflow_redis_data:
-  payflow_rabbitmq_data:
+  postgres_data:
+  rabbitmq_data:

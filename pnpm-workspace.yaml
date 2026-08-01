@@ -2,7 +2,10 @@ autoInstallPeers: true
 allowBuilds:
   '@parcel/watcher': false
   '@prisma/engines': true
+  '@scarf/scarf': true
   '@swc/core': true
+  bcrypt: true
+  esbuild: true
   less: false
   nx: true
   prisma: false
