@@ -1,46 +1,50 @@
+import { ApiProperty } from '@nestjs/swagger';
 import {
   IsNotEmpty,
-  IsOptional,
   IsString,
   IsUUID,
   Length,
   Matches,
-  MaxLength,
 } from 'class-validator';
 
 export class TransferWalletDto {
+  @ApiProperty({
+    example: '11111111-1111-1111-1111-111111111111',
+  })
   @IsUUID()
-  @IsNotEmpty()
   sourceWalletId!: string;
 
+  @ApiProperty({
+    example: '22222222-2222-2222-2222-222222222222',
+  })
   @IsUUID()
-  @IsNotEmpty()
   destinationWalletId!: string;
 
+  @ApiProperty({
+    example: '500.00',
+  })
   @IsString()
-  @IsNotEmpty()
-  @Length(3, 3)
-  @Matches(/^[A-Z]{3}$/, {
-    message: 'currency must be a 3-letter uppercase code',
-  })
-  currency!: string;
-
-  @IsString()
-  @IsNotEmpty()
-  @Matches(/^[0-9]+(?:\.[0-9]{1,2})?$/, {
-    message: 'amount must be a valid positive decimal string',
-  })
-  @Matches(/^(?!0+(?:\.0+)?$).+$/, {
-    message: 'amount must be greater than 0',
-  })
+  @Matches(/^\d+(\.\d{1,2})?$/)
   amount!: string;
 
-  @IsUUID()
+  @ApiProperty({
+    example: 'INR',
+  })
+  @IsString()
+  @Length(3, 3)
+  currency!: string;
+
+  @ApiProperty({
+    example: 'Wallet Transfer',
+  })
+  @IsString()
+  @IsNotEmpty()
+  description!: string;
+
+  @ApiProperty({
+    example: 'transfer-001',
+  })
+  @IsString()
   @IsNotEmpty()
   idempotencyKey!: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(250)
-  description?: string;
 }
