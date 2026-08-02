@@ -6,6 +6,7 @@ import { PrismaModule } from '../../../../libs/database/src';
 
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { RedisRateLimitGuard } from './guards/redis-rate-limit.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
 
@@ -38,6 +39,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     AuthService,
     JwtStrategy,
     RolesGuard,
+    RedisRateLimitGuard,
   ],
 
   exports: [
@@ -45,6 +47,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     JwtModule,
     PassportModule,
     RolesGuard,
+    RedisRateLimitGuard,
   ],
 })
 export class AuthModule {}

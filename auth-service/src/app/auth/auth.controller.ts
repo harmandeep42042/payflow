@@ -7,7 +7,6 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -17,11 +16,13 @@ import {
 
 import { AuthService } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
+import { RateLimit } from './decorators/rate-limit.decorator';
 import { Roles } from './decorators/roles.decorator';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { RedisRateLimitGuard } from './guards/redis-rate-limit.guard';
 import { RolesGuard } from './guards/roles.guard';
 
 type AuthenticatedUser = {
@@ -39,7 +40,7 @@ export class AuthController {
 
   @Get('health')
   @ApiOperation({
-    summary: 'Health Check',
+    summary: 'Check Auth Service health',
   })
   health() {
     return this.authService.health();
@@ -47,12 +48,24 @@ export class AuthController {
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
+  @UseGuards(RedisRateLimitGuard)
+  @RateLimit({
+    prefix: 'register',
+    limit: 3,
+    windowSeconds: 300,
+  })
   @ApiOperation({
-    summary: 'Register User',
+    summary: 'Register a new user',
   })
   @ApiResponse({
     status: 201,
-    description: 'User registered successfully',
+    description:
+      'User registered successfully',
+  })
+  @ApiResponse({
+    status: 429,
+    description:
+      'Registration rate limit exceeded',
   })
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
@@ -60,12 +73,23 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(RedisRateLimitGuard)
+  @RateLimit({
+    prefix: 'login',
+    limit: 5,
+    windowSeconds: 300,
+  })
   @ApiOperation({
-    summary: 'Login User',
+    summary: 'Login using email and password',
   })
   @ApiResponse({
     status: 200,
     description: 'Login successful',
+  })
+  @ApiResponse({
+    status: 429,
+    description:
+      'Login rate limit exceeded',
   })
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
@@ -73,8 +97,14 @@ export class AuthController {
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(RedisRateLimitGuard)
+  @RateLimit({
+    prefix: 'refresh',
+    limit: 10,
+    windowSeconds: 60,
+  })
   @ApiOperation({
-    summary: 'Refresh JWT Token',
+    summary: 'Rotate refresh token',
   })
   refresh(@Body() dto: RefreshTokenDto) {
     return this.authService.refresh(dto);
@@ -82,8 +112,14 @@ export class AuthController {
 
   @Post('logout')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(RedisRateLimitGuard)
+  @RateLimit({
+    prefix: 'logout',
+    limit: 10,
+    windowSeconds: 60,
+  })
   @ApiOperation({
-    summary: 'Logout User',
+    summary: 'Revoke refresh token',
   })
   logout(@Body() dto: RefreshTokenDto) {
     return this.authService.logout(dto);
@@ -93,13 +129,14 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
   @ApiOperation({
-    summary: 'Current User Profile',
+    summary: 'Get current user profile',
   })
   getProfile(
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return {
-      message: 'Protected profile accessed successfully',
+      message:
+        'Protected profile accessed successfully',
       user,
     };
   }
@@ -109,13 +146,14 @@ export class AuthController {
   @Roles('ADMIN')
   @ApiBearerAuth('access-token')
   @ApiOperation({
-    summary: 'Admin Dashboard',
+    summary: 'Access ADMIN-only route',
   })
   getAdminDashboard(
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return {
-      message: 'Admin route accessed successfully',
+      message:
+        'Admin route accessed successfully',
       user,
     };
   }
@@ -125,13 +163,15 @@ export class AuthController {
   @Roles('USER', 'ADMIN')
   @ApiBearerAuth('access-token')
   @ApiOperation({
-    summary: 'User Dashboard',
+    summary:
+      'Access USER or ADMIN route',
   })
   getUserDashboard(
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return {
-      message: 'User route accessed successfully',
+      message:
+        'User route accessed successfully',
       user,
     };
   }
