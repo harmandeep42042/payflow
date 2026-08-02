@@ -12,6 +12,7 @@ import {
 } from 'crypto';
 
 import { PrismaService } from '../../../../libs/database/src';
+import { EmailService } from '../email/email.service';
 import { RedisService } from '../redis/redis.service';
 import { RequestOtpDto } from './dto/request-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
@@ -25,6 +26,7 @@ export class OtpService {
     private readonly redisService: RedisService,
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly emailService: EmailService,
   ) {}
 
   async requestOtp(dto: RequestOtpDto) {
@@ -51,7 +53,8 @@ export class OtpService {
     const otp = this.generateOtp();
 
     const otpKey = this.getOtpKey(email);
-    const attemptsKey = this.getAttemptsKey(email);
+    const attemptsKey =
+      this.getAttemptsKey(email);
 
     await this.redisService.set(
       otpKey,
@@ -59,13 +62,34 @@ export class OtpService {
       this.otpExpirySeconds,
     );
 
-    await this.redisService.delete(attemptsKey);
+    await this.redisService.delete(
+      attemptsKey,
+    );
+
+    try {
+      await this.emailService.sendOtpEmail({
+        email: user.email,
+        firstName: user.firstName,
+        otp,
+        expiresInMinutes: 5,
+      });
+    } catch (error) {
+      await Promise.all([
+        this.redisService.delete(otpKey),
+        this.redisService.delete(
+          attemptsKey,
+        ),
+      ]);
+
+      throw error;
+    }
 
     return {
-      message: 'OTP generated successfully',
+      message:
+        'OTP sent successfully to your email',
       email,
-      expiresInSeconds: this.otpExpirySeconds,
-      developmentOtp: otp,
+      expiresInSeconds:
+        this.otpExpirySeconds,
     };
   }
 
@@ -73,7 +97,8 @@ export class OtpService {
     const email = this.normalizeEmail(dto.email);
 
     const otpKey = this.getOtpKey(email);
-    const attemptsKey = this.getAttemptsKey(email);
+    const attemptsKey =
+      this.getAttemptsKey(email);
 
     const storedOtpHash =
       await this.redisService.get(otpKey);
@@ -99,7 +124,9 @@ export class OtpService {
     if (attempts > this.maximumVerifyAttempts) {
       await Promise.all([
         this.redisService.delete(otpKey),
-        this.redisService.delete(attemptsKey),
+        this.redisService.delete(
+          attemptsKey,
+        ),
       ]);
 
       throw new HttpException(
@@ -119,12 +146,11 @@ export class OtpService {
       );
     }
 
-    const user =
-      await this.prisma.user.findUnique({
-        where: {
-          email,
-        },
-      });
+    const user = await this.prisma.user.findUnique({
+      where: {
+        email,
+      },
+    });
 
     if (!user) {
       throw new NotFoundException(
@@ -140,7 +166,9 @@ export class OtpService {
 
     await Promise.all([
       this.redisService.delete(otpKey),
-      this.redisService.delete(attemptsKey),
+      this.redisService.delete(
+        attemptsKey,
+      ),
     ]);
 
     const tokens = await this.generateTokens({
@@ -155,7 +183,8 @@ export class OtpService {
         tokenHash: this.hashValue(
           tokens.refreshToken,
         ),
-        expiresAt: this.getRefreshTokenExpiry(),
+        expiresAt:
+          this.getRefreshTokenExpiry(),
       },
     });
 

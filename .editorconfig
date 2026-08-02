@@ -11,3 +11,10 @@ trim_trailing_whitespace = true
 [*.md]
 max_line_length = off
 trim_trailing_whitespace = false
+MAIL_HOST="smtp.gmail.com"
+MAIL_PORT=587
+MAIL_SECURE="false"
+MAIL_USER="your-email@gmail.com"
+MAIL_PASSWORD="your-google-app-password"
+MAIL_FROM_NAME="Payflow"
+MAIL_FROM_EMAIL="your-email@gmail.com"
