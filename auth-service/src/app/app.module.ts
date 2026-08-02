@@ -6,6 +6,7 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { EmailModule } from './email/email.module';
 import { OtpModule } from './otp/otp.module';
+import { PasswordResetModule } from './password-reset/password-reset.module';
 import { RedisModule } from './redis/redis.module';
 
 @Module({
@@ -18,6 +19,7 @@ import { RedisModule } from './redis/redis.module';
     EmailModule,
     AuthModule,
     OtpModule,
+    PasswordResetModule,
   ],
 
   controllers: [AppController],

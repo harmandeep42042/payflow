@@ -9,6 +9,10 @@ import { buildOtpEmailTemplate } from './templates/otp.template';
 import { buildResetPasswordEmailTemplate } from './templates/reset-password.template';
 import { buildWelcomeEmailTemplate } from './templates/welcome.template';
 
+export type EmailDeliveryResult = {
+  delivery: 'email' | 'console';
+};
+
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
@@ -22,7 +26,21 @@ export class EmailService {
     firstName: string;
     otp: string;
     expiresInMinutes: number;
-  }): Promise<void> {
+  }): Promise<EmailDeliveryResult> {
+    if (!this.isMailEnabled()) {
+      this.logger.warn(
+        [
+          'MAIL_ENABLED=false',
+          `Development OTP for ${input.email}: ${input.otp}`,
+          `Expires in ${input.expiresInMinutes} minutes`,
+        ].join(' | '),
+      );
+
+      return {
+        delivery: 'console',
+      };
+    }
+
     try {
       await this.mailerService.sendMail({
         to: input.email,
@@ -37,6 +55,10 @@ export class EmailService {
       this.logger.log(
         `OTP email sent to ${input.email}`,
       );
+
+      return {
+        delivery: 'email',
+      };
     } catch (error) {
       this.logger.error(
         `Failed to send OTP email to ${input.email}`,
@@ -54,7 +76,17 @@ export class EmailService {
   async sendWelcomeEmail(input: {
     email: string;
     firstName: string;
-  }): Promise<void> {
+  }): Promise<EmailDeliveryResult> {
+    if (!this.isMailEnabled()) {
+      this.logger.warn(
+        `Development welcome email for ${input.email}`,
+      );
+
+      return {
+        delivery: 'console',
+      };
+    }
+
     try {
       await this.mailerService.sendMail({
         to: input.email,
@@ -67,12 +99,20 @@ export class EmailService {
       this.logger.log(
         `Welcome email sent to ${input.email}`,
       );
+
+      return {
+        delivery: 'email',
+      };
     } catch (error) {
       this.logger.error(
         `Failed to send welcome email to ${input.email}`,
         error instanceof Error
           ? error.stack
           : String(error),
+      );
+
+      throw new ServiceUnavailableException(
+        'Unable to send welcome email',
       );
     }
   }
@@ -81,7 +121,21 @@ export class EmailService {
     email: string;
     firstName: string;
     resetToken: string;
-  }): Promise<void> {
+  }): Promise<EmailDeliveryResult> {
+    if (!this.isMailEnabled()) {
+      this.logger.warn(
+        [
+          'MAIL_ENABLED=false',
+          `Development password reset token for ${input.email}`,
+          input.resetToken,
+        ].join(' | '),
+      );
+
+      return {
+        delivery: 'console',
+      };
+    }
+
     try {
       await this.mailerService.sendMail({
         to: input.email,
@@ -95,6 +149,10 @@ export class EmailService {
       this.logger.log(
         `Password reset email sent to ${input.email}`,
       );
+
+      return {
+        delivery: 'email',
+      };
     } catch (error) {
       this.logger.error(
         `Failed to send password reset email to ${input.email}`,
@@ -107,5 +165,13 @@ export class EmailService {
         'Unable to send password reset email',
       );
     }
+  }
+
+  private isMailEnabled(): boolean {
+    return (
+      String(
+        process.env.MAIL_ENABLED ?? 'false',
+      ).toLowerCase() === 'true'
+    );
   }
 }
