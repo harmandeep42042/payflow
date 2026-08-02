@@ -5,8 +5,10 @@ import {
   Param,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import {
+  ApiBearerAuth,
   ApiOperation,
   ApiParam,
   ApiQuery,
@@ -14,6 +16,9 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 
+import {
+  GatewayJwtAuthGuard,
+} from '../gateway-auth/guards/gateway-jwt-auth.guard';
 import { WalletProxyService } from './wallet-proxy.service';
 
 type TransactionHistoryQuery = {
@@ -23,6 +28,8 @@ type TransactionHistoryQuery = {
 };
 
 @ApiTags('Wallets')
+@ApiBearerAuth('access-token')
+@UseGuards(GatewayJwtAuthGuard)
 @Controller('wallets')
 export class WalletProxyController {
   constructor(
@@ -39,6 +46,11 @@ export class WalletProxyController {
     name: 'userId',
     description: 'User UUID',
   })
+  @ApiResponse({
+    status: 401,
+    description:
+      'Access token missing or invalid',
+  })
   getUserWallets(
     @Param('userId') userId: string,
   ) {
@@ -49,7 +61,7 @@ export class WalletProxyController {
   @Get(':walletId/transactions')
   @ApiOperation({
     summary:
-      'Get wallet transaction history through API Gateway',
+      'Get protected wallet transaction history',
   })
   @ApiParam({
     name: 'walletId',
@@ -81,19 +93,17 @@ export class WalletProxyController {
   @ApiResponse({
     status: 200,
     description:
-      'Transaction history returned successfully',
+      'Transaction history returned',
   })
   @ApiResponse({
-    status: 404,
-    description: 'Wallet not found',
-  })
-  @ApiResponse({
-    status: 503,
+    status: 401,
     description:
-      'Wallet service is unavailable',
+      'Access token missing or invalid',
   })
   getTransactionHistory(
-    @Param('walletId') walletId: string,
+    @Param('walletId')
+    walletId: string,
+
     @Query()
     query: TransactionHistoryQuery,
   ) {
@@ -107,14 +117,15 @@ export class WalletProxyController {
   @Get(':walletId')
   @ApiOperation({
     summary:
-      'Get wallet details through API Gateway',
+      'Get protected wallet details',
   })
   @ApiParam({
     name: 'walletId',
     description: 'Wallet UUID',
   })
   getWallet(
-    @Param('walletId') walletId: string,
+    @Param('walletId')
+    walletId: string,
   ) {
     return this.walletProxyService
       .getWallet(walletId);
@@ -123,7 +134,7 @@ export class WalletProxyController {
   @Post('deposit')
   @ApiOperation({
     summary:
-      'Deposit money through API Gateway',
+      'Deposit through protected Gateway route',
   })
   deposit(
     @Body() body: unknown,
@@ -135,7 +146,7 @@ export class WalletProxyController {
   @Post('withdraw')
   @ApiOperation({
     summary:
-      'Withdraw money through API Gateway',
+      'Withdraw through protected Gateway route',
   })
   withdraw(
     @Body() body: unknown,
@@ -147,7 +158,7 @@ export class WalletProxyController {
   @Post('transfer')
   @ApiOperation({
     summary:
-      'Transfer money through API Gateway',
+      'Transfer through protected Gateway route',
   })
   transfer(
     @Body() body: unknown,
