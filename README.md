@@ -597,3 +597,46 @@ It is not ready for handling real money without additional security audits, regu
 ## License
 
 This project is licensed under the MIT License.
+## Payflow Architecture
+
+Payflow is an Nx monorepo containing:
+
+- `web` — Customer Next.js application
+- `admin-web` — Administration Next.js application
+- `api-gateway` — NestJS API Gateway
+- `auth-service` — Authentication microservice
+- `wallet-service` — Wallet and ledger microservice
+- `notification-service` — RabbitMQ notification consumer
+
+### Infrastructure
+
+- PostgreSQL
+- Prisma ORM
+- Redis
+- RabbitMQ
+- Docker Compose
+
+### Implemented Features
+
+- JWT authentication
+- Role-based admin authorization
+- Wallet creation and balance management
+- Deposits, withdrawals and transfers
+- Double-entry ledger records
+- Outbox event publishing
+- Admin dashboard
+- User and wallet management
+- Wallet freeze and unfreeze
+- Transaction history and details
+- Analytics dashboard
+- CSV and PDF exports
+- RabbitMQ notification service foundation
+
+### Local Ports
+
+- Customer Web: `3000`
+- Admin Web: `3001`
+- API Gateway: `4000`
+- Wallet Service: `4001`
+- Auth Service: `4002`
+
