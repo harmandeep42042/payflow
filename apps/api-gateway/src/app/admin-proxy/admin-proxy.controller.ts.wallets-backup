@@ -1,0 +1,111 @@
+import {
+  Controller,
+  Get,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+
+import {
+  Roles,
+} from '../gateway-auth/decorators/roles.decorator';
+import {
+  GatewayJwtAuthGuard,
+} from '../gateway-auth/guards/gateway-jwt-auth.guard';
+import {
+  RolesGuard,
+} from '../gateway-auth/guards/roles.guard';
+import {
+  AdminProxyService,
+} from './admin-proxy.service';
+
+type AdminUsersQuery = {
+  page?: string;
+  limit?: string;
+  search?: string;
+  status?: string;
+  role?: string;
+};
+
+@ApiTags('Admin')
+@ApiBearerAuth('access-token')
+@Controller('admin')
+@UseGuards(
+  GatewayJwtAuthGuard,
+  RolesGuard,
+)
+@Roles('ADMIN')
+export class AdminProxyController {
+  constructor(
+    private readonly adminProxyService:
+      AdminProxyService,
+  ) {}
+
+  @Get('dashboard')
+  @ApiOperation({
+    summary:
+      'Get live administration dashboard data',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Live dashboard data returned successfully',
+  })
+  getDashboard() {
+    return this.adminProxyService
+      .getDashboard();
+  }
+
+  @Get('users')
+  @ApiOperation({
+    summary:
+      'Get paginated administration users list',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    example: 10,
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    example: 'admin',
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: [
+      'ALL',
+      'ACTIVE',
+      'BLOCKED',
+      'SUSPENDED',
+    ],
+  })
+  @ApiQuery({
+    name: 'role',
+    required: false,
+    enum: [
+      'ALL',
+      'USER',
+      'ADMIN',
+    ],
+  })
+  getUsers(
+    @Query()
+    query: AdminUsersQuery,
+  ) {
+    return this.adminProxyService
+      .getUsers(query);
+  }
+}

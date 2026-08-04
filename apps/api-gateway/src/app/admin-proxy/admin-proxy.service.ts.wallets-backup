@@ -1,0 +1,126 @@
+import { HttpService } from '@nestjs/axios';
+import {
+  HttpException,
+  Injectable,
+  ServiceUnavailableException,
+} from '@nestjs/common';
+import { AxiosError } from 'axios';
+import { firstValueFrom } from 'rxjs';
+
+type AdminUsersQuery = {
+  page?: string;
+  limit?: string;
+  search?: string;
+  status?: string;
+  role?: string;
+};
+
+@Injectable()
+export class AdminProxyService {
+  private readonly walletServiceUrl =
+    process.env.WALLET_SERVICE_URL ??
+    'http://localhost:4001/api/v1';
+
+  constructor(
+    private readonly httpService:
+      HttpService,
+  ) {}
+
+  async getDashboard() {
+    return this.get('/admin/dashboard');
+  }
+
+  async getUsers(
+    query: AdminUsersQuery,
+  ) {
+    const searchParams =
+      new URLSearchParams();
+
+    if (query.page) {
+      searchParams.set(
+        'page',
+        query.page,
+      );
+    }
+
+    if (query.limit) {
+      searchParams.set(
+        'limit',
+        query.limit,
+      );
+    }
+
+    if (query.search) {
+      searchParams.set(
+        'search',
+        query.search,
+      );
+    }
+
+    if (query.status) {
+      searchParams.set(
+        'status',
+        query.status,
+      );
+    }
+
+    if (query.role) {
+      searchParams.set(
+        'role',
+        query.role,
+      );
+    }
+
+    const queryString =
+      searchParams.toString();
+
+    const path = queryString
+      ? `/admin/users?${queryString}`
+      : '/admin/users';
+
+    return this.get(path);
+  }
+
+  private async get(
+    path: string,
+  ) {
+    try {
+      const response =
+        await firstValueFrom(
+          this.httpService.get(
+            `${this.walletServiceUrl}${path}`,
+          ),
+        );
+
+      return response.data;
+    } catch (error) {
+      this.handleHttpError(error);
+    }
+  }
+
+  private handleHttpError(
+    error: unknown,
+  ): never {
+    if (
+      error instanceof AxiosError
+    ) {
+      if (error.response) {
+        throw new HttpException(
+          error.response.data ?? {
+            message:
+              'Admin service request failed',
+          },
+          error.response.status,
+        );
+      }
+
+      throw new ServiceUnavailableException(
+        'Wallet service is unavailable',
+      );
+    }
+
+    throw new ServiceUnavailableException(
+      'Unable to communicate with administration service',
+    );
+  }
+}

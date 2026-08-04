@@ -5,6 +5,7 @@ allowBuilds:
   '@scarf/scarf': true
   '@swc/core': true
   bcrypt: true
+  core-js: true
   esbuild: true
   less: false
   nx: true

@@ -1,0 +1,61 @@
+import { HttpService } from '@nestjs/axios';
+import {
+  HttpException,
+  Injectable,
+  ServiceUnavailableException,
+} from '@nestjs/common';
+import { AxiosError } from 'axios';
+import { firstValueFrom } from 'rxjs';
+
+@Injectable()
+export class AdminProxyService {
+  private readonly walletServiceUrl =
+    process.env.WALLET_SERVICE_URL ??
+    'http://localhost:4001/api/v1';
+
+  constructor(
+    private readonly httpService:
+      HttpService,
+  ) {}
+
+  async getDashboard() {
+    try {
+      const response =
+        await firstValueFrom(
+          this.httpService.get(
+            `${this.walletServiceUrl}/admin/dashboard`,
+          ),
+        );
+
+      return response.data;
+    } catch (error) {
+      this.handleHttpError(error);
+    }
+  }
+
+  private handleHttpError(
+    error: unknown,
+  ): never {
+    if (
+      error instanceof AxiosError
+    ) {
+      if (error.response) {
+        throw new HttpException(
+          error.response.data ?? {
+            message:
+              'Admin dashboard request failed',
+          },
+          error.response.status,
+        );
+      }
+
+      throw new ServiceUnavailableException(
+        'Wallet service is unavailable',
+      );
+    }
+
+    throw new ServiceUnavailableException(
+      'Unable to load administration dashboard',
+    );
+  }
+}

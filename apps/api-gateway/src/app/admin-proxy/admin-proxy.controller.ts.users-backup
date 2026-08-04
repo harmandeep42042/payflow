@@ -1,0 +1,69 @@
+import {
+  Controller,
+  Get,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+
+import {
+  Roles,
+} from '../gateway-auth/decorators/roles.decorator';
+import {
+  GatewayJwtAuthGuard,
+} from '../gateway-auth/guards/gateway-jwt-auth.guard';
+import {
+  RolesGuard,
+} from '../gateway-auth/guards/roles.guard';
+import {
+  AdminProxyService,
+} from './admin-proxy.service';
+
+@ApiTags('Admin')
+@ApiBearerAuth('access-token')
+@Controller('admin')
+@UseGuards(
+  GatewayJwtAuthGuard,
+  RolesGuard,
+)
+@Roles('ADMIN')
+export class AdminProxyController {
+  constructor(
+    private readonly adminProxyService:
+      AdminProxyService,
+  ) {}
+
+  @Get('dashboard')
+  @ApiOperation({
+    summary:
+      'Get live administration dashboard data',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Live dashboard data returned successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description:
+      'Access token is missing or invalid',
+  })
+  @ApiResponse({
+    status: 403,
+    description:
+      'Administrator role is required',
+  })
+  @ApiResponse({
+    status: 503,
+    description:
+      'Wallet service is unavailable',
+  })
+  getDashboard() {
+    return this.adminProxyService
+      .getDashboard();
+  }
+}

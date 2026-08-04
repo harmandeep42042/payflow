@@ -1,0 +1,40 @@
+import {
+  Controller,
+  Get,
+  Query,
+} from '@nestjs/common';
+
+import {
+  AdminService,
+  AdminUserRole,
+  AdminUserStatus,
+} from './admin.service';
+
+@Controller('admin')
+export class AdminController {
+  constructor(
+    private readonly adminService: AdminService,
+  ) {}
+
+  @Get('dashboard')
+  getDashboard() {
+    return this.adminService.getDashboard();
+  }
+
+  @Get('users')
+  getUsers(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+    @Query('status') status?: AdminUserStatus,
+    @Query('role') role?: AdminUserRole,
+  ) {
+    return this.adminService.getUsers({
+      page: page ? Number(page) : 1,
+      limit: limit ? Number(limit) : 10,
+      search,
+      status,
+      role,
+    });
+  }
+}

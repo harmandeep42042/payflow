@@ -1,0 +1,507 @@
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from '@payflow/database';
+
+type RecentTransaction = {
+  id: string;
+  type: 'DEPOSIT' | 'WITHDRAWAL' | 'TRANSFER';
+  amount: string;
+  currency: string;
+  status: string;
+  reference: string | null;
+  description: string | null;
+  walletId: string | null;
+  sourceWalletId: string | null;
+  destinationWalletId: string | null;
+  createdAt: Date;
+  completedAt: Date | null;
+};
+
+export type AdminUserStatus =
+  | 'ALL'
+  | 'ACTIVE'
+  | 'BLOCKED'
+  | 'SUSPENDED';
+
+export type AdminUserRole =
+  | 'ALL'
+  | 'USER'
+  | 'ADMIN';
+
+export type GetAdminUsersInput = {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: AdminUserStatus;
+  role?: AdminUserRole;
+};
+
+@Injectable()
+export class AdminService {
+  constructor(
+    private readonly prisma: PrismaService,
+  ) {}
+
+  async getDashboard() {
+    const [
+      totalUsers,
+      activeUsers,
+      blockedUsers,
+      suspendedUsers,
+      totalWallets,
+      activeWallets,
+      frozenWallets,
+      closedWallets,
+      walletBalanceAggregate,
+      totalDeposits,
+      totalWithdrawals,
+      totalTransfers,
+      depositAmountAggregate,
+      withdrawalAmountAggregate,
+      transferAmountAggregate,
+      recentUsers,
+      recentDeposits,
+      recentWithdrawals,
+      recentTransfers,
+    ] = await Promise.all([
+      this.prisma.user.count(),
+
+      this.prisma.user.count({
+        where: {
+          status: 'ACTIVE',
+        },
+      }),
+
+      this.prisma.user.count({
+        where: {
+          status: 'BLOCKED',
+        },
+      }),
+
+      this.prisma.user.count({
+        where: {
+          status: 'SUSPENDED',
+        },
+      }),
+
+      this.prisma.wallet.count(),
+
+      this.prisma.wallet.count({
+        where: {
+          status: 'ACTIVE',
+        },
+      }),
+
+      this.prisma.wallet.count({
+        where: {
+          status: 'FROZEN',
+        },
+      }),
+
+      this.prisma.wallet.count({
+        where: {
+          status: 'CLOSED',
+        },
+      }),
+
+      this.prisma.wallet.aggregate({
+        _sum: {
+          balance: true,
+        },
+      }),
+
+      this.prisma.deposit.count(),
+
+      this.prisma.withdrawal.count(),
+
+      this.prisma.transfer.count(),
+
+      this.prisma.deposit.aggregate({
+        where: {
+          status: 'COMPLETED',
+        },
+        _sum: {
+          amount: true,
+        },
+      }),
+
+      this.prisma.withdrawal.aggregate({
+        where: {
+          status: 'COMPLETED',
+        },
+        _sum: {
+          amount: true,
+        },
+      }),
+
+      this.prisma.transfer.aggregate({
+        where: {
+          status: 'COMPLETED',
+        },
+        _sum: {
+          amount: true,
+        },
+      }),
+
+      this.prisma.user.findMany({
+        orderBy: {
+          createdAt: 'desc',
+        },
+        take: 5,
+        select: {
+          id: true,
+          email: true,
+          phone: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          status: true,
+          createdAt: true,
+        },
+      }),
+
+      this.prisma.deposit.findMany({
+        orderBy: {
+          createdAt: 'desc',
+        },
+        take: 5,
+        select: {
+          id: true,
+          walletId: true,
+          amount: true,
+          currency: true,
+          reference: true,
+          status: true,
+          createdAt: true,
+          completedAt: true,
+        },
+      }),
+
+      this.prisma.withdrawal.findMany({
+        orderBy: {
+          createdAt: 'desc',
+        },
+        take: 5,
+        select: {
+          id: true,
+          walletId: true,
+          amount: true,
+          currency: true,
+          reference: true,
+          status: true,
+          createdAt: true,
+          completedAt: true,
+        },
+      }),
+
+      this.prisma.transfer.findMany({
+        orderBy: {
+          createdAt: 'desc',
+        },
+        take: 5,
+        select: {
+          id: true,
+          sourceWalletId: true,
+          destinationWalletId: true,
+          amount: true,
+          currency: true,
+          description: true,
+          status: true,
+          createdAt: true,
+          completedAt: true,
+        },
+      }),
+    ]);
+
+    const recentTransactions: RecentTransaction[] = [
+      ...recentDeposits.map((deposit) => ({
+        id: deposit.id,
+        type: 'DEPOSIT' as const,
+        amount: deposit.amount.toString(),
+        currency: deposit.currency,
+        status: deposit.status,
+        reference: deposit.reference,
+        description: null,
+        walletId: deposit.walletId,
+        sourceWalletId: null,
+        destinationWalletId: null,
+        createdAt: deposit.createdAt,
+        completedAt: deposit.completedAt,
+      })),
+
+      ...recentWithdrawals.map((withdrawal) => ({
+        id: withdrawal.id,
+        type: 'WITHDRAWAL' as const,
+        amount: withdrawal.amount.toString(),
+        currency: withdrawal.currency,
+        status: withdrawal.status,
+        reference: withdrawal.reference,
+        description: null,
+        walletId: withdrawal.walletId,
+        sourceWalletId: null,
+        destinationWalletId: null,
+        createdAt: withdrawal.createdAt,
+        completedAt: withdrawal.completedAt,
+      })),
+
+      ...recentTransfers.map((transfer) => ({
+        id: transfer.id,
+        type: 'TRANSFER' as const,
+        amount: transfer.amount.toString(),
+        currency: transfer.currency,
+        status: transfer.status,
+        reference: null,
+        description: transfer.description,
+        walletId: null,
+        sourceWalletId: transfer.sourceWalletId,
+        destinationWalletId:
+          transfer.destinationWalletId,
+        createdAt: transfer.createdAt,
+        completedAt: transfer.completedAt,
+      })),
+    ]
+      .sort(
+        (first, second) =>
+          second.createdAt.getTime() -
+          first.createdAt.getTime(),
+      )
+      .slice(0, 10);
+
+    const transactionCount =
+      totalDeposits +
+      totalWithdrawals +
+      totalTransfers;
+
+    return {
+      stats: {
+        totalUsers,
+        activeUsers,
+        blockedUsers,
+        suspendedUsers,
+
+        totalWallets,
+        activeWallets,
+        frozenWallets,
+        closedWallets,
+
+        totalTransactions:
+          transactionCount,
+        totalDeposits,
+        totalWithdrawals,
+        totalTransfers,
+
+        totalBalance:
+          walletBalanceAggregate
+            ._sum
+            .balance
+            ?.toString() ?? '0',
+
+        totalDepositAmount:
+          depositAmountAggregate
+            ._sum
+            .amount
+            ?.toString() ?? '0',
+
+        totalWithdrawalAmount:
+          withdrawalAmountAggregate
+            ._sum
+            .amount
+            ?.toString() ?? '0',
+
+        totalTransferAmount:
+          transferAmountAggregate
+            ._sum
+            .amount
+            ?.toString() ?? '0',
+      },
+
+      recentUsers,
+
+      recentTransactions,
+    };
+  }
+
+  async getUsers(
+    input: GetAdminUsersInput = {},
+  ) {
+    const requestedPage =
+      Number(input.page ?? 1);
+
+    const requestedLimit =
+      Number(input.limit ?? 10);
+
+    const page =
+      Number.isFinite(requestedPage) &&
+      requestedPage > 0
+        ? Math.floor(requestedPage)
+        : 1;
+
+    const limit =
+      Number.isFinite(requestedLimit) &&
+      requestedLimit > 0
+        ? Math.min(
+            Math.floor(requestedLimit),
+            100,
+          )
+        : 10;
+
+    const search =
+      input.search
+        ?.trim() ?? '';
+
+    const status:
+      AdminUserStatus =
+        input.status ?? 'ALL';
+
+    const role:
+      AdminUserRole =
+        input.role ?? 'ALL';
+
+    const where = {
+      ...(search
+        ? {
+            OR: [
+              {
+                email: {
+                  contains: search,
+                  mode:
+                    'insensitive' as const,
+                },
+              },
+              {
+                firstName: {
+                  contains: search,
+                  mode:
+                    'insensitive' as const,
+                },
+              },
+              {
+                lastName: {
+                  contains: search,
+                  mode:
+                    'insensitive' as const,
+                },
+              },
+              {
+                phone: {
+                  contains: search,
+                },
+              },
+            ],
+          }
+        : {}),
+
+      ...(status !== 'ALL'
+        ? {
+            status,
+          }
+        : {}),
+
+      ...(role !== 'ALL'
+        ? {
+            role,
+          }
+        : {}),
+    };
+
+    const skip =
+      (page - 1) * limit;
+
+    const [
+      users,
+      total,
+    ] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+
+        orderBy: {
+          createdAt: 'desc',
+        },
+
+        skip,
+        take: limit,
+
+        select: {
+          id: true,
+          email: true,
+          phone: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+
+          wallets: {
+            select: {
+              id: true,
+              currency: true,
+              balance: true,
+              status: true,
+              createdAt: true,
+            },
+          },
+        },
+      }),
+
+      this.prisma.user.count({
+        where,
+      }),
+    ]);
+
+    const totalPages =
+      total === 0
+        ? 0
+        : Math.ceil(total / limit);
+
+    return {
+      users: users.map((user) => ({
+        ...user,
+
+        wallets: user.wallets.map(
+          (wallet) => ({
+            ...wallet,
+            balance:
+              wallet.balance.toString(),
+          }),
+        ),
+
+        walletCount:
+          user.wallets.length,
+
+        totalWalletBalance:
+          user.wallets
+            .reduce(
+              (
+                sum,
+                wallet,
+              ) =>
+                sum +
+                Number(
+                  wallet.balance,
+                ),
+              0,
+            )
+            .toFixed(2),
+      })),
+
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages,
+
+        hasNextPage:
+          page < totalPages,
+
+        hasPreviousPage:
+          page > 1,
+      },
+
+      filters: {
+        search,
+        status,
+        role,
+      },
+    };
+  }
+}
