@@ -1,11 +1,24 @@
-import { HttpService } from '@nestjs/axios';
+import {
+  HttpService,
+} from '@nestjs/axios';
+
 import {
   HttpException,
   Injectable,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { AxiosError } from 'axios';
-import { firstValueFrom } from 'rxjs';
+
+import {
+  payflowConfig,
+} from '@payflow/shared-config';
+
+import {
+  AxiosError,
+} from 'axios';
+
+import {
+  firstValueFrom,
+} from 'rxjs';
 
 type TransactionHistoryQuery = {
   type?: string;
@@ -16,19 +29,36 @@ type TransactionHistoryQuery = {
 @Injectable()
 export class WalletProxyService {
   private readonly walletServiceUrl =
-    process.env.WALLET_SERVICE_URL ??
-    'http://localhost:4001/api/v1';
+    payflowConfig.urls.walletService;
 
   constructor(
-    private readonly httpService: HttpService,
+    private readonly httpService:
+      HttpService,
   ) {}
 
-  getWallet(walletId: string) {
-    return this.get(`/wallets/${walletId}`);
+  createWallet(
+    body: unknown,
+  ) {
+    return this.post(
+      '/wallets',
+      body,
+    );
   }
 
-  getUserWallets(userId: string) {
-    return this.get(`/wallets/user/${userId}`);
+  getWallet(
+    walletId: string,
+  ) {
+    return this.get(
+      `/wallets/${walletId}`,
+    );
+  }
+
+  getUserWallets(
+    userId: string,
+  ) {
+    return this.get(
+      `/wallets/user/${userId}`,
+    );
   }
 
   getTransactionHistory(
@@ -41,16 +71,31 @@ export class WalletProxyService {
     );
   }
 
-  deposit(body: unknown) {
-    return this.post('/wallets/deposit', body);
+  deposit(
+    body: unknown,
+  ) {
+    return this.post(
+      '/wallets/deposit',
+      body,
+    );
   }
 
-  withdraw(body: unknown) {
-    return this.post('/wallets/withdraw', body);
+  withdraw(
+    body: unknown,
+  ) {
+    return this.post(
+      '/wallets/withdraw',
+      body,
+    );
   }
 
-  transfer(body: unknown) {
-    return this.post('/wallets/transfer', body);
+  transfer(
+    body: unknown,
+  ) {
+    return this.post(
+      '/wallets/transfer',
+      body,
+    );
   }
 
   private async get(
@@ -58,14 +103,15 @@ export class WalletProxyService {
     params?: Record<string, unknown>,
   ) {
     try {
-      const response = await firstValueFrom(
-        this.httpService.get(
-          `${this.walletServiceUrl}${path}`,
-          {
-            params,
-          },
-        ),
-      );
+      const response =
+        await firstValueFrom(
+          this.httpService.get(
+            `${this.walletServiceUrl}${path}`,
+            {
+              params,
+            },
+          ),
+        );
 
       return response.data;
     } catch (error) {
@@ -78,17 +124,19 @@ export class WalletProxyService {
     body: unknown,
   ) {
     try {
-      const response = await firstValueFrom(
-        this.httpService.post(
-          `${this.walletServiceUrl}${path}`,
-          body,
-          {
-            headers: {
-              'Content-Type': 'application/json',
+      const response =
+        await firstValueFrom(
+          this.httpService.post(
+            `${this.walletServiceUrl}${path}`,
+            body,
+            {
+              headers: {
+                'Content-Type':
+                  'application/json',
+              },
             },
-          },
-        ),
-      );
+          ),
+        );
 
       return response.data;
     } catch (error) {
@@ -96,7 +144,9 @@ export class WalletProxyService {
     }
   }
 
-  private handleError(error: unknown): never {
+  private handleError(
+    error: unknown,
+  ): never {
     if (error instanceof AxiosError) {
       if (error.response) {
         throw new HttpException(

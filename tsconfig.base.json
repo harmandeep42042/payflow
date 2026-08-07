@@ -1,22 +1,39 @@
 {
-  "compileOnSave": false,
-  "compilerOptions": {
-    "rootDir": ".",
-    "sourceMap": true,
-    "declaration": false,
-    "moduleResolution": "bundler",
-    "emitDecoratorMetadata": true,
-    "experimentalDecorators": true,
-    "importHelpers": true,
-    "target": "es2015",
-    "module": "esnext",
-    "lib": ["es2020", "dom"],
-    "skipLibCheck": true,
-    "skipDefaultLibCheck": true,
-    "strict": false,
-    "paths": {
-      "@payflow/database": ["./libs/database/src/index.ts"]
-    }
-  },
-  "exclude": ["node_modules", "tmp"]
+    "compileOnSave":  false,
+    "compilerOptions":  {
+                            "rootDir":  ".",
+                            "sourceMap":  true,
+                            "declaration":  false,
+                            "moduleResolution":  "bundler",
+                            "emitDecoratorMetadata":  true,
+                            "experimentalDecorators":  true,
+                            "importHelpers":  true,
+                            "target":  "es2015",
+                            "module":  "esnext",
+                            "lib":  [
+                                        "es2020",
+                                        "dom"
+                                    ],
+                            "skipLibCheck":  true,
+                            "skipDefaultLibCheck":  true,
+                            "strict":  false,
+                            "paths":  {
+                                          "@payflow/database":  [
+                                                                    "./libs/database/src/index.ts"
+                                                                ],
+                                          "@payflow/shared-types":  [
+                                                                        "./libs/shared/types/src/index.ts"
+                                                                    ],
+                                          "@payflow/shared-config":  [
+                                                                         "./libs/shared/config/src/index.ts"
+                                                                     ],
+                                          "@payflow/shared-events":  [
+                                                                         "./libs/shared/events/src/index.ts"
+                                                                     ]
+                                      }
+                        },
+    "exclude":  [
+                    "node_modules",
+                    "tmp"
+                ]
 }

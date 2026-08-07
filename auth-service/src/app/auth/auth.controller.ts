@@ -1,10 +1,14 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
+  Param,
+  ParseUUIDPipe,
   Post,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -14,13 +18,18 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 
+import type {
+  Request,
+} from 'express';
 import { AuthService } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { RateLimit } from './decorators/rate-limit.decorator';
 import { Roles } from './decorators/roles.decorator';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RedisRateLimitGuard } from './guards/redis-rate-limit.guard';
 import { RolesGuard } from './guards/roles.guard';
@@ -91,8 +100,38 @@ export class AuthController {
     description:
       'Login rate limit exceeded',
   })
-  login(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
+
+  login(
+    @Body()
+    dto: LoginDto,
+
+    @Req()
+    request: Request,
+  ) {
+    const forwardedFor =
+      request.headers[
+        'x-forwarded-for'
+      ];
+
+    const ipAddress =
+      typeof forwardedFor === 'string'
+        ? forwardedFor
+            .split(',')[0]
+            ?.trim()
+        : request.ip;
+
+    return this.authService.login(
+      dto,
+      {
+        userAgent:
+          request.headers[
+            'user-agent'
+          ] ?? null,
+
+        ipAddress:
+          ipAddress ?? null,
+      },
+    );
   }
 
   @Post('refresh')
@@ -125,6 +164,150 @@ export class AuthController {
     return this.authService.logout(dto);
   }
 
+
+
+
+  @Post('sessions/current')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary:
+      'Identify the current login session',
+  })
+  getCurrentSession(
+    @CurrentUser()
+    user: AuthenticatedUser,
+
+    @Body()
+    dto: RefreshTokenDto,
+  ) {
+    return this.authService
+      .getCurrentSession(
+        user.id,
+        dto.refreshToken,
+      );
+  }
+  @Get('sessions')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary:
+      'Get active login sessions',
+  })
+  getSessions(
+    @CurrentUser()
+    user: AuthenticatedUser,
+  ) {
+    return this.authService
+      .getSessions(user.id);
+  }
+
+  @Delete('sessions/:sessionId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary:
+      'Logout a specific session',
+  })
+  revokeSession(
+    @CurrentUser()
+    user: AuthenticatedUser,
+
+    @Param(
+      'sessionId',
+      new ParseUUIDPipe(),
+    )
+    sessionId: string,
+  ) {
+    return this.authService
+      .revokeSession(
+        user.id,
+        sessionId,
+      );
+  }
+
+
+  @Post('sessions/logout-others')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary:
+      'Logout every device except the current session',
+  })
+  logoutOtherSessions(
+    @CurrentUser()
+    user: AuthenticatedUser,
+
+    @Body()
+    dto: RefreshTokenDto,
+  ) {
+    return this.authService
+      .logoutOtherSessions(
+        user.id,
+        dto.refreshToken,
+      );
+  }
+  @Delete('sessions')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary:
+      'Logout all active sessions',
+  })
+  logoutAllSessions(
+    @CurrentUser()
+    user: AuthenticatedUser,
+  ) {
+    return this.authService
+      .logoutAllSessions(
+        user.id,
+      );
+  }
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary:
+      'Change password for the logged-in user',
+  })
+  changePassword(
+    @CurrentUser()
+    user: AuthenticatedUser,
+
+    @Body()
+    dto: ChangePasswordDto,
+  ) {
+    return this.authService
+      .changePassword(
+        user.id,
+        dto,
+      );
+  }
+
+  @Post('profile/update')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary:
+      'Update current user profile',
+  })
+  updateProfile(
+    @CurrentUser()
+    user: AuthenticatedUser,
+
+    @Body()
+    dto: UpdateProfileDto,
+  ) {
+    return this.authService
+      .updateProfile(
+        user.id,
+        dto,
+      );
+  }
   @Get('profile')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')

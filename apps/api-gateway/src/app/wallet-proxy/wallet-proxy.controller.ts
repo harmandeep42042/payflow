@@ -7,6 +7,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -19,7 +20,10 @@ import {
 import {
   GatewayJwtAuthGuard,
 } from '../gateway-auth/guards/gateway-jwt-auth.guard';
-import { WalletProxyService } from './wallet-proxy.service';
+
+import {
+  WalletProxyService,
+} from './wallet-proxy.service';
 
 type TransactionHistoryQuery = {
   type?: string;
@@ -37,6 +41,24 @@ export class WalletProxyController {
       WalletProxyService,
   ) {}
 
+  @Post()
+  @ApiOperation({
+    summary:
+      'Create a wallet through the protected Gateway route',
+  })
+  @ApiResponse({
+    status: 201,
+    description:
+      'Wallet created successfully',
+  })
+  createWallet(
+    @Body()
+    body: unknown,
+  ) {
+    return this.walletProxyService
+      .createWallet(body);
+  }
+
   @Get('user/:userId')
   @ApiOperation({
     summary:
@@ -46,13 +68,9 @@ export class WalletProxyController {
     name: 'userId',
     description: 'User UUID',
   })
-  @ApiResponse({
-    status: 401,
-    description:
-      'Access token missing or invalid',
-  })
   getUserWallets(
-    @Param('userId') userId: string,
+    @Param('userId')
+    userId: string,
   ) {
     return this.walletProxyService
       .getUserWallets(userId);
@@ -76,29 +94,16 @@ export class WalletProxyController {
       'WITHDRAWAL',
       'TRANSFER',
     ],
-    example: 'ALL',
   })
   @ApiQuery({
     name: 'page',
     required: false,
     type: Number,
-    example: 1,
   })
   @ApiQuery({
     name: 'limit',
     required: false,
     type: Number,
-    example: 20,
-  })
-  @ApiResponse({
-    status: 200,
-    description:
-      'Transaction history returned',
-  })
-  @ApiResponse({
-    status: 401,
-    description:
-      'Access token missing or invalid',
   })
   getTransactionHistory(
     @Param('walletId')
@@ -119,10 +124,6 @@ export class WalletProxyController {
     summary:
       'Get protected wallet details',
   })
-  @ApiParam({
-    name: 'walletId',
-    description: 'Wallet UUID',
-  })
   getWallet(
     @Param('walletId')
     walletId: string,
@@ -137,7 +138,8 @@ export class WalletProxyController {
       'Deposit through protected Gateway route',
   })
   deposit(
-    @Body() body: unknown,
+    @Body()
+    body: unknown,
   ) {
     return this.walletProxyService
       .deposit(body);
@@ -149,7 +151,8 @@ export class WalletProxyController {
       'Withdraw through protected Gateway route',
   })
   withdraw(
-    @Body() body: unknown,
+    @Body()
+    body: unknown,
   ) {
     return this.walletProxyService
       .withdraw(body);
@@ -161,7 +164,8 @@ export class WalletProxyController {
       'Transfer through protected Gateway route',
   })
   transfer(
-    @Body() body: unknown,
+    @Body()
+    body: unknown,
   ) {
     return this.walletProxyService
       .transfer(body);

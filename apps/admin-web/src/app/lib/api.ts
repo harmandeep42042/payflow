@@ -1,25 +1,16 @@
+import type {
+  AdminLoginResponse,
+  PayflowUser,
+} from '@payflow/shared-types';
+
 export const API_GATEWAY_URL =
   process.env.NEXT_PUBLIC_API_GATEWAY_URL ??
   'http://localhost:4000/api/v1';
 
-export type AdminUser = {
-  id: string;
-  email: string;
-  phone?: string | null;
-  firstName: string;
-  lastName?: string | null;
-  role: string;
-  status: string;
-};
+export type AdminUser = PayflowUser;
 
-export type AdminLoginResponse = {
-  message?: string;
-  tokenType?: string;
-  accessToken: string;
-  refreshToken: string;
-  accessTokenExpiresIn?: string;
-  refreshTokenExpiresIn?: string;
-  user: AdminUser;
+export type {
+  AdminLoginResponse,
 };
 
 type WrappedResponse<T> = {
@@ -173,7 +164,7 @@ export function getAdminRefreshToken():
 }
 
 export function getStoredAdmin():
-  | AdminUser
+  | PayflowUser
   | null {
   if (typeof window === 'undefined') {
     return null;
@@ -192,7 +183,7 @@ export function getStoredAdmin():
     const user =
       JSON.parse(
         storedUser,
-      ) as AdminUser;
+      ) as PayflowUser;
 
     if (user.role !== 'ADMIN') {
       return null;

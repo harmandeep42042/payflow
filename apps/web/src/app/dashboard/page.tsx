@@ -1,677 +1,812 @@
-'use client';
+﻿'use client';
 
 import {
-  FormEvent,
   useCallback,
   useEffect,
-  useMemo,
   useState,
 } from 'react';
-import { useRouter } from 'next/navigation';
+
+import Link from 'next/link';
 
 import {
-  API_GATEWAY_URL,
-  clearAuthSession,
-  getAccessToken,
-  getStoredUser,
+  useRouter,
+} from 'next/navigation';
+
+import type {
   PayflowUser,
+} from '@payflow/shared-types';
+
+import {
+  getStoredUser,
+  hasValidUserSession,
+  logoutUser,
+  userAuthenticatedRequest,
 } from '../lib/api';
 
-import DashboardHeader from './components/DashboardHeader';
-import SummaryCards from './components/SummaryCards';
-import TransactionChart from './components/TransactionChart';
-import TransactionTable, {
-  WalletTransaction,
-} from './components/TransactionTable';
-import WalletActions, {
-  WalletActionType,
-} from './components/WalletActions';
-import WalletCards from './components/WalletCards';
+import {
+  useNotifications,
+} from '../hooks/use-notifications';
 
-type Wallet = {
+import DashboardHeader from './components/DashboardHeader';
+
+type UserWallet = {
   id: string;
   userId: string;
   currency: string;
   balance: string;
-  status: string;
+  status:
+    | 'ACTIVE'
+    | 'FROZEN'
+    | 'CLOSED';
   version: number;
   createdAt: string;
   updatedAt: string;
 };
 
-type TransactionHistoryResponse = {
-  wallet: Wallet;
-
-  filters: {
-    type: string;
-    page: number;
-    limit: number;
-  };
-
-  pagination: {
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
-    hasNextPage: boolean;
-    hasPreviousPage: boolean;
-  };
-
-  transactions: WalletTransaction[];
+type DashboardTransaction = {
+  id: string;
+  type:
+    | 'DEPOSIT'
+    | 'WITHDRAWAL'
+    | 'TRANSFER';
+  direction:
+    | 'CREDIT'
+    | 'DEBIT';
+  amount: string;
+  currency: string;
+  status: string;
+  reference?: string | null;
+  description?: string | null;
+  createdAt: string;
+  sourceWalletId?: string | null;
+  destinationWalletId?: string | null;
+  counterparty?: {
+    walletId: string;
+    userId: string;
+    firstName: string;
+    lastName?: string | null;
+    email: string;
+  } | null;
 };
 
-function createIdempotencyKey(
-  prefix: string,
+type DashboardTransactionResponse = {
+  transactions?: DashboardTransaction[];
+  items?: DashboardTransaction[];
+  data?: DashboardTransaction[];
+};
+
+function formatMoney(
+  amount: string | number,
+  currency = 'INR',
 ): string {
-  return `${prefix}-${crypto.randomUUID()}`;
+  const value =
+    Number(amount);
+
+  return new Intl.NumberFormat(
+    'en-IN',
+    {
+      style:
+        'currency',
+
+      currency,
+
+      maximumFractionDigits:
+        2,
+    },
+  ).format(
+    Number.isFinite(value)
+      ? value
+      : 0,
+  );
 }
 
-export default function DashboardPage() {
-  const router = useRouter();
+function formatDateTime(
+  value: Date | null,
+): string {
+  if (!value) {
+    return 'Not updated yet';
+  }
 
-  const [user, setUser] =
-    useState<PayflowUser | null>(null);
+  return value.toLocaleString(
+    'en-IN',
+    {
+      dateStyle:
+        'medium',
 
-  const [wallets, setWallets] =
-    useState<Wallet[]>([]);
-
-  const [
-    selectedWalletId,
-    setSelectedWalletId,
-  ] = useState('');
-
-  const [
-    transactions,
-    setTransactions,
-  ] = useState<WalletTransaction[]>([]);
-
-  const [
-    transactionFilter,
-    setTransactionFilter,
-  ] = useState('ALL');
-
-  const [isLoading, setIsLoading] =
-    useState(true);
-
-  const [
-    isActionLoading,
-    setIsActionLoading,
-  ] = useState(false);
-
-  const [
-    isHistoryLoading,
-    setIsHistoryLoading,
-  ] = useState(false);
-
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-
-  const [
-    activeAction,
-    setActiveAction,
-  ] = useState<WalletActionType>(
-    'DEPOSIT',
-  );
-
-  const [amount, setAmount] = useState('');
-
-  const [reference, setReference] =
-    useState('');
-
-  const [
-    destinationWalletId,
-    setDestinationWalletId,
-  ] = useState('');
-
-  const [
-    description,
-    setDescription,
-  ] = useState('');
-
-  const selectedWallet = useMemo(
-    () =>
-      wallets.find(
-        (wallet) =>
-          wallet.id === selectedWalletId,
-      ) ?? null,
-    [
-      wallets,
-      selectedWalletId,
-    ],
-  );
-
-  const authenticatedFetch = useCallback(
-    async (
-      path: string,
-      options: RequestInit = {},
-    ) => {
-      const token = getAccessToken();
-
-      if (!token) {
-        clearAuthSession();
-        router.replace('/login');
-
-        throw new Error(
-          'Your session has expired',
-        );
-      }
-
-      const response = await fetch(
-        `${API_GATEWAY_URL}${path}`,
-        {
-          ...options,
-
-          headers: {
-            'Content-Type':
-              'application/json',
-
-            Authorization:
-              `Bearer ${token}`,
-
-            ...options.headers,
-          },
-        },
-      );
-
-      const responseBody =
-        await response.json();
-
-      if (response.status === 401) {
-        clearAuthSession();
-        router.replace('/login');
-
-        throw new Error(
-          'Your session has expired',
-        );
-      }
-
-      if (!response.ok) {
-        const message =
-          Array.isArray(
-            responseBody.message,
-          )
-            ? responseBody.message.join(
-                ', ',
-              )
-            : responseBody.message ??
-              responseBody.error ??
-              'Request failed';
-
-        throw new Error(message);
-      }
-
-      return (
-        responseBody.data ??
-        responseBody
-      );
+      timeStyle:
+        'short',
     },
-    [router],
+  );
+}
+
+export default function UserDashboardPage() {
+  const router =
+    useRouter();
+
+  const {
+    latestNotification,
+    isConnected,
+  } = useNotifications();
+
+  const [
+    user,
+    setUser,
+  ] = useState<PayflowUser | null>(
+    null,
   );
 
-  const loadWallets = useCallback(
-    async (
-      currentUser: PayflowUser,
-    ): Promise<void> => {
-      try {
-        setError('');
+  const [
+    wallet,
+    setWallet,
+  ] = useState<UserWallet | null>(
+    null,
+  );
 
-        const walletData =
-          await authenticatedFetch(
-            `/wallets/user/${currentUser.id}`,
-          );
+  const [
+    recentTransactions,
+    setRecentTransactions,
+  ] = useState<DashboardTransaction[]>(
+    [],
+  );
 
-        const loadedWallets =
-          Array.isArray(walletData)
-            ? (walletData as Wallet[])
-            : [];
+  const [
+    isLoading,
+    setIsLoading,
+  ] = useState(true);
 
-        setWallets(loadedWallets);
+  const [
+    isRefreshing,
+    setIsRefreshing,
+  ] = useState(false);
+
+  const [
+    error,
+    setError,
+  ] = useState('');
+
+  const [
+    lastUpdatedAt,
+    setLastUpdatedAt,
+  ] = useState<Date | null>(
+    null,
+  );
+
+  const loadDashboard =
+    useCallback(
+      async (
+        showLoader = true,
+      ): Promise<void> => {
+        const storedUser =
+          getStoredUser();
 
         if (
-          loadedWallets.length > 0 &&
-          !selectedWalletId
+          !storedUser ||
+          !hasValidUserSession()
         ) {
-          setSelectedWalletId(
-            loadedWallets[0].id,
+          router.replace(
+            '/login',
           );
-        }
-      } catch (requestError) {
-        setError(
-          requestError instanceof Error
-            ? requestError.message
-            : 'Unable to load wallets',
-        );
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [
-      authenticatedFetch,
-      selectedWalletId,
-    ],
-  );
 
-  const loadTransactionHistory =
-    useCallback(
-      async (): Promise<void> => {
-        if (!selectedWalletId) {
-          setTransactions([]);
           return;
         }
 
+        setUser(
+          storedUser,
+        );
+
+        if (showLoader) {
+          setIsLoading(true);
+        }
+        else {
+          setIsRefreshing(true);
+        }
+
+        setError('');
+
         try {
-          setIsHistoryLoading(true);
-          setError('');
+          const walletResponse =
+            await userAuthenticatedRequest<
+              | UserWallet
+              | UserWallet[]
+              | {
+                  data?: UserWallet;
+                  wallets?: UserWallet[];
+                }
+            >(
+              `/wallets/user/${storedUser.id}`,
+            );
 
-          const history =
-            (await authenticatedFetch(
-              `/wallets/${selectedWalletId}/transactions?type=${transactionFilter}&page=1&limit=50`,
-            )) as TransactionHistoryResponse;
+          let resolvedWallet:
+            | UserWallet
+            | null = null;
 
-          setTransactions(
-            history.transactions ?? [],
+          if (
+            Array.isArray(
+              walletResponse,
+            )
+          ) {
+            resolvedWallet =
+              walletResponse[0] ??
+              null;
+          }
+          else if (
+            walletResponse &&
+            typeof walletResponse ===
+              'object' &&
+            'id' in walletResponse
+          ) {
+            resolvedWallet =
+              walletResponse as
+                UserWallet;
+          }
+          else if (
+            walletResponse &&
+            typeof walletResponse ===
+              'object' &&
+            'data' in walletResponse
+          ) {
+            resolvedWallet =
+              walletResponse.data ??
+              null;
+          }
+          else if (
+            walletResponse &&
+            typeof walletResponse ===
+              'object' &&
+            'wallets' in
+              walletResponse
+          ) {
+            resolvedWallet =
+              walletResponse
+                .wallets?.[0] ??
+              null;
+          }
+
+          if (
+            !resolvedWallet?.id
+          ) {
+            throw new Error(
+              'Wallet details were missing from the server response',
+            );
+          }
+
+          setWallet(
+            resolvedWallet,
           );
-        } catch (requestError) {
+
+          const historyResponse =
+            await userAuthenticatedRequest<
+              | DashboardTransaction[]
+              | DashboardTransactionResponse
+            >(
+              `/wallets/${resolvedWallet.id}/transactions?page=1&limit=5&type=ALL`,
+            );
+
+          let resolvedTransactions:
+            DashboardTransaction[] = [];
+
+          if (
+            Array.isArray(
+              historyResponse,
+            )
+          ) {
+            resolvedTransactions =
+              historyResponse;
+          }
+          else if (
+            historyResponse.transactions
+          ) {
+            resolvedTransactions =
+              historyResponse.transactions;
+          }
+          else if (
+            historyResponse.items
+          ) {
+            resolvedTransactions =
+              historyResponse.items;
+          }
+          else if (
+            historyResponse.data
+          ) {
+            resolvedTransactions =
+              historyResponse.data;
+          }
+
+          setRecentTransactions(
+            resolvedTransactions.slice(
+              0,
+              5,
+            ),
+          );
+
+          setLastUpdatedAt(
+            new Date(),
+          );
+        }
+        catch (
+          requestError
+        ) {
           setError(
-            requestError instanceof Error
+            requestError instanceof
+              Error
               ? requestError.message
-              : 'Unable to load transaction history',
+              : 'Unable to load wallet',
           );
-        } finally {
-          setIsHistoryLoading(false);
+        }
+        finally {
+          setIsLoading(false);
+          setIsRefreshing(false);
         }
       },
       [
-        authenticatedFetch,
-        selectedWalletId,
-        transactionFilter,
+        router,
       ],
     );
 
   useEffect(() => {
-    const storedUser =
-      getStoredUser();
-
-    const token =
-      getAccessToken();
-
-    if (!storedUser || !token) {
-      router.replace('/login');
-      return;
-    }
-
-    setUser(storedUser);
-
-    void loadWallets(storedUser);
+    void loadDashboard();
   }, [
-    loadWallets,
-    router,
+    loadDashboard,
   ]);
 
   useEffect(() => {
-    if (selectedWalletId) {
-      void loadTransactionHistory();
+    if (
+      !latestNotification
+    ) {
+      return;
+    }
+
+    const walletEvents = [
+      'wallet.deposit.completed',
+      'wallet.withdrawal.completed',
+      'wallet.transfer.completed',
+      'payment.completed',
+    ];
+
+    if (
+      walletEvents.includes(
+        latestNotification.type,
+      )
+    ) {
+      void loadDashboard(
+        false,
+      );
     }
   }, [
-    selectedWalletId,
-    transactionFilter,
-    loadTransactionHistory,
+    latestNotification,
+    loadDashboard,
   ]);
 
-  function resetActionForm(): void {
-    setAmount('');
-    setReference('');
-    setDestinationWalletId('');
-    setDescription('');
-  }
+  async function handleLogout():
+    Promise<void> {
+    await logoutUser();
 
-  function handleActionChange(
-    action: WalletActionType,
-  ): void {
-    setActiveAction(action);
-    setError('');
-    setSuccess('');
-    resetActionForm();
-  }
+    router.replace(
+      '/login',
+    );
 
-  async function refreshDashboard(): Promise<void> {
-    if (!user) {
-      return;
-    }
-
-    await loadWallets(user);
-    await loadTransactionHistory();
-  }
-
-  async function handleWalletAction(
-    event: FormEvent<HTMLFormElement>,
-  ): Promise<void> {
-    event.preventDefault();
-
-    if (!selectedWallet) {
-      setError(
-        'Please select a wallet first',
-      );
-
-      return;
-    }
-
-    setError('');
-    setSuccess('');
-    setIsActionLoading(true);
-
-    try {
-      if (activeAction === 'DEPOSIT') {
-        await authenticatedFetch(
-          '/wallets/deposit',
-          {
-            method: 'POST',
-
-            body: JSON.stringify({
-              walletId:
-                selectedWallet.id,
-
-              amount:
-                amount.trim(),
-
-              currency:
-                selectedWallet.currency,
-
-              reference:
-                reference.trim() ||
-                'WEB-DEPOSIT',
-
-              idempotencyKey:
-                createIdempotencyKey(
-                  'web-deposit',
-                ),
-            }),
-          },
-        );
-
-        setSuccess(
-          'Money deposited successfully',
-        );
-      }
-
-      if (activeAction === 'WITHDRAW') {
-        await authenticatedFetch(
-          '/wallets/withdraw',
-          {
-            method: 'POST',
-
-            body: JSON.stringify({
-              walletId:
-                selectedWallet.id,
-
-              amount:
-                amount.trim(),
-
-              currency:
-                selectedWallet.currency,
-
-              reference:
-                reference.trim() ||
-                'WEB-WITHDRAWAL',
-
-              idempotencyKey:
-                createIdempotencyKey(
-                  'web-withdraw',
-                ),
-            }),
-          },
-        );
-
-        setSuccess(
-          'Money withdrawn successfully',
-        );
-      }
-
-      if (activeAction === 'TRANSFER') {
-        if (
-          !destinationWalletId.trim()
-        ) {
-          throw new Error(
-            'Destination wallet ID is required',
-          );
-        }
-
-        await authenticatedFetch(
-          '/wallets/transfer',
-          {
-            method: 'POST',
-
-            body: JSON.stringify({
-              sourceWalletId:
-                selectedWallet.id,
-
-              destinationWalletId:
-                destinationWalletId.trim(),
-
-              amount:
-                amount.trim(),
-
-              currency:
-                selectedWallet.currency,
-
-              description:
-                description.trim() ||
-                'Payflow transfer',
-
-              idempotencyKey:
-                createIdempotencyKey(
-                  'web-transfer',
-                ),
-            }),
-          },
-        );
-
-        setSuccess(
-          'Money transferred successfully',
-        );
-      }
-
-      resetActionForm();
-
-      await refreshDashboard();
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : 'Transaction failed',
-      );
-    } finally {
-      setIsActionLoading(false);
-    }
-  }
-
-  function handleLogout(): void {
-    clearAuthSession();
-
-    router.push('/login');
     router.refresh();
   }
 
-  if (isLoading) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50">
-        <p className="font-semibold text-slate-600">
-          Loading dashboard...
-        </p>
-      </main>
-    );
-  }
-
   return (
-    <main className="min-h-screen bg-slate-50">
+    <main className="min-h-screen bg-slate-100">
       <DashboardHeader
-        firstName={user?.firstName}
-        lastName={user?.lastName}
-        email={user?.email}
-        onLogout={handleLogout}
+        firstName={
+          user?.firstName
+        }
+        lastName={
+          user?.lastName
+        }
+        email={
+          user?.email
+        }
+        onLogout={
+          handleLogout
+        }
       />
 
       <div className="mx-auto max-w-7xl px-6 py-10">
-        <section>
-          <p className="text-sm font-semibold uppercase tracking-wider text-sky-600">
-            Overview
-          </p>
+        <section className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
+          <div>
+            <p className="text-sm font-bold uppercase tracking-wider text-sky-600">
+              Wallet Dashboard 2.0
+            </p>
 
-          <h2 className="mt-2 text-3xl font-bold text-slate-900">
-            Welcome, {user?.firstName}
-          </h2>
+            <h2 className="mt-2 text-3xl font-bold text-slate-900">
+              Welcome back,
+              {' '}
+              {user?.firstName ??
+                'Payflow User'}
+            </h2>
 
-          <p className="mt-2 text-slate-600">
-            Manage your wallets and
-            transactions.
-          </p>
+            <p className="mt-2 text-slate-600">
+              Manage your wallet, security and transactions.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              disabled={
+                isRefreshing
+              }
+              onClick={() =>
+                void loadDashboard(
+                  false,
+                )
+              }
+              className="rounded-xl bg-sky-500 px-5 py-3 font-bold text-white transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isRefreshing
+                ? 'Refreshing...'
+                : 'Refresh balance'}
+            </button>
+
+            <Link
+              href="/transactions"
+              className="rounded-xl border border-slate-300 bg-white px-5 py-3 font-bold text-slate-700 transition hover:bg-slate-50"
+            >
+              Transactions
+            </Link>
+          </div>
         </section>
 
-        <div className="mt-8">
-          <SummaryCards
-            wallets={wallets}
-            transactions={transactions}
-          />
-        </div>
-
-        <div className="mt-8">
-          <TransactionChart
-            transactions={transactions}
-          />
-        </div>
-
         {error ? (
-          <div className="mt-6 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-red-700">
+          <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 font-medium text-red-700">
             {error}
           </div>
         ) : null}
 
-        {success ? (
-          <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-emerald-700">
-            {success}
-          </div>
-        ) : null}
+        <section className="mt-8 grid gap-6 lg:grid-cols-3">
+          <article className="rounded-3xl bg-gradient-to-br from-sky-500 to-blue-700 p-7 text-white shadow-xl lg:col-span-2">
+            <div className="flex flex-wrap items-start justify-between gap-5">
+              <div>
+                <p className="text-sm font-semibold text-sky-100">
+                  Available balance
+                </p>
 
-        <section className="mt-10">
-          <div className="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-            <h3 className="text-xl font-bold text-slate-900">
-              Your wallets
-            </h3>
-
-            {wallets.length > 0 ? (
-              <select
-                value={selectedWalletId}
-
-                onChange={(event) =>
-                  setSelectedWalletId(
-                    event.target.value,
-                  )
-                }
-
-                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-slate-800"
-              >
-                {wallets.map(
-                  (wallet) => (
-                    <option
-                      key={wallet.id}
-                      value={wallet.id}
-                    >
-                      {wallet.currency}
-                      {' - '}
-                      {wallet.id.slice(
-                        0,
-                        8,
+                <p className="mt-3 text-4xl font-bold">
+                  {isLoading
+                    ? 'Loading...'
+                    : formatMoney(
+                        wallet?.balance ??
+                          0,
+                        wallet?.currency ??
+                          'INR',
                       )}
-                    </option>
-                  ),
-                )}
-              </select>
-            ) : null}
-          </div>
+                </p>
 
-          <WalletCards
-            wallets={wallets}
-            selectedWalletId={
-              selectedWalletId
-            }
-            onSelectWallet={
-              setSelectedWalletId
-            }
-          />
+                <p className="mt-4 text-sm text-sky-100">
+                  Wallet ID:
+                  {' '}
+                  {wallet?.id ??
+                    'Unavailable'}
+                </p>
+              </div>
+
+              <span className="rounded-full bg-white/20 px-4 py-2 text-sm font-bold">
+                {wallet?.status ??
+                  'UNKNOWN'}
+              </span>
+            </div>
+
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link
+                href="/transactions"
+                className="rounded-xl bg-white px-5 py-3 font-bold text-sky-700 transition hover:bg-sky-50"
+              >
+                View activity
+              </Link>
+
+              <Link
+                href="/edit-profile"
+                className="rounded-xl border border-white/50 px-5 py-3 font-bold text-white transition hover:bg-white/10"
+              >
+                Manage profile
+              </Link>
+            </div>
+          </article>
+
+          <article className="rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
+            <p className="text-sm font-bold uppercase tracking-wider text-slate-500">
+              Live status
+            </p>
+
+            <div className="mt-5 flex items-center gap-3">
+              <span
+                className={`h-3 w-3 rounded-full ${
+                  isConnected
+                    ? 'bg-emerald-500'
+                    : 'bg-slate-300'
+                }`}
+              />
+
+              <p className="font-bold text-slate-900">
+                {isConnected
+                  ? 'Real-time connected'
+                  : 'Real-time disconnected'}
+              </p>
+            </div>
+
+            <p className="mt-5 text-sm leading-6 text-slate-500">
+              Wallet balance will automatically refresh after deposits, withdrawals, transfers and payments.
+            </p>
+
+            <p className="mt-5 text-xs font-semibold text-slate-400">
+              Last updated
+            </p>
+
+            <p className="mt-1 font-semibold text-slate-700">
+              {formatDateTime(
+                lastUpdatedAt,
+              )}
+            </p>
+          </article>
         </section>
 
-        {selectedWallet ? (
-          <div className="mt-10 space-y-10">
-            <WalletActions
-              selectedWallet={
-                selectedWallet
-              }
+        <section className="mt-8">
+          <div>
+            <p className="text-sm font-bold uppercase tracking-wider text-sky-600">
+              Quick access
+            </p>
 
-              activeAction={
-                activeAction
-              }
-
-              amount={amount}
-
-              reference={reference}
-
-              destinationWalletId={
-                destinationWalletId
-              }
-
-              description={
-                description
-              }
-
-              isLoading={
-                isActionLoading
-              }
-
-              onActionChange={
-                handleActionChange
-              }
-
-              onAmountChange={
-                setAmount
-              }
-
-              onReferenceChange={
-                setReference
-              }
-
-              onDestinationWalletChange={
-                setDestinationWalletId
-              }
-
-              onDescriptionChange={
-                setDescription
-              }
-
-              onSubmit={
-                handleWalletAction
-              }
-            />
-
-            <TransactionTable
-              transactions={
-                transactions
-              }
-
-              filter={
-                transactionFilter
-              }
-
-              isLoading={
-                isHistoryLoading
-              }
-
-              onFilterChange={
-                setTransactionFilter
-              }
-            />
+            <h3 className="mt-2 text-2xl font-bold text-slate-900">
+              Manage your Payflow account
+            </h3>
           </div>
-        ) : null}
+
+          <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            <Link
+              href="/transactions"
+              className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
+            >
+              <p className="text-lg font-bold text-slate-900">
+                Transactions
+              </p>
+
+              <p className="mt-2 text-sm text-slate-500">
+                View wallet activity and payment history.
+              </p>
+            </Link>
+
+            <Link
+              href="/sessions"
+              className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
+            >
+              <p className="text-lg font-bold text-slate-900">
+                Active devices
+              </p>
+
+              <p className="mt-2 text-sm text-slate-500">
+                Review and manage signed-in devices.
+              </p>
+            </Link>
+
+            <Link
+              href="/edit-profile"
+              className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
+            >
+              <p className="text-lg font-bold text-slate-900">
+                Profile
+              </p>
+
+              <p className="mt-2 text-sm text-slate-500">
+                Update your personal account information.
+              </p>
+            </Link>
+
+            <Link
+              href="/notification-settings"
+              className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
+            >
+              <p className="text-lg font-bold text-slate-900">
+                Notification Settings
+              </p>
+
+              <p className="mt-2 text-sm text-slate-500">
+                Choose how Payflow notifies you about wallet activity.
+              </p>
+            </Link>
+
+            <Link
+              href="/forgot-password"
+              className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
+            >
+              <p className="text-lg font-bold text-slate-900">
+                Security
+              </p>
+
+              <p className="mt-2 text-sm text-slate-500">
+                Reset your password and protect your account.
+              </p>
+            </Link>
+          </div>
+        </section>
+
+        <section className="mt-8 rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-bold uppercase tracking-wider text-sky-600">
+                Recent activity
+              </p>
+
+              <h3 className="mt-2 text-2xl font-bold text-slate-900">
+                Recent Transactions
+              </h3>
+
+              <p className="mt-1 text-sm text-slate-500">
+                Your latest wallet activity.
+              </p>
+            </div>
+
+            <Link
+              href="/transactions"
+              className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800"
+            >
+              View All Transactions
+            </Link>
+          </div>
+
+          {isLoading ? (
+            <p className="mt-6 text-slate-500">
+              Loading recent transactions...
+            </p>
+          ) : recentTransactions.length === 0 ? (
+            <div className="mt-6 rounded-2xl bg-slate-50 p-8 text-center text-slate-500">
+              No recent transactions found.
+            </div>
+          ) : (
+            <div className="mt-6 divide-y divide-slate-100">
+              {recentTransactions.map(
+                (transaction) => {
+                  const isCredit =
+                    transaction.direction ===
+                    'CREDIT';
+
+                  const counterpartyName =
+                    transaction.counterparty
+                      ? `${transaction.counterparty.firstName} ${
+                          transaction.counterparty.lastName ?? ''
+                        }`.trim()
+                      : '';
+
+                  const details =
+                    transaction.type ===
+                      'TRANSFER' &&
+                    transaction.counterparty
+                      ? `${
+                          isCredit
+                            ? 'Received from'
+                            : 'Sent to'
+                        } ${counterpartyName}`
+                      : transaction.description ??
+                        transaction.reference ??
+                        'Payflow transaction';
+
+                  return (
+                    <Link
+                      key={transaction.id}
+                      href={`/transactions?transactionId=${encodeURIComponent(
+                        transaction.id,
+                      )}`}
+                      className="flex flex-col gap-4 py-5 transition hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-bold text-sky-700">
+                            {transaction.type}
+                          </span>
+
+                          <span className="text-xs font-semibold text-slate-400">
+                            {new Date(
+                              transaction.createdAt,
+                            ).toLocaleString(
+                              'en-IN',
+                            )}
+                          </span>
+                        </div>
+
+                        <p className="mt-2 font-bold text-slate-900">
+                          {details}
+                        </p>
+
+                        {transaction.counterparty && (
+                          <p className="mt-1 text-sm text-slate-500">
+                            {transaction.counterparty.email}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-4 sm:text-right">
+                        <div>
+                          <p
+                            className={
+                              isCredit
+                                ? 'text-lg font-bold text-emerald-600'
+                                : 'text-lg font-bold text-red-600'
+                            }
+                          >
+                            {isCredit
+                              ? '+'
+                              : '-'}
+                            {formatMoney(
+                              transaction.amount,
+                              transaction.currency,
+                            )}
+                          </p>
+
+                          <p className="mt-1 text-xs font-bold text-slate-400">
+                            {transaction.status}
+                          </p>
+                        </div>
+                      </div>
+                    </Link>
+                  );
+                },
+              )}
+            </div>
+          )}
+        </section>
+
+        <section className="mt-8 rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
+          <h3 className="text-xl font-bold text-slate-900">
+            Wallet information
+          </h3>
+
+          <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <p className="text-sm text-slate-500">
+                Currency
+              </p>
+
+              <p className="mt-1 font-bold text-slate-900">
+                {wallet?.currency ??
+                  'INR'}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-sm text-slate-500">
+                Wallet status
+              </p>
+
+              <p className="mt-1 font-bold text-slate-900">
+                {wallet?.status ??
+                  'Unknown'}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-sm text-slate-500">
+                Wallet version
+              </p>
+
+              <p className="mt-1 font-bold text-slate-900">
+                {wallet?.version ??
+                  0}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-sm text-slate-500">
+                Last wallet update
+              </p>
+
+              <p className="mt-1 font-bold text-slate-900">
+                {wallet?.updatedAt
+                  ? new Date(
+                      wallet.updatedAt,
+                    ).toLocaleString(
+                      'en-IN',
+                    )
+                  : 'Unavailable'}
+              </p>
+            </div>
+          </div>
+        </section>
       </div>
     </main>
   );
 }
+
+

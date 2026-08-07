@@ -1,38 +1,86 @@
-import { NestFactory } from '@nestjs/core';
+﻿import {
+  NestFactory,
+} from '@nestjs/core';
+
 import {
   MicroserviceOptions,
   Transport,
 } from '@nestjs/microservices';
-import { AppModule } from './app/app.module';
 
-async function bootstrap(): Promise<void> {
+import {
+  payflowConfig,
+} from '@payflow/shared-config';
+
+import {
+  AppModule,
+} from './app/app.module';
+
+async function bootstrap():
+  Promise<void> {
   const app =
-    await NestFactory.createMicroservice<MicroserviceOptions>(
+    await NestFactory.create(
       AppModule,
-      {
-        transport: Transport.RMQ,
-        options: {
-          urls: [
-            process.env.RABBITMQ_URL ??
-              'amqp://payflow:payflow_password@localhost:5672',
-          ],
-          queue:
-            process.env.RABBITMQ_QUEUE ??
-            'wallet_events',
-          queueOptions: {
-            durable: true,
-          },
-          noAck: false,
-          prefetchCount: 10,
-        },
-      },
     );
 
-  await app.listen();
+  app.enableCors({
+    origin: true,
+    credentials: true,
+  });
+
+  app.connectMicroservice<
+    MicroserviceOptions
+  >({
+    transport:
+      Transport.RMQ,
+
+    options: {
+      urls: [
+        payflowConfig
+          .urls.rabbitMq,
+      ],
+
+      queue:
+        payflowConfig
+          .rabbitMq
+          .walletEventsQueue,
+
+      queueOptions: {
+        durable: true,
+      },
+
+      noAck: false,
+
+      prefetchCount:
+        payflowConfig
+          .rabbitMq
+          .prefetchCount,
+    },
+  });
+
+  await app
+    .startAllMicroservices();
+
+  await app.listen(
+    payflowConfig
+      .ports
+      .notificationService,
+  );
 
   console.log(
-    'Notification Service is listening to RabbitMQ queue: wallet_events',
+    `Notification Service HTTP/WebSocket listening on port ${
+      payflowConfig
+        .ports
+        .notificationService
+    }`,
+  );
+
+  console.log(
+    `Notification Service consuming RabbitMQ queue: ${
+      payflowConfig
+        .rabbitMq
+        .walletEventsQueue
+    }`,
   );
 }
 
-bootstrap();
+void bootstrap();

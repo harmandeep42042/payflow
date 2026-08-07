@@ -1,9 +1,15 @@
+import {
+  AuditLogModule,
+} from '../audit-log/audit-log.module';
 import { Module } from '@nestjs/common';
 
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 
 @Module({
+  imports: [
+    AuditLogModule,
+  ],
   controllers: [
     AdminController,
   ],

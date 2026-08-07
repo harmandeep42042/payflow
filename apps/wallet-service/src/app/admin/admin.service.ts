@@ -1,5 +1,15 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '@payflow/database';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  PrismaService,
+} from '@payflow/database';
+
+import {
+  AuditLogService,
+} from '../audit-log/audit-log.service';
 
 type RecentTransaction = {
   id: string;
@@ -39,6 +49,8 @@ export type GetAdminUsersInput = {
 export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly auditLogService:
+      AuditLogService,
   ) {}
 
   async getDashboard() {
@@ -2103,6 +2115,270 @@ export class AdminService {
               2,
             ),
         })),
+    };
+  }
+
+  async getUserById(
+    userId: string,
+  ) {
+    const user =
+      await this.prisma.user.findUnique({
+        where: {
+          id: userId,
+        },
+
+        select: {
+          id: true,
+          email: true,
+          phone: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+
+          wallets: {
+            orderBy: {
+              createdAt: 'desc',
+            },
+
+            select: {
+              id: true,
+              userId: true,
+              currency: true,
+              balance: true,
+              status: true,
+              version: true,
+              createdAt: true,
+              updatedAt: true,
+
+              ledgerAccount: {
+                select: {
+                  id: true,
+                  code: true,
+                  name: true,
+                  type: true,
+                  currency: true,
+                  status: true,
+                },
+              },
+
+              _count: {
+                select: {
+                  deposits: true,
+                  withdrawals: true,
+                  outgoingTransfers: true,
+                  incomingTransfers: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+    if (!user) {
+      throw new NotFoundException(
+        'User not found',
+      );
+    }
+
+    const totalWalletBalance =
+      user.wallets.reduce(
+        (total, wallet) =>
+          total + Number(wallet.balance),
+        0,
+      );
+
+    return {
+      ...user,
+
+      wallets: user.wallets.map(
+        ({
+          _count,
+          ...wallet
+        }) => ({
+          ...wallet,
+
+          balance:
+            wallet.balance.toString(),
+
+          transactionCounts: {
+            deposits:
+              _count.deposits,
+
+            withdrawals:
+              _count.withdrawals,
+
+            outgoingTransfers:
+              _count.outgoingTransfers,
+
+            incomingTransfers:
+              _count.incomingTransfers,
+
+            total:
+              _count.deposits +
+              _count.withdrawals +
+              _count.outgoingTransfers +
+              _count.incomingTransfers,
+          },
+        }),
+      ),
+
+      walletCount:
+        user.wallets.length,
+
+      totalWalletBalance:
+        totalWalletBalance.toFixed(2),
+    };
+  }
+
+  async updateUserStatus(
+    userId: string,
+    status:
+      | 'ACTIVE'
+      | 'BLOCKED'
+      | 'SUSPENDED',
+  ) {
+    const allowedStatuses = [
+      'ACTIVE',
+      'BLOCKED',
+      'SUSPENDED',
+    ] as const;
+
+    if (
+      !allowedStatuses.includes(
+        status,
+      )
+    ) {
+      throw new BadRequestException(
+        'User status must be ACTIVE, BLOCKED or SUSPENDED',
+      );
+    }
+
+    const user =
+      await this.prisma.user.findUnique({
+        where: {
+          id: userId,
+        },
+      });
+
+    if (!user) {
+      throw new NotFoundException(
+        'User not found',
+      );
+    }
+
+    if (
+      user.role === 'ADMIN' &&
+      status !== 'ACTIVE'
+    ) {
+      throw new BadRequestException(
+        'Admin users cannot be blocked or suspended from this endpoint',
+      );
+    }
+
+    if (
+      user.status === status
+    ) {
+      return {
+        message:
+          `User is already ${status}`,
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+          status: user.status,
+          updatedAt: user.updatedAt,
+        },
+      };
+    }
+
+    const now =
+      new Date();
+
+    const updatedUser =
+      await this.prisma.$transaction(
+        async (transaction) => {
+          const result =
+            await transaction.user.update({
+              where: {
+                id: user.id,
+              },
+
+              data: {
+                status,
+              },
+
+              select: {
+                id: true,
+                email: true,
+                phone: true,
+                firstName: true,
+                lastName: true,
+                role: true,
+                status: true,
+                createdAt: true,
+                updatedAt: true,
+              },
+            });
+
+          if (
+            status !== 'ACTIVE'
+          ) {
+            await transaction.refreshToken.updateMany({
+              where: {
+                userId: user.id,
+                revokedAt: null,
+              },
+
+              data: {
+                revokedAt: now,
+              },
+            });
+          }
+
+          return result;
+        },
+      );
+
+    const auditAction =
+      status === 'BLOCKED'
+        ? 'BLOCK_USER'
+        : status === 'SUSPENDED'
+          ? 'SUSPEND_USER'
+          : 'ACTIVATE_USER';
+
+    await this.auditLogService.create({
+      action: auditAction,
+      targetType: 'USER',
+      targetId: updatedUser.id,
+
+      description:
+        `User status changed from ${user.status} to ${updatedUser.status}`,
+
+      metadata: {
+        previousStatus:
+          user.status,
+
+        newStatus:
+          updatedUser.status,
+
+        targetEmail:
+          updatedUser.email,
+
+        targetRole:
+          updatedUser.role,
+      },
+    });
+
+    return {
+      message:
+        `User status updated to ${status}`,
+
+      user: updatedUser,
     };
   }
 }

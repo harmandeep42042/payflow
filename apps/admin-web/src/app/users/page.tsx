@@ -9,6 +9,11 @@ import {
 import { useRouter } from 'next/navigation';
 
 import {
+  AdminUserDetails,
+  UserDetailsModal,
+} from '../components/user-details-modal';
+
+import {
   adminAuthenticatedRequest,
   clearAdminSession,
   getStoredAdmin,
@@ -116,6 +121,29 @@ export default function UsersPage() {
   const [error, setError] =
     useState('');
 
+  const [
+    selectedUser,
+    setSelectedUser,
+  ] =
+    useState<AdminUserDetails | null>(
+      null,
+    );
+
+  const [
+    isDetailsLoading,
+    setIsDetailsLoading,
+  ] = useState(false);
+
+  const [
+    isStatusUpdating,
+    setIsStatusUpdating,
+  ] = useState(false);
+
+  const [
+    detailsError,
+    setDetailsError,
+  ] = useState('');
+
   const loadUsers = useCallback(
     async (): Promise<void> => {
       try {
@@ -221,6 +249,82 @@ export default function UsersPage() {
     setStatus('ALL');
     setRole('ALL');
     setPage(1);
+  }
+
+  async function openUserDetails(
+    userId: string,
+  ): Promise<void> {
+    try {
+      setIsDetailsLoading(true);
+      setDetailsError('');
+
+      const response =
+        await adminAuthenticatedRequest<AdminUserDetails>(
+          `/admin/users/${userId}`,
+        );
+
+      setSelectedUser(response);
+    } catch (requestError) {
+      setDetailsError(
+        requestError instanceof Error
+          ? requestError.message
+          : 'Unable to load user details',
+      );
+    } finally {
+      setIsDetailsLoading(false);
+    }
+  }
+
+  async function updateSelectedUserStatus(
+    newStatus:
+      | 'ACTIVE'
+      | 'BLOCKED'
+      | 'SUSPENDED',
+  ): Promise<void> {
+    if (!selectedUser) {
+      return;
+    }
+
+    try {
+      setIsStatusUpdating(true);
+      setDetailsError('');
+
+      const response =
+        await adminAuthenticatedRequest<{
+          message: string;
+          user: AdminUserDetails;
+        }>(
+          `/admin/users/${selectedUser.id}/status`,
+          {
+            method: 'PATCH',
+
+            body: JSON.stringify({
+              status: newStatus,
+            }),
+          },
+        );
+
+      setSelectedUser({
+        ...selectedUser,
+        ...response.user,
+        status: response.user.status,
+      });
+
+      await loadUsers();
+    } catch (requestError) {
+      setDetailsError(
+        requestError instanceof Error
+          ? requestError.message
+          : 'Unable to update user status',
+      );
+    } finally {
+      setIsStatusUpdating(false);
+    }
+  }
+
+  function closeUserDetails(): void {
+    setSelectedUser(null);
+    setDetailsError('');
   }
 
   function handleLogout(): void {
@@ -422,6 +526,10 @@ export default function UsersPage() {
                     <th className="px-6 py-4">
                       Joined
                     </th>
+
+                    <th className="px-6 py-4">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
 
@@ -492,6 +600,20 @@ export default function UsersPage() {
                           'en-IN',
                         )}
                       </td>
+
+                      <td className="px-6 py-5">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void openUserDetails(
+                              user.id,
+                            )
+                          }
+                          className="rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-600"
+                        >
+                          View Details
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -545,6 +667,16 @@ export default function UsersPage() {
           </div>
         </section>
       </div>
+      <UserDetailsModal
+        user={selectedUser}
+        isLoading={isDetailsLoading}
+        isUpdating={isStatusUpdating}
+        error={detailsError}
+        onClose={closeUserDetails}
+        onUpdateStatus={
+          updateSelectedUserStatus
+        }
+      />
     </main>
   );
 }

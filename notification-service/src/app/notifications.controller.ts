@@ -1,4 +1,8 @@
-import { Controller, Logger } from '@nestjs/common';
+import {
+  Controller,
+  Logger,
+} from '@nestjs/common';
+
 import {
   Ctx,
   EventPattern,
@@ -6,59 +10,150 @@ import {
   RmqContext,
 } from '@nestjs/microservices';
 
+import {
+  NotificationEvent,
+  NotificationsService,
+} from './notifications.service';
+
 @Controller()
 export class NotificationsController {
-  private readonly logger = new Logger(NotificationsController.name);
+  private readonly logger =
+    new Logger(
+      NotificationsController.name,
+    );
 
-  @EventPattern('wallet.transfer.completed')
-  handleTransferCompleted(
-    @Payload() event: unknown,
-    @Ctx() context: RmqContext,
-  ): void {
-    const channel = context.getChannelRef();
-    const message = context.getMessage();
+  constructor(
+    private readonly notificationsService:
+      NotificationsService,
+  ) {}
 
-    try {
-      this.logger.log(
-        `Transfer event received: ${JSON.stringify(event)}`,
-      );
+  @EventPattern(
+    'wallet.deposit.completed',
+  )
+  handleDepositCompleted(
+    @Payload()
+    event: NotificationEvent,
 
-      this.logger.log('Transfer notification sent');
-
-      channel.ack(message);
-    } catch (error) {
-      this.logger.error(
-        'Failed to process transfer event',
-        error instanceof Error ? error.stack : String(error),
-      );
-
-      channel.nack(message, false, true);
-    }
+    @Ctx()
+    context: RmqContext,
+  ): Promise<void> {
+    return this.handleEvent(
+      'wallet.deposit.completed',
+      event,
+      context,
+    );
   }
 
-  @EventPattern('wallet.deposit.completed')
-  handleDepositCompleted(
-    @Payload() event: unknown,
-    @Ctx() context: RmqContext,
-  ): void {
-    const channel = context.getChannelRef();
-    const message = context.getMessage();
+  @EventPattern(
+    'wallet.withdrawal.completed',
+  )
+  handleWithdrawalCompleted(
+    @Payload()
+    event: NotificationEvent,
+
+    @Ctx()
+    context: RmqContext,
+  ): Promise<void> {
+    return this.handleEvent(
+      'wallet.withdrawal.completed',
+      event,
+      context,
+    );
+  }
+
+  @EventPattern(
+    'wallet.transfer.completed',
+  )
+  handleTransferCompleted(
+    @Payload()
+    event: NotificationEvent,
+
+    @Ctx()
+    context: RmqContext,
+  ): Promise<void> {
+    return this.handleEvent(
+      'wallet.transfer.completed',
+      event,
+      context,
+    );
+  }
+
+  @EventPattern(
+    'payment.completed',
+  )
+  handlePaymentCompleted(
+    @Payload()
+    event: NotificationEvent,
+
+    @Ctx()
+    context: RmqContext,
+  ): Promise<void> {
+    return this.handleEvent(
+      'payment.completed',
+      event,
+      context,
+    );
+  }
+
+  @EventPattern(
+    'user.registered',
+  )
+  handleUserRegistered(
+    @Payload()
+    event: NotificationEvent,
+
+    @Ctx()
+    context: RmqContext,
+  ): Promise<void> {
+    return this.handleEvent(
+      'user.registered',
+      event,
+      context,
+    );
+  }
+
+  private async handleEvent(
+    eventName: string,
+    event: NotificationEvent,
+    context: RmqContext,
+  ): Promise<void> {
+    const channel =
+      context.getChannelRef();
+
+    const message =
+      context.getMessage();
 
     try {
       this.logger.log(
-        `Deposit event received: ${JSON.stringify(event)}`,
+        `Received ${eventName}: ${JSON.stringify(
+          event,
+        )}`,
       );
 
-      this.logger.log('Deposit notification sent');
+      await this.notificationsService
+        .process(
+          eventName,
+          event,
+        );
 
       channel.ack(message);
+
+      this.logger.log(
+        `Acknowledged ${eventName}`,
+      );
     } catch (error) {
       this.logger.error(
-        'Failed to process deposit event',
-        error instanceof Error ? error.stack : String(error),
+        `Failed to process ${eventName}`,
+        error instanceof Error
+          ? error.stack
+          : String(error),
       );
 
-      channel.nack(message, false, true);
+      channel.nack(
+        message,
+        false,
+        true,
+      );
     }
   }
 }

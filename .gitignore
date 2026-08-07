@@ -48,3 +48,25 @@ Thumbs.db
 .next
 out
 /generated/prisma
+
+# Local environment / secrets
+.env
+.env.local
+.env.*.local
+apps/*/.env.local
+
+# Development backup files
+*.backup
+*.bak
+*-backup
+*.backup.prisma
+*.before-create-wallet
+
+# Temporary inspection/debug output
+*-inspection.txt
+*-build-error.txt
+wallet-event-blocks.txt
+current-transaction-history-route.txt
+
+# Local database backup
+*.backup

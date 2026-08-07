@@ -1,3 +1,4 @@
+import { payflowConfig } from '@payflow/shared-config';
 import { HttpService } from '@nestjs/axios';
 import {
   HttpException,
@@ -41,8 +42,7 @@ type UpdateWalletStatusBody = {
 @Injectable()
 export class AdminProxyService {
   private readonly walletServiceUrl =
-    process.env.WALLET_SERVICE_URL ??
-    'http://localhost:4001/api/v1';
+    payflowConfig.urls.walletService;
 
   constructor(
     private readonly httpService:
@@ -62,6 +62,29 @@ export class AdminProxyService {
     );
   }
 
+
+  getUserById(
+    userId: string,
+  ) {
+    return this.get(
+      `/admin/users/${userId}`,
+    );
+  }
+
+  updateUserStatus(
+    userId: string,
+    body: {
+      status:
+        | 'ACTIVE'
+        | 'BLOCKED'
+        | 'SUSPENDED';
+    },
+  ) {
+    return this.patch(
+      `/admin/users/${userId}/status`,
+      body,
+    );
+  }
   getWallets(
     query: AdminWalletsQuery,
   ) {
@@ -80,6 +103,21 @@ export class AdminProxyService {
     );
   }
 
+
+  getAuditLogs(
+    query: {
+      page?: string;
+      limit?: string;
+      action?: string;
+      targetType?: string;
+      actorUserId?: string;
+    },
+  ) {
+    return this.getWithQuery(
+      '/admin/audit-logs',
+      query,
+    );
+  }
   getAnalytics(
     days?: string,
   ) {

@@ -25,6 +25,15 @@ import {
 } from 'recharts';
 
 import {
+  AnalyticsCharts,
+} from '../components/analytics-charts';
+
+import type {
+  DailyActivityItem,
+  TransactionStatusItem,
+  TransactionTypeItem,
+} from '../components/analytics-charts';
+import {
   adminAuthenticatedRequest,
   clearAdminSession,
   getStoredAdmin,
@@ -131,6 +140,18 @@ export default function AnalyticsPage() {
   const [isLoading, setIsLoading] =
     useState(true);
 
+  const [
+    analyticsAutoRefresh,
+    setAnalyticsAutoRefresh,
+  ] = useState(true);
+
+  const [
+    analyticsLastUpdated,
+    setAnalyticsLastUpdated,
+  ] = useState<Date | null>(
+    null,
+  );
+
   const [error, setError] =
     useState('');
 
@@ -146,6 +167,10 @@ export default function AnalyticsPage() {
           );
 
         setAnalytics(response);
+
+        setAnalyticsLastUpdated(
+          new Date(),
+        );
       } catch (requestError) {
         const message =
           requestError instanceof Error
@@ -243,6 +268,26 @@ export default function AnalyticsPage() {
         })),
       [analytics],
     );
+  useEffect(() => {
+    if (!analyticsAutoRefresh) {
+      return;
+    }
+
+    const intervalId =
+      window.setInterval(() => {
+        void loadAnalytics();
+      }, 30_000);
+
+    return () => {
+      window.clearInterval(
+        intervalId,
+      );
+    };
+  }, [
+    analyticsAutoRefresh,
+    loadAnalytics,
+  ]);
+
 
   function handleLogout(): void {
     clearAdminSession();
@@ -752,6 +797,23 @@ export default function AnalyticsPage() {
           </article>
         </section>
       </div>
+
+        {analytics ? (
+          <AnalyticsCharts
+            dailyActivity={
+              analytics.dailyActivity as
+                DailyActivityItem[]
+            }
+            transactionTypes={
+              analytics.transactionTypes as
+                TransactionTypeItem[]
+            }
+            transactionStatuses={
+              analytics.transactionStatuses as
+                TransactionStatusItem[]
+            }
+          />
+        ) : null}
     </main>
   );
 }

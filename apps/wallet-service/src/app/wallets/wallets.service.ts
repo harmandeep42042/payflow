@@ -1,3 +1,4 @@
+﻿import { WalletEventPattern } from '@payflow/shared-events';
 import {
   BadRequestException,
   ConflictException,
@@ -255,7 +256,7 @@ export class WalletsService {
         data: {
           aggregateType: 'DEPOSIT',
           aggregateId: updatedDeposit.id,
-          eventType: 'wallet.deposit.completed',
+          eventType: WalletEventPattern.DepositCompleted,
           payload: {
             depositId: updatedDeposit.id,
             walletId,
@@ -488,7 +489,7 @@ export class WalletsService {
         data: {
           aggregateType: 'WITHDRAWAL',
           aggregateId: updatedWithdrawal.id,
-          eventType: 'wallet.withdrawal.completed',
+          eventType: WalletEventPattern.WithdrawalCompleted,
           payload: {
             withdrawalId: updatedWithdrawal.id,
             walletId,
@@ -790,7 +791,7 @@ export class WalletsService {
         data: {
           aggregateType: 'TRANSFER',
           aggregateId: updatedTransfer.id,
-          eventType: 'wallet.transfer.completed',
+          eventType: WalletEventPattern.TransferCompleted,
           payload: {
             transferId: updatedTransfer.id,
             sourceWalletId,
@@ -991,6 +992,34 @@ export class WalletsService {
                 },
               ],
             },
+            include: {
+              sourceWallet: {
+                select: {
+                  id: true,
+                  user: {
+                    select: {
+                      id: true,
+                      email: true,
+                      firstName: true,
+                      lastName: true,
+                    },
+                  },
+                },
+              },
+              destinationWallet: {
+                select: {
+                  id: true,
+                  user: {
+                    select: {
+                      id: true,
+                      email: true,
+                      firstName: true,
+                      lastName: true,
+                    },
+                  },
+                },
+              },
+            },
             orderBy: {
               createdAt: 'desc',
             },
@@ -1047,6 +1076,33 @@ export class WalletsService {
           sourceWalletId: transfer.sourceWalletId,
           destinationWalletId:
             transfer.destinationWalletId,
+
+          counterparty: outgoing
+            ? {
+                walletId:
+                  transfer.destinationWallet.id,
+                userId:
+                  transfer.destinationWallet.user.id,
+                firstName:
+                  transfer.destinationWallet.user.firstName,
+                lastName:
+                  transfer.destinationWallet.user.lastName,
+                email:
+                  transfer.destinationWallet.user.email,
+              }
+            : {
+                walletId:
+                  transfer.sourceWallet.id,
+                userId:
+                  transfer.sourceWallet.user.id,
+                firstName:
+                  transfer.sourceWallet.user.firstName,
+                lastName:
+                  transfer.sourceWallet.user.lastName,
+                email:
+                  transfer.sourceWallet.user.email,
+              },
+
           amount: transfer.amount.toString(),
           currency: transfer.currency,
           status: transfer.status,
@@ -1095,3 +1151,5 @@ export class WalletsService {
     };
   }
 }
+
+

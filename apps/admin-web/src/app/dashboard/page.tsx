@@ -98,6 +98,18 @@ export default function AdminDashboardPage() {
   const [isLoading, setIsLoading] =
     useState(true);
 
+  const [
+    autoRefreshEnabled,
+    setAutoRefreshEnabled,
+  ] = useState(true);
+
+  const [
+    lastUpdatedAt,
+    setLastUpdatedAt,
+  ] = useState<Date | null>(
+    null,
+  );
+
   const [error, setError] = useState('');
 
   const loadDashboard = useCallback(
@@ -112,6 +124,10 @@ export default function AdminDashboardPage() {
           );
 
         setDashboard(response);
+
+        setLastUpdatedAt(
+          new Date(),
+        );
       } catch (requestError) {
         const message =
           requestError instanceof Error
@@ -154,6 +170,26 @@ export default function AdminDashboardPage() {
 
     void loadDashboard();
   }, [loadDashboard, router]);
+  useEffect(() => {
+    if (!autoRefreshEnabled) {
+      return;
+    }
+
+    const intervalId =
+      window.setInterval(() => {
+        void loadDashboard();
+      }, 10_000);
+
+    return () => {
+      window.clearInterval(
+        intervalId,
+      );
+    };
+  }, [
+    autoRefreshEnabled,
+    loadDashboard,
+  ]);
+
 
   function handleLogout(): void {
     clearAdminSession();
@@ -311,6 +347,55 @@ export default function AdminDashboardPage() {
             >
               View analytics
             </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                router.push('/audit-logs')
+              }
+              className="rounded-xl border border-red-500 bg-white px-5 py-3 font-semibold text-red-600 transition hover:bg-red-50"
+            >
+              View audit logs
+            </button>            <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+              <span
+                className={`h-3 w-3 rounded-full ${
+                  autoRefreshEnabled
+                    ? 'bg-emerald-500'
+                    : 'bg-slate-300'
+                }`}
+              />
+
+              <div>
+                <p className="text-sm font-semibold text-slate-700">
+                  Live refresh
+                </p>
+
+                <p className="text-xs text-slate-500">
+                  {lastUpdatedAt
+                    ? `Updated ${lastUpdatedAt.toLocaleTimeString(
+                        'en-IN',
+                      )}`
+                    : 'Waiting for data'}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setAutoRefreshEnabled(
+                    (current) =>
+                      !current,
+                  )
+                }
+                className="ml-2 rounded-lg border border-slate-300 px-3 py-1 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                {autoRefreshEnabled
+                  ? 'Pause'
+                  : 'Resume'}
+              </button>
+            </div>
+
+
 
             <button
               type="button"

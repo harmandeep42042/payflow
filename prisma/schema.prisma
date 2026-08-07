@@ -20,21 +20,27 @@ model User {
   updatedAt    DateTime   @updatedAt
 
   wallets       Wallet[]
-  refreshTokens RefreshToken[]
+  refreshTokens          RefreshToken[]
+  notificationPreference NotificationPreference?
 }
 
 model RefreshToken {
-  id        String    @id @default(uuid())
-  userId    String
-  tokenHash String    @unique
-  expiresAt DateTime
-  revokedAt DateTime?
-  createdAt DateTime  @default(now())
+  id         String    @id @default(uuid())
+  userId     String
+  tokenHash  String    @unique
+  deviceName String?
+  userAgent  String?
+  ipAddress  String?
+  lastUsedAt DateTime  @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([expiresAt])
+  @@index([lastUsedAt])
 }
 
 model Wallet {
@@ -183,6 +189,49 @@ model OutboxEvent {
   @@index([aggregateType, aggregateId])
 }
 
+model NotificationLog {
+  id                String             @id @default(uuid())
+  eventId           String?            @unique
+  eventType         String
+  recipient         String
+  subject           String
+  status            NotificationStatus @default(PENDING)
+  providerMessageId String?
+  errorMessage      String?
+  attempts          Int                @default(0)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  sentAt            DateTime?
+
+  @@index([status, createdAt])
+  @@index([recipient])
+  @@index([eventType])
+}
+
+
+model NotificationPreference {
+  id                  String   @id @default(uuid())
+  userId              String   @unique
+  inAppEnabled        Boolean  @default(true)
+  emailEnabled        Boolean  @default(true)
+  transfersEnabled    Boolean  @default(true)
+  depositsEnabled     Boolean  @default(true)
+  withdrawalsEnabled  Boolean  @default(true)
+  paymentsEnabled     Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  PREVIEW
+}
+
 enum UserRole {
   USER
   ADMIN
@@ -245,3 +294,102 @@ enum OutboxStatus {
   PUBLISHED
   FAILED
 }
+
+enum PaymentProvider {
+  MOCK
+  RAZORPAY
+  STRIPE
+}
+
+enum PaymentStatus {
+  CREATED
+  PENDING
+  AUTHORIZED
+  COMPLETED
+  FAILED
+  CANCELLED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+model Payment {
+  id                String          @id @default(uuid())
+  userId            String
+  walletId          String
+  provider          PaymentProvider @default(MOCK)
+  providerOrderId   String?         @unique
+  providerPaymentId String?         @unique
+  amount            Decimal         @db.Decimal(18, 2)
+  amountInPaise     Int
+  currency          String          @db.VarChar(3)
+  status            PaymentStatus   @default(CREATED)
+  description       String?
+  idempotencyKey    String          @unique
+  failureReason     String?
+  metadata          Json?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  authorizedAt      DateTime?
+  completedAt       DateTime?
+  failedAt          DateTime?
+
+  @@index([userId, createdAt])
+  @@index([walletId, createdAt])
+  @@index([status, createdAt])
+  @@index([provider, providerOrderId])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  actorUserId String?
+  actorEmail  String?
+  action      String
+  targetType  String
+  targetId    String?
+  description String?
+  metadata    Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@index([actorUserId])
+  @@index([action])
+  @@index([targetType, targetId])
+  @@index([createdAt])
+}
+
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String?
+  email     String?
+  type      String
+  title     String
+  message   String
+  channel   String    @default("IN_APP")
+  status    String    @default("CREATED")
+  isRead    Boolean   @default(false)
+  metadata  Json?
+  createdAt DateTime  @default(now())
+  readAt    DateTime?
+  updatedAt DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([email])
+  @@index([type])
+  @@index([status])
+  @@index([isRead])
+  @@index([createdAt])
+}
+

@@ -1,3 +1,7 @@
+'use client';
+
+import NotificationBell from './NotificationBell';
+
 type DashboardHeaderProps = {
   firstName?: string;
   lastName?: string | null;
@@ -32,6 +36,8 @@ export default function DashboardHeader({
         </div>
 
         <div className="flex items-center gap-4">
+          <NotificationBell />
+
           <div className="hidden text-right sm:block">
             <p className="font-semibold text-slate-900">
               {fullName || 'Payflow User'}
@@ -41,6 +47,13 @@ export default function DashboardHeader({
               {email ?? ''}
             </p>
           </div>
+
+          <a
+            href="/sessions"
+            className="rounded-xl border border-sky-300 bg-white px-4 py-2 font-semibold text-sky-600 transition hover:bg-sky-50"
+          >
+            Devices
+          </a>
 
           <button
             type="button"

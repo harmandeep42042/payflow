@@ -53,6 +53,13 @@ type AdminTransactionsQuery = {
   status?: string;
 };
 
+
+type UpdateUserStatusBody = {
+  status:
+    | 'ACTIVE'
+    | 'BLOCKED'
+    | 'SUSPENDED';
+};
 type UpdateWalletStatusBody = {
   status:
     | 'ACTIVE'
@@ -93,6 +100,52 @@ export class AdminProxyController {
       .getUsers(query);
   }
 
+
+  @Get('users/:userId')
+  @ApiOperation({
+    summary:
+      'Get complete user details through admin Gateway',
+  })
+  @ApiParam({
+    name: 'userId',
+    description: 'User UUID',
+  })
+  getUserById(
+    @Param(
+      'userId',
+      new ParseUUIDPipe(),
+    )
+    userId: string,
+  ) {
+    return this.adminProxyService
+      .getUserById(userId);
+  }
+
+  @Patch('users/:userId/status')
+  @ApiOperation({
+    summary:
+      'Update user status through admin Gateway',
+  })
+  @ApiParam({
+    name: 'userId',
+    description: 'User UUID',
+  })
+  updateUserStatus(
+    @Param(
+      'userId',
+      new ParseUUIDPipe(),
+    )
+    userId: string,
+
+    @Body()
+    body: UpdateUserStatusBody,
+  ) {
+    return this.adminProxyService
+      .updateUserStatus(
+        userId,
+        body,
+      );
+  }
   @Get('wallets')
   getWallets(
     @Query()
@@ -199,6 +252,59 @@ export class AdminProxyController {
       );
   }
 
+
+  @Get('audit-logs')
+  @ApiOperation({
+    summary:
+      'Get administration audit logs through Gateway',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    example: 20,
+  })
+  @ApiQuery({
+    name: 'action',
+    required: false,
+  })
+  @ApiQuery({
+    name: 'targetType',
+    required: false,
+  })
+  @ApiQuery({
+    name: 'actorUserId',
+    required: false,
+  })
+  getAuditLogs(
+    @Query('page')
+    page?: string,
+
+    @Query('limit')
+    limit?: string,
+
+    @Query('action')
+    action?: string,
+
+    @Query('targetType')
+    targetType?: string,
+
+    @Query('actorUserId')
+    actorUserId?: string,
+  ) {
+    return this.adminProxyService
+      .getAuditLogs({
+        page,
+        limit,
+        action,
+        targetType,
+        actorUserId,
+      });
+  }
   @Get('analytics')
   @ApiOperation({
     summary:

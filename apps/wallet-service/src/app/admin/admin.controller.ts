@@ -16,11 +16,21 @@ import {
 } from '@nestjs/swagger';
 
 import {
+  AuditLogService,
+} from '../audit-log/audit-log.service';
+import {
   AdminService,
   AdminUserRole,
   AdminUserStatus,
 } from './admin.service';
 
+
+type UpdateUserStatusDto = {
+  status:
+    | 'ACTIVE'
+    | 'BLOCKED'
+    | 'SUSPENDED';
+};
 type AdminWalletStatus =
   | 'ALL'
   | 'ACTIVE'
@@ -38,7 +48,11 @@ type UpdateWalletStatusDto = {
 @Controller('admin')
 export class AdminController {
   constructor(
-    private readonly adminService: AdminService,
+    private readonly adminService:
+      AdminService,
+
+    private readonly auditLogService:
+      AuditLogService,
   ) {}
 
   @Get('dashboard')
@@ -80,6 +94,52 @@ export class AdminController {
     });
   }
 
+
+  @Get('users/:userId')
+  @ApiOperation({
+    summary:
+      'Get complete administration user details',
+  })
+  @ApiParam({
+    name: 'userId',
+    description: 'User UUID',
+  })
+  getUserById(
+    @Param(
+      'userId',
+      new ParseUUIDPipe(),
+    )
+    userId: string,
+  ) {
+    return this.adminService
+      .getUserById(userId);
+  }
+
+  @Patch('users/:userId/status')
+  @ApiOperation({
+    summary:
+      'Block, suspend or reactivate a user',
+  })
+  @ApiParam({
+    name: 'userId',
+    description: 'User UUID',
+  })
+  updateUserStatus(
+    @Param(
+      'userId',
+      new ParseUUIDPipe(),
+    )
+    userId: string,
+
+    @Body()
+    body: UpdateUserStatusDto,
+  ) {
+    return this.adminService
+      .updateUserStatus(
+        userId,
+        body.status,
+      );
+  }
   @Get('wallets')
   @ApiOperation({
     summary:
@@ -256,6 +316,77 @@ export class AdminController {
       );
   }
 
+
+  @Get('audit-logs')
+  @ApiOperation({
+    summary:
+      'Get paginated administration audit logs',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    example: 20,
+  })
+  @ApiQuery({
+    name: 'action',
+    required: false,
+    example: 'BLOCK_USER',
+  })
+  @ApiQuery({
+    name: 'targetType',
+    required: false,
+    example: 'USER',
+  })
+  @ApiQuery({
+    name: 'actorUserId',
+    required: false,
+  })
+  getAuditLogs(
+    @Query('page')
+    page?: string,
+
+    @Query('limit')
+    limit?: string,
+
+    @Query('action')
+    action?: string,
+
+    @Query('targetType')
+    targetType?: string,
+
+    @Query('actorUserId')
+    actorUserId?: string,
+  ) {
+    return this.auditLogService
+      .findAll({
+        page:
+          page
+            ? Number(page)
+            : 1,
+
+        limit:
+          limit
+            ? Number(limit)
+            : 20,
+
+        action:
+          action?.trim() ||
+          undefined,
+
+        targetType:
+          targetType?.trim() ||
+          undefined,
+
+        actorUserId:
+          actorUserId?.trim() ||
+          undefined,
+      });
+  }
   @Get('analytics')
   @ApiOperation({
     summary:

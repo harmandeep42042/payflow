@@ -1,3 +1,4 @@
+import { payflowConfig } from '@payflow/shared-config';
 import { HttpService } from '@nestjs/axios';
 import {
   HttpException,
@@ -10,8 +11,7 @@ import { firstValueFrom } from 'rxjs';
 @Injectable()
 export class AuthProxyService {
   private readonly authServiceUrl =
-    process.env.AUTH_SERVICE_URL ??
-    'http://localhost:4002/api';
+    payflowConfig.urls.authService;
 
   constructor(
     private readonly httpService: HttpService,
@@ -21,8 +21,45 @@ export class AuthProxyService {
     return this.post('/auth/register', body);
   }
 
-  login(body: unknown) {
-    return this.post('/auth/login', body);
+
+  async login(
+    body: unknown,
+    userAgent?: string,
+    ipAddress?: string,
+  ) {
+    try {
+      const response =
+        await firstValueFrom(
+          this.httpService.post(
+            `${this.authServiceUrl}/auth/login`,
+            body,
+            {
+              headers: {
+                'Content-Type':
+                  'application/json',
+
+                ...(userAgent
+                  ? {
+                      'User-Agent':
+                        userAgent,
+                    }
+                  : {}),
+
+                ...(ipAddress
+                  ? {
+                      'X-Forwarded-For':
+                        ipAddress,
+                    }
+                  : {}),
+              },
+            },
+          ),
+        );
+
+      return response.data;
+    } catch (error) {
+      this.handleHttpError(error);
+    }
   }
 
   refresh(body: unknown) {
@@ -33,6 +70,223 @@ export class AuthProxyService {
     return this.post('/auth/logout', body);
   }
 
+
+  forgotPassword(body: unknown) {
+    return this.post(
+      "/auth/password/forgot",
+      body,
+    );
+  }
+
+  resetPassword(body: unknown) {
+    return this.post(
+      "/auth/password/reset",
+      body,
+    );
+  }
+
+  async changePassword(
+    authorization: string | undefined,
+    body: unknown,
+  ) {
+    try {
+      const response =
+        await firstValueFrom(
+          this.httpService.post(
+            `${this.authServiceUrl}/auth/change-password`,
+            body,
+            {
+              headers: {
+                'Content-Type':
+                  'application/json',
+
+                ...(authorization
+                  ? {
+                      Authorization:
+                        authorization,
+                    }
+                  : {}),
+              },
+            },
+          ),
+        );
+
+      return response.data;
+    } catch (error) {
+      this.handleHttpError(error);
+    }
+  }
+
+  async updateProfile(
+    authorization: string | undefined,
+    body: unknown,
+  ) {
+    try {
+      const response =
+        await firstValueFrom(
+          this.httpService.post(
+            `${this.authServiceUrl}/auth/profile/update`,
+            body,
+            {
+              headers: {
+                'Content-Type':
+                  'application/json',
+
+                ...(authorization
+                  ? {
+                      Authorization:
+                        authorization,
+                    }
+                  : {}),
+              },
+            },
+          ),
+        );
+
+      return response.data;
+    } catch (error) {
+      this.handleHttpError(error);
+    }
+  }
+
+
+  async getCurrentSession(
+    refreshToken: string,
+    authorization?: string,
+  ) {
+    try {
+      const response =
+        await firstValueFrom(
+          this.httpService.post(
+            `${this.authServiceUrl}/auth/sessions/current`,
+            {
+              refreshToken,
+            },
+            {
+              headers:
+                authorization
+                  ? {
+                      Authorization:
+                        authorization,
+                    }
+                  : {},
+            },
+          ),
+        );
+
+      return response.data;
+    } catch (error) {
+      this.handleHttpError(error);
+    }
+  }
+  async getSessions(
+    authorization?: string,
+  ) {
+    try {
+      const response =
+        await firstValueFrom(
+          this.httpService.get(
+            `${this.authServiceUrl}/auth/sessions`,
+            {
+              headers:
+                authorization
+                  ? {
+                      Authorization:
+                        authorization,
+                    }
+                  : {},
+            },
+          ),
+        );
+
+      return response.data;
+    } catch (error) {
+      this.handleHttpError(error);
+    }
+  }
+
+  async revokeSession(
+    sessionId: string,
+    authorization?: string,
+  ) {
+    try {
+      const response =
+        await firstValueFrom(
+          this.httpService.delete(
+            `${this.authServiceUrl}/auth/sessions/${sessionId}`,
+            {
+              headers:
+                authorization
+                  ? {
+                      Authorization:
+                        authorization,
+                    }
+                  : {},
+            },
+          ),
+        );
+
+      return response.data;
+    } catch (error) {
+      this.handleHttpError(error);
+    }
+  }
+
+
+  async logoutOtherSessions(
+    refreshToken: string,
+    authorization?: string,
+  ) {
+    try {
+      const response =
+        await firstValueFrom(
+          this.httpService.post(
+            `${this.authServiceUrl}/auth/sessions/logout-others`,
+            {
+              refreshToken,
+            },
+            {
+              headers:
+                authorization
+                  ? {
+                      Authorization:
+                        authorization,
+                    }
+                  : {},
+            },
+          ),
+        );
+
+      return response.data;
+    } catch (error) {
+      this.handleHttpError(error);
+    }
+  }
+  async logoutAllSessions(
+    authorization?: string,
+  ) {
+    try {
+      const response =
+        await firstValueFrom(
+          this.httpService.delete(
+            `${this.authServiceUrl}/auth/sessions`,
+            {
+              headers:
+                authorization
+                  ? {
+                      Authorization:
+                        authorization,
+                    }
+                  : {},
+            },
+          ),
+        );
+
+      return response.data;
+    } catch (error) {
+      this.handleHttpError(error);
+    }
+  }
   async profile(authorization?: string) {
     try {
       const response = await firstValueFrom(
