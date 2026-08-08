@@ -28,6 +28,8 @@ import {
 } from '../hooks/use-notifications';
 
 import DashboardHeader from './components/DashboardHeader';
+import SummaryCards from './components/SummaryCards';
+import TransactionChart from './components/TransactionChart';
 
 type UserWallet = {
   id: string;
@@ -145,6 +147,13 @@ export default function UserDashboardPage() {
   const [
     recentTransactions,
     setRecentTransactions,
+  ] = useState<DashboardTransaction[]>(
+    [],
+  );
+
+  const [
+    analyticsTransactions,
+    setAnalyticsTransactions,
   ] = useState<DashboardTransaction[]>(
     [],
   );
@@ -279,7 +288,7 @@ export default function UserDashboardPage() {
               | DashboardTransaction[]
               | DashboardTransactionResponse
             >(
-              `/wallets/${resolvedWallet.id}/transactions?page=1&limit=5&type=ALL`,
+              `/wallets/${resolvedWallet.id}/transactions?page=1&limit=100&type=ALL`,
             );
 
           let resolvedTransactions:
@@ -311,6 +320,10 @@ export default function UserDashboardPage() {
             resolvedTransactions =
               historyResponse.data;
           }
+
+          setAnalyticsTransactions(
+            resolvedTransactions,
+          );
 
           setRecentTransactions(
             resolvedTransactions.slice(
@@ -542,6 +555,35 @@ export default function UserDashboardPage() {
               )}
             </p>
           </article>
+        </section>
+
+        <section className="mt-8">
+          <div>
+            <p className="text-sm font-bold uppercase tracking-wider text-sky-600">
+              Wallet analytics
+            </p>
+
+            <h3 className="mt-2 text-2xl font-bold text-slate-900">
+              Financial overview
+            </h3>
+
+            <p className="mt-2 text-sm text-slate-500">
+              Money movement across your recent Payflow wallet activity.
+            </p>
+          </div>
+
+          <div className="mt-5">
+            <SummaryCards
+              wallets={wallet ? [wallet] : []}
+              transactions={analyticsTransactions}
+            />
+          </div>
+
+          <div className="mt-6">
+            <TransactionChart
+              transactions={analyticsTransactions}
+            />
+          </div>
         </section>
 
         <section className="mt-8">
@@ -808,5 +850,7 @@ export default function UserDashboardPage() {
     </main>
   );
 }
+
+
 
 
