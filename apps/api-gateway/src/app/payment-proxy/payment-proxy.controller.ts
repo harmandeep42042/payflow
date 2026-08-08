@@ -2,51 +2,52 @@
   Body,
   Controller,
   Get,
-  NotFoundException,
   Param,
   ParseUUIDPipe,
   Post,
+  UseGuards,
 } from '@nestjs/common';
 
 import {
+  ApiBearerAuth,
   ApiOperation,
   ApiParam,
-  ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
 
 import {
-  CreatePaymentOrderDto,
-} from './dto/create-payment-order.dto';
+  GatewayJwtAuthGuard,
+} from '../gateway-auth/guards/gateway-jwt-auth.guard';
 
 import {
-  PaymentsService,
-} from './payments.service';
+  PaymentProxyService,
+} from './payment-proxy.service';
 
 @ApiTags('Payments')
+@ApiBearerAuth('access-token')
+@UseGuards(
+  GatewayJwtAuthGuard,
+)
 @Controller('payments')
-export class PaymentsController {
+export class PaymentProxyController {
   constructor(
-    private readonly paymentsService:
-      PaymentsService,
+    private readonly paymentProxyService:
+      PaymentProxyService,
   ) {}
 
   @Post('orders')
   @ApiOperation({
     summary:
-      'Create a payment order',
-  })
-  @ApiResponse({
-    status: 201,
-    description:
-      'Payment order created successfully',
+      'Create a payment order through the protected Gateway route',
   })
   createOrder(
     @Body()
-    dto: CreatePaymentOrderDto,
+    body: unknown,
   ) {
-    return this.paymentsService
-      .createOrder(dto);
+    return this.paymentProxyService
+      .createOrder(
+        body,
+      );
   }
 
   @Post(
@@ -54,7 +55,7 @@ export class PaymentsController {
   )
   @ApiOperation({
     summary:
-      'Confirm a mock payment and credit the wallet',
+      'Confirm a payment order through the protected Gateway route',
   })
   @ApiParam({
     name:
@@ -69,16 +70,18 @@ export class PaymentsController {
     )
     orderId: string,
   ) {
-    return this.paymentsService
+    return this.paymentProxyService
       .confirmOrder(
         orderId,
       );
   }
 
-  @Get('orders/:orderId')
+  @Get(
+    'orders/:orderId',
+  )
   @ApiOperation({
     summary:
-      'Get payment order details',
+      'Get payment order through the protected Gateway route',
   })
   @ApiParam({
     name:
@@ -86,27 +89,25 @@ export class PaymentsController {
     description:
       'Internal payment order UUID',
   })
-  async getOrder(
-    @Param('orderId')
+  getOrder(
+    @Param(
+      'orderId',
+      new ParseUUIDPipe(),
+    )
     orderId: string,
   ) {
-    const order =
-      await this.paymentsService
-        .getOrder(orderId);
-
-    if (!order) {
-      throw new NotFoundException(
-        'Payment order not found',
+    return this.paymentProxyService
+      .getOrder(
+        orderId,
       );
-    }
-
-    return order;
   }
 
-  @Get('users/:userId')
+  @Get(
+    'users/:userId',
+  )
   @ApiOperation({
     summary:
-      'Get payments belonging to a user',
+      'Get user payment history through the protected Gateway route',
   })
   @ApiParam({
     name:
@@ -115,10 +116,13 @@ export class PaymentsController {
       'Payflow user UUID',
   })
   getUserPayments(
-    @Param('userId')
+    @Param(
+      'userId',
+      new ParseUUIDPipe(),
+    )
     userId: string,
   ) {
-    return this.paymentsService
+    return this.paymentProxyService
       .getUserPayments(
         userId,
       );

@@ -1,7 +1,21 @@
-import {
+﻿import {
+  BadGatewayException,
   ConflictException,
   Injectable,
+  NotFoundException,
 } from '@nestjs/common';
+
+import {
+  HttpService,
+} from '@nestjs/axios';
+
+import {
+  firstValueFrom,
+} from 'rxjs';
+
+import {
+  randomUUID,
+} from 'node:crypto';
 
 import {
   PrismaService,
@@ -13,9 +27,23 @@ import {
 
 @Injectable()
 export class PaymentsService {
+  private readonly walletServiceUrl =
+    (
+      process.env[
+        'WALLET_SERVICE_URL'
+      ] ??
+      'http://localhost:4001/api/v1'
+    ).replace(
+      /\/$/,
+      '',
+    );
+
   constructor(
     private readonly prisma:
       PrismaService,
+
+    private readonly http:
+      HttpService,
   ) {}
 
   async createOrder(
@@ -37,7 +65,8 @@ export class PaymentsService {
 
     const amount =
       (
-        dto.amountInPaise / 100
+        dto.amountInPaise /
+        100
       ).toFixed(2);
 
     return this.prisma.payment.create({
@@ -52,7 +81,7 @@ export class PaymentsService {
           'MOCK',
 
         providerOrderId:
-          `mock_order_${crypto.randomUUID()}`,
+          `mock_order_${randomUUID()}`,
 
         amount,
 
@@ -82,6 +111,179 @@ export class PaymentsService {
         },
       },
     });
+  }
+
+  async confirmOrder(
+    orderId: string,
+  ) {
+    const payment =
+      await this.prisma.payment.findUnique({
+        where: {
+          id:
+            orderId,
+        },
+      });
+
+    if (!payment) {
+      throw new NotFoundException(
+        'Payment order not found',
+      );
+    }
+
+    /*
+     * If payment is already complete,
+     * never credit wallet again.
+     */
+    if (
+      payment.status ===
+      'COMPLETED'
+    ) {
+      return {
+        message:
+          'Payment already completed',
+
+        payment,
+
+        replayed:
+          true,
+      };
+    }
+
+    if (
+      payment.status !==
+      'CREATED'
+    ) {
+      throw new ConflictException(
+        `Payment cannot be confirmed from status ${payment.status}`,
+      );
+    }
+
+    const walletDepositBody = {
+      walletId:
+        payment.walletId,
+
+      amount:
+        payment.amount
+          .toString(),
+
+      currency:
+        payment.currency,
+
+      reference:
+        `PAYMENT-${payment.id}`,
+
+      /*
+       * Very important:
+       * this makes wallet credit
+       * idempotent.
+       */
+      idempotencyKey:
+        `payment:${payment.id}`,
+    };
+
+    let walletResult:
+      unknown;
+
+    try {
+      const response =
+        await firstValueFrom(
+          this.http.post(
+            `${this.walletServiceUrl}/wallets/deposit`,
+            walletDepositBody,
+          ),
+        );
+
+      walletResult =
+        response.data;
+    } catch {
+      throw new BadGatewayException(
+        'Wallet credit failed. Payment was not completed.',
+      );
+    }
+
+    const providerPaymentId =
+      `mock_pay_${randomUUID()}`;
+
+    /*
+     * Conditional update protects us
+     * from concurrent confirmation calls.
+     */
+    const updateResult =
+      await this.prisma.payment.updateMany({
+        where: {
+          id:
+            payment.id,
+
+          status:
+            'CREATED',
+        },
+
+        data: {
+          status:
+            'COMPLETED',
+
+          providerPaymentId,
+
+          completedAt:
+            new Date(),
+        },
+      });
+
+    /*
+     * Another concurrent request may
+     * already have completed it.
+     *
+     * Wallet is still safe because the
+     * deposit idempotency key is identical.
+     */
+    if (
+      updateResult.count ===
+      0
+    ) {
+      const currentPayment =
+        await this.prisma.payment.findUnique({
+          where: {
+            id:
+              payment.id,
+          },
+        });
+
+      return {
+        message:
+          'Payment already processed',
+
+        payment:
+          currentPayment,
+
+        wallet:
+          walletResult,
+
+        replayed:
+          true,
+      };
+    }
+
+    const completedPayment =
+      await this.prisma.payment.findUnique({
+        where: {
+          id:
+            payment.id,
+        },
+      });
+
+    return {
+      message:
+        'Payment completed successfully',
+
+      payment:
+        completedPayment,
+
+      wallet:
+        walletResult,
+
+      replayed:
+        false,
+    };
   }
 
   async getOrder(

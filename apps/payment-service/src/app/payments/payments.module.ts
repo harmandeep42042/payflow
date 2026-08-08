@@ -1,6 +1,10 @@
-import {
+﻿import {
   Module,
 } from '@nestjs/common';
+
+import {
+  HttpModule,
+} from '@nestjs/axios';
 
 import {
   PrismaModule,
@@ -21,6 +25,11 @@ import {
 @Module({
   imports: [
     PrismaModule,
+
+    HttpModule.register({
+      timeout: 5000,
+      maxRedirects: 0,
+    }),
   ],
 
   controllers: [

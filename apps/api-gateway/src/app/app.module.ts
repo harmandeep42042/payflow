@@ -1,4 +1,7 @@
-import { Module } from '@nestjs/common';
+﻿import {
+  Module,
+} from '@nestjs/common';
+
 import {
   ConfigModule,
 } from '@nestjs/config';
@@ -6,18 +9,27 @@ import {
 import {
   AdminProxyModule,
 } from './admin-proxy/admin-proxy.module';
+
 import {
   AppController,
 } from './app.controller';
+
 import {
   AppService,
 } from './app.service';
+
 import {
   AuthProxyModule,
 } from './auth-proxy/auth-proxy.module';
+
 import {
   GatewayAuthModule,
 } from './gateway-auth/gateway-auth.module';
+
+import {
+  PaymentProxyModule,
+} from './payment-proxy/payment-proxy.module';
+
 import {
   WalletProxyModule,
 } from './wallet-proxy/wallet-proxy.module';
@@ -31,6 +43,7 @@ import {
     GatewayAuthModule,
     AuthProxyModule,
     WalletProxyModule,
+    PaymentProxyModule,
     AdminProxyModule,
   ],
 

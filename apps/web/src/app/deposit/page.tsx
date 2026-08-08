@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import {
   FormEvent,
@@ -27,19 +27,48 @@ type UserWallet = {
   status: string;
 };
 
-type DepositResponse = {
+type PaymentOrder = {
   id: string;
+  userId: string;
   walletId: string;
+  provider: string;
+  providerOrderId: string;
+  providerPaymentId?: string | null;
   amount: string;
+  amountInPaise: number;
   currency: string;
-  reference?: string | null;
   status: string;
+  description?: string | null;
+  idempotencyKey: string;
+};
+
+type PaymentConfirmResponse = {
+  message: string;
+
+  payment: PaymentOrder & {
+    completedAt?: string | null;
+  };
+
   wallet: {
     id: string;
-    balance: string;
+    idempotencyKey: string;
+    walletId: string;
+    amount: string;
     currency: string;
-    version: number;
+    reference: string;
+    status: string;
+
+    wallet: {
+      id: string;
+      balance: string;
+      currency: string;
+      version: number;
+    };
+
+    replayed: boolean;
   };
+
+  replayed: boolean;
 };
 
 function formatMoney(
@@ -53,33 +82,59 @@ function formatMoney(
       currency,
       maximumFractionDigits: 2,
     },
-  ).format(Number(amount) || 0);
+  ).format(
+    Number(amount) || 0,
+  );
 }
 
 export default function DepositPage() {
-  const router = useRouter();
+  const router =
+    useRouter();
 
-  const [wallet, setWallet] =
-    useState<UserWallet | null>(null);
+  const [
+    wallet,
+    setWallet,
+  ] =
+    useState<UserWallet | null>(
+      null,
+    );
 
-  const [amount, setAmount] =
+  const [
+    amount,
+    setAmount,
+  ] =
     useState('100.00');
 
-  const [reference, setReference] =
-    useState('USER-PORTAL-DEPOSIT');
+  const [
+    reference,
+    setReference,
+  ] =
+    useState(
+      'Payflow Add Money',
+    );
 
-  const [isLoading, setIsLoading] =
+  const [
+    isLoading,
+    setIsLoading,
+  ] =
     useState(true);
 
   const [
     isSubmitting,
     setIsSubmitting,
-  ] = useState(false);
+  ] =
+    useState(false);
 
-  const [error, setError] =
+  const [
+    error,
+    setError,
+  ] =
     useState('');
 
-  const [success, setSuccess] =
+  const [
+    success,
+    setSuccess,
+  ] =
     useState('');
 
   const loadWallet =
@@ -92,7 +147,10 @@ export default function DepositPage() {
           !user ||
           !hasValidUserSession()
         ) {
-          router.replace('/login');
+          router.replace(
+            '/login',
+          );
+
           return;
         }
 
@@ -116,26 +174,39 @@ export default function DepositPage() {
             | UserWallet
             | null = null;
 
-          if (Array.isArray(response)) {
+          if (
+            Array.isArray(
+              response,
+            )
+          ) {
             resolvedWallet =
-              response[0] ?? null;
-          } else if (
+              response[0] ??
+              null;
+          }
+          else if (
             response &&
-            typeof response === 'object' &&
+            typeof response ===
+              'object' &&
             'id' in response
           ) {
             resolvedWallet =
-              response as UserWallet;
-          } else if (
+              response as
+                UserWallet;
+          }
+          else if (
             response &&
-            typeof response === 'object' &&
+            typeof response ===
+              'object' &&
             'data' in response
           ) {
             resolvedWallet =
-              response.data ?? null;
-          } else if (
+              response.data ??
+              null;
+          }
+          else if (
             response &&
-            typeof response === 'object' &&
+            typeof response ===
+              'object' &&
             'wallets' in response
           ) {
             resolvedWallet =
@@ -143,108 +214,230 @@ export default function DepositPage() {
               null;
           }
 
-          if (!resolvedWallet?.id) {
+          if (
+            !resolvedWallet?.id
+          ) {
             throw new Error(
               'Wallet details were not found',
             );
           }
 
-          setWallet(resolvedWallet);
-        } catch (requestError) {
+          setWallet(
+            resolvedWallet,
+          );
+        }
+        catch (
+          requestError
+        ) {
           setError(
-            requestError instanceof Error
+            requestError
+              instanceof Error
               ? requestError.message
               : 'Unable to load wallet',
           );
-        } finally {
-          setIsLoading(false);
+        }
+        finally {
+          setIsLoading(
+            false,
+          );
         }
       },
-      [router],
+      [
+        router,
+      ],
     );
 
-  useEffect(() => {
-    void loadWallet();
-  }, [loadWallet]);
+  useEffect(
+    () => {
+      void loadWallet();
+    },
+    [
+      loadWallet,
+    ],
+  );
 
   async function handleDeposit(
-    event: FormEvent<HTMLFormElement>,
+    event:
+      FormEvent<HTMLFormElement>,
   ): Promise<void> {
     event.preventDefault();
+
+    const user =
+      getStoredUser();
+
+    if (
+      !user ||
+      !hasValidUserSession()
+    ) {
+      router.replace(
+        '/login',
+      );
+
+      return;
+    }
 
     if (!wallet) {
       setError(
         'Wallet is unavailable',
       );
+
       return;
     }
 
     const numericAmount =
-      Number(amount);
+      Number(
+        amount,
+      );
 
     if (
-      !Number.isFinite(numericAmount) ||
-      numericAmount <= 0
+      !Number.isFinite(
+        numericAmount,
+      ) ||
+      numericAmount < 1
     ) {
       setError(
-        'Please enter a valid amount',
+        'Please enter an amount of at least ₹1',
       );
+
       return;
     }
 
+    const amountInPaise =
+      Math.round(
+        numericAmount *
+          100,
+      );
+
     try {
-      setIsSubmitting(true);
+      setIsSubmitting(
+        true,
+      );
+
       setError('');
       setSuccess('');
 
-      const response =
-        await userAuthenticatedRequest<DepositResponse>(
-          '/wallets/deposit',
+      /*
+       * STEP 1:
+       * Create persistent payment order
+       * through API Gateway.
+       */
+      const payment =
+        await userAuthenticatedRequest<
+          PaymentOrder
+        >(
+          '/payments/orders',
           {
-            method: 'POST',
+            method:
+              'POST',
 
-            body: JSON.stringify({
-              walletId:
-                wallet.id,
+            body:
+              JSON.stringify({
+                userId:
+                  user.id,
 
-              amount:
-                numericAmount.toFixed(2),
+                walletId:
+                  wallet.id,
 
-              currency:
-                wallet.currency,
+                amountInPaise,
 
-              reference:
-                reference.trim() ||
-                undefined,
+                currency:
+                  wallet.currency,
 
-              idempotencyKey:
-                `web-deposit-${crypto.randomUUID()}`,
-            }),
+                description:
+                  reference.trim() ||
+                  'Payflow Add Money',
+
+                idempotencyKey:
+                  `web-payment-${crypto.randomUUID()}`,
+              }),
           },
         );
 
-      setWallet({
-        ...wallet,
-        balance:
-          response.wallet.balance,
-      });
+      if (
+        !payment.id ||
+        payment.status !==
+          'CREATED'
+      ) {
+        throw new Error(
+          'Payment order could not be created',
+        );
+      }
+
+      /*
+       * STEP 2:
+       * Confirm mock payment.
+       *
+       * Payment Service will call
+       * Wallet Service using an
+       * idempotent deposit key.
+       */
+      const confirmed =
+        await userAuthenticatedRequest<
+          PaymentConfirmResponse
+        >(
+          `/payments/orders/${payment.id}/confirm`,
+          {
+            method:
+              'POST',
+          },
+        );
+
+      if (
+        confirmed.payment
+          .status !==
+        'COMPLETED'
+      ) {
+        throw new Error(
+          'Payment was not completed',
+        );
+      }
+
+      const updatedBalance =
+        confirmed.wallet
+          ?.wallet
+          ?.balance;
+
+      if (
+        updatedBalance
+      ) {
+        setWallet(
+          {
+            ...wallet,
+
+            balance:
+              updatedBalance,
+          },
+        );
+      }
+      else {
+        await loadWallet();
+      }
 
       setSuccess(
         `${formatMoney(
-          response.amount,
-          response.currency,
-        )} added successfully.`,
+          confirmed.payment
+            .amount,
+          confirmed.payment
+            .currency,
+        )} added successfully through Payflow Payment Service.`,
       );
 
       setAmount('');
-    } catch (requestError) {
+    }
+    catch (
+      requestError
+    ) {
       setError(
-        requestError instanceof Error
+        requestError
+          instanceof Error
           ? requestError.message
-          : 'Deposit failed',
+          : 'Payment failed',
       );
-    } finally {
-      setIsSubmitting(false);
+    }
+    finally {
+      setIsSubmitting(
+        false,
+      );
     }
   }
 
@@ -258,7 +451,7 @@ export default function DepositPage() {
             </h1>
 
             <p className="mt-2 text-slate-500">
-              Add test funds to your Payflow wallet.
+              Add money through the Payflow payment flow.
             </p>
           </div>
 
@@ -292,7 +485,8 @@ export default function DepositPage() {
               {isLoading
                 ? 'Loading...'
                 : formatMoney(
-                    wallet?.balance ?? 0,
+                    wallet?.balance ??
+                      0,
                     wallet?.currency ??
                       'INR',
                   )}
@@ -315,7 +509,9 @@ export default function DepositPage() {
           </aside>
 
           <form
-            onSubmit={handleDeposit}
+            onSubmit={
+              handleDeposit
+            }
             className="rounded-3xl bg-white p-7 shadow-sm"
           >
             <div>
@@ -332,9 +528,12 @@ export default function DepositPage() {
                 min="1"
                 step="0.01"
                 value={amount}
-                onChange={(event) =>
+                onChange={(
+                  event,
+                ) =>
                   setAmount(
-                    event.target.value,
+                    event.target
+                      .value,
                   )
                 }
                 required
@@ -347,15 +546,20 @@ export default function DepositPage() {
                 htmlFor="reference"
                 className="text-sm font-semibold text-slate-700"
               >
-                Reference
+                Payment Note
               </label>
 
               <input
                 id="reference"
-                value={reference}
-                onChange={(event) =>
+                value={
+                  reference
+                }
+                onChange={(
+                  event,
+                ) =>
                   setReference(
-                    event.target.value,
+                    event.target
+                      .value,
                   )
                 }
                 className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
@@ -363,7 +567,7 @@ export default function DepositPage() {
             </div>
 
             <div className="mt-5 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-700">
-              This is a development deposit. It does not charge a real card or UPI account.
+              Development mode uses the Payflow MOCK payment provider. No real card, bank account or UPI account is charged.
             </div>
 
             <button
@@ -376,7 +580,7 @@ export default function DepositPage() {
               className="mt-6 w-full rounded-xl bg-emerald-500 px-5 py-3 font-bold text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSubmitting
-                ? 'Adding Money...'
+                ? 'Processing Payment...'
                 : 'Add Money'}
             </button>
           </form>
