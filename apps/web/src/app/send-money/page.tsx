@@ -324,11 +324,22 @@ export default function SendMoneyPage() {
       return;
     }
 
+    const formattedAmount =
+      new Intl.NumberFormat(
+        'en-IN',
+        {
+          style: 'currency',
+          currency:
+            senderWallet.currency,
+          maximumFractionDigits: 2,
+        },
+      ).format(
+        numericAmount,
+      );
+
     const confirmed =
       window.confirm(
-        `Send â‚¹${numericAmount.toFixed(
-          2,
-        )} to ${recipient.displayName || recipient.email}?`,
+        `Send ${formattedAmount} to ${recipient.displayName || recipient.email}?`,
       );
 
     if (!confirmed) {
@@ -461,15 +472,19 @@ export default function SendMoneyPage() {
             </p>
 
             <p className="mt-2 text-3xl font-bold">
-              â‚¹
-              {Number(
-                senderWallet.balance,
-              ).toLocaleString(
+              {new Intl.NumberFormat(
                 'en-IN',
                 {
+                  style: 'currency',
+                  currency:
+                    senderWallet.currency,
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
                 },
+              ).format(
+                Number(
+                  senderWallet.balance,
+                ),
               )}
             </p>
           </div>

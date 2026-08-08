@@ -240,27 +240,23 @@ function TransferSuccessContent() {
       <div className="mx-auto max-w-xl">
         <section className="rounded-3xl border border-slate-200 bg-white p-8 shadow-xl">
           <div className="text-center">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-3xl font-bold text-emerald-600">
-              ✓
-            </div>
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-3xl font-bold text-emerald-600">&#10003;</div>
 
             <h1 className="mt-5 text-3xl font-bold text-slate-900">
               Payment Successful
             </h1>
 
             <p className="mt-3 text-4xl font-bold text-sky-600">
-              ₹
-              {Number(
-                amount,
-              ).toLocaleString(
+              {new Intl.NumberFormat(
                 'en-IN',
                 {
-                  minimumFractionDigits:
-                    2,
-
-                  maximumFractionDigits:
-                    2,
+                  style: 'currency',
+                  currency: 'INR',
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
                 },
+              ).format(
+                Number(amount),
               )}
             </p>
           </div>
