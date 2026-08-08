@@ -683,7 +683,7 @@ const downloadReceipt = (
 
             <Link
               href="/dashboard"
-              className="rounded-xl bg-slate-900 px-4 py-2 font-semibold text-white"
+              className="rounded-xl bg-sky-500 px-4 py-2 font-semibold text-white shadow-sm transition hover:bg-sky-600"
             >
               Dashboard
             </Link>
@@ -1211,6 +1211,7 @@ const downloadReceipt = (
 </main>
   );
 }
+
 
 
 

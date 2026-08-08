@@ -457,7 +457,7 @@ export default function UserDashboardPage() {
 
             <Link
               href="/transactions"
-              className="rounded-xl border border-slate-300 bg-white px-5 py-3 font-bold text-slate-700 transition hover:bg-slate-50"
+              className="rounded-xl bg-sky-500 px-5 py-3 font-bold text-white shadow-sm transition hover:bg-sky-600"
             >
               Transactions
             </Link>
@@ -506,7 +506,7 @@ export default function UserDashboardPage() {
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
                 href="/transactions"
-                className="rounded-xl bg-white px-5 py-3 font-bold text-sky-700 transition hover:bg-sky-50"
+                className="rounded-xl bg-sky-600 px-5 py-3 font-bold text-white shadow-sm transition hover:bg-sky-700"
               >
                 View activity
               </Link>
@@ -683,7 +683,7 @@ export default function UserDashboardPage() {
 
             <Link
               href="/transactions"
-              className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800"
+              className="rounded-xl bg-sky-500 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-sky-600"
             >
               View All Transactions
             </Link>
@@ -850,6 +850,8 @@ export default function UserDashboardPage() {
     </main>
   );
 }
+
+
 
 
 
