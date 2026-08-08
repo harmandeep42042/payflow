@@ -11,6 +11,8 @@ import Link from 'next/link';
 
 import jsPDF from 'jspdf';
 
+import TransactionChart from './TransactionChart';
+
 import {
   useRouter,
 } from 'next/navigation';
@@ -35,6 +37,9 @@ type WalletTransaction = {
     | 'DEPOSIT'
     | 'WITHDRAWAL'
     | 'TRANSFER';
+  direction:
+    | 'CREDIT'
+    | 'DEBIT';
   status:
     | 'PENDING'
     | 'PROCESSING'
@@ -727,6 +732,26 @@ const downloadReceipt = (
           </div>
         ) : null}
 
+        <section className="mt-7 rounded-3xl bg-white p-6 shadow-sm">
+          <div className="mb-6">
+            <p className="text-sm font-semibold uppercase tracking-wide text-sky-600">
+              Analytics
+            </p>
+
+            <h2 className="mt-1 text-2xl font-bold text-slate-900">
+              Money In vs Money Out
+            </h2>
+
+            <p className="mt-2 text-sm text-slate-500">
+              Daily wallet movement based on your recent Payflow transactions.
+            </p>
+          </div>
+
+          <TransactionChart
+            transactions={transactions}
+          />
+        </section>
+
         <section className="mt-7 overflow-hidden rounded-3xl bg-white shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 px-6 py-5">
             <h2 className="text-xl font-bold text-slate-900">
@@ -826,7 +851,7 @@ const downloadReceipt = (
           ) : (
             <>
 <div className="overflow-x-auto">
-              <table className="w-full min-w-[850px]">
+              <table className="w-full table-fixed">
                 <thead className="bg-slate-50 text-left text-sm uppercase tracking-wide text-slate-500">
                   <tr>
                     <th className="px-6 py-4">
@@ -1186,6 +1211,8 @@ const downloadReceipt = (
 </main>
   );
 }
+
+
 
 
 
