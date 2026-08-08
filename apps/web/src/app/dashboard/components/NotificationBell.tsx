@@ -605,20 +605,34 @@ export default function NotificationBell() {
                           {notification.title}
                         </span>
 
-                        <button
-                          type="button"
-                          title="Delete notification"
-                          onClick={(event) => {
-                            event.stopPropagation();
+                        <span
+  role="button"
+  tabIndex={0}
+  title="Delete notification"
+  onClick={(event) => {
+    event.stopPropagation();
 
-                            void deleteNotification(
-                              notification.id,
-                            );
-                          }}
-                          className="rounded-md px-2 py-1 text-xs font-bold text-slate-400 transition hover:bg-red-50 hover:text-red-600"
-                        >
-                          ×
-                        </button>
+    void deleteNotification(
+      notification.id,
+    );
+  }}
+  onKeyDown={(event) => {
+    if (
+      event.key === 'Enter' ||
+      event.key === ' '
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      void deleteNotification(
+        notification.id,
+      );
+    }
+  }}
+  className="rounded-md px-2 py-1 text-xs font-bold text-slate-400 transition hover:bg-red-50 hover:text-red-600"
+>
+  ×
+</span>
 
                         {!notification.isRead ? (
                           <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-sky-500" />
@@ -649,6 +663,7 @@ export default function NotificationBell() {
     </div>
   );
 }
+
 
 
 

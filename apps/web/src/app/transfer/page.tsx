@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import {
   FormEvent,
@@ -178,6 +178,41 @@ export default function TransferPage() {
 
   useEffect(() => {
     void loadWallet();
+
+    const handleFocus = (): void => {
+      void loadWallet();
+    };
+
+    const handleVisibilityChange = (): void => {
+      if (
+        document.visibilityState ===
+        'visible'
+      ) {
+        void loadWallet();
+      }
+    };
+
+    window.addEventListener(
+      'focus',
+      handleFocus,
+    );
+
+    document.addEventListener(
+      'visibilitychange',
+      handleVisibilityChange,
+    );
+
+    return () => {
+      window.removeEventListener(
+        'focus',
+        handleFocus,
+      );
+
+      document.removeEventListener(
+        'visibilitychange',
+        handleVisibilityChange,
+      );
+    };
   }, [loadWallet]);
 
   async function handleTransfer(
