@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import {
   useCallback,
@@ -24,15 +24,6 @@ import {
   YAxis,
 } from 'recharts';
 
-import {
-  AnalyticsCharts,
-} from '../components/analytics-charts';
-
-import type {
-  DailyActivityItem,
-  TransactionStatusItem,
-  TransactionTypeItem,
-} from '../components/analytics-charts';
 import {
   adminAuthenticatedRequest,
   clearAdminSession,
@@ -797,23 +788,6 @@ export default function AnalyticsPage() {
           </article>
         </section>
       </div>
-
-        {analytics ? (
-          <AnalyticsCharts
-            dailyActivity={
-              analytics.dailyActivity as
-                DailyActivityItem[]
-            }
-            transactionTypes={
-              analytics.transactionTypes as
-                TransactionTypeItem[]
-            }
-            transactionStatuses={
-              analytics.transactionStatuses as
-                TransactionStatusItem[]
-            }
-          />
-        ) : null}
     </main>
   );
 }
