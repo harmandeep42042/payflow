@@ -1,4 +1,4 @@
-import {
+﻿import {
   ConflictException,
   Injectable,
   InternalServerErrorException,
@@ -7,7 +7,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { createHash } from 'crypto';
-import { PrismaService } from '../../../../libs/database/src';
+import { PrismaService } from '@payflow/database';
 
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';

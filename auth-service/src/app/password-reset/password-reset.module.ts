@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 
-import { PrismaModule } from '../../../../libs/database/src';
+import { PrismaModule } from '@payflow/database';
 import { AuthModule } from '../auth/auth.module';
 import { PasswordResetController } from './password-reset.controller';
 import { PasswordResetService } from './password-reset.service';

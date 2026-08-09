@@ -1,21 +1,66 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+﻿import {
+  Test,
+  TestingModule,
+} from '@nestjs/testing';
+
+import {
+  AppController,
+} from './app.controller';
+
+import {
+  AppService,
+} from './app.service';
 
 describe('AppController', () => {
-  let app: TestingModule;
+  let controller: AppController;
 
-  beforeAll(async () => {
-    app = await Test.createTestingModule({
-      controllers: [AppController],
-      providers: [AppService],
-    }).compile();
+  const healthResponse = {
+    status: 'ok',
+    service: 'wallet-service',
+    database: 'connected',
+    timestamp:
+      '2026-08-09T00:00:00.000Z',
+  };
+
+  const appServiceMock = {
+    getData: jest.fn(),
+  };
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+
+    appServiceMock.getData.mockResolvedValue(
+      healthResponse,
+    );
+
+    const module: TestingModule =
+      await Test.createTestingModule({
+        controllers: [
+          AppController,
+        ],
+        providers: [
+          {
+            provide: AppService,
+            useValue: appServiceMock,
+          },
+        ],
+      }).compile();
+
+    controller =
+      module.get<AppController>(
+        AppController,
+      );
   });
 
-  describe('getData', () => {
-    it('should return "Hello API"', () => {
-      const appController = app.get<AppController>(AppController);
-      expect(appController.getData()).toEqual({ message: 'Hello API' });
-    });
+  it('should return wallet service health', async () => {
+    await expect(
+      controller.getHealth(),
+    ).resolves.toEqual(
+      healthResponse,
+    );
+
+    expect(
+      appServiceMock.getData,
+    ).toHaveBeenCalledTimes(1);
   });
 });

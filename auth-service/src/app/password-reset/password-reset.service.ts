@@ -1,4 +1,4 @@
-import {
+﻿import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -8,7 +8,7 @@ import {
   randomBytes,
 } from 'crypto';
 
-import { PrismaService } from '../../../../libs/database/src';
+import { PrismaService } from '@payflow/database';
 import { EmailService } from '../email/email.service';
 import { RedisService } from '../redis/redis.service';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';

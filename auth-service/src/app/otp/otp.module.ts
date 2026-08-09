@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 
-import { PrismaModule } from '../../../../libs/database/src';
+import { PrismaModule } from '@payflow/database';
 import { RedisRateLimitGuard } from '../auth/guards/redis-rate-limit.guard';
 import { OtpController } from './otp.controller';
 import { OtpService } from './otp.service';

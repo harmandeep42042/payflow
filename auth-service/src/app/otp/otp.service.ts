@@ -1,4 +1,4 @@
-import {
+﻿import {
   HttpException,
   HttpStatus,
   Injectable,
@@ -11,7 +11,7 @@ import {
   randomInt,
 } from 'crypto';
 
-import { PrismaService } from '../../../../libs/database/src';
+import { PrismaService } from '@payflow/database';
 import { EmailService } from '../email/email.service';
 import { RedisService } from '../redis/redis.service';
 import { RequestOtpDto } from './dto/request-otp.dto';
