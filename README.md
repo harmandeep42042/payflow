@@ -1,4 +1,4 @@
-# 💳 Payflow
+﻿# ðŸ’³ Payflow
 
 Enterprise-grade digital wallet and payment platform built using microservices architecture.
 
@@ -173,39 +173,39 @@ The project currently includes wallet operations, authentication, notifications,
 
 ```text
 payflow/
-├── apps/
-│   ├── api-gateway/
-│   ├── wallet-service/
-│   ├── web/
-│   └── admin-web/
-│
-├── auth-service/
-│
-├── notification-service/
-│
-├── libs/
-│   └── database/
-│       └── src/
-│           └── lib/
-│               └── prisma/
-│                   ├── prisma.module.ts
-│                   └── prisma.service.ts
-│
-├── prisma/
-│   ├── migrations/
-│   └── schema.prisma
-│
-├── generated/
-│   └── prisma/
-│
-├── tools/
-│   └── create-admin.ts
-│
-├── docker-compose.yml
-├── prisma.config.ts
-├── pnpm-workspace.yaml
-├── package.json
-└── README.md
+â”œâ”€â”€ apps/
+â”‚   â”œâ”€â”€ api-gateway/
+â”‚   â”œâ”€â”€ wallet-service/
+â”‚   â”œâ”€â”€ web/
+â”‚   â””â”€â”€ admin-web/
+â”‚
+â”œâ”€â”€ auth-service/
+â”‚
+â”œâ”€â”€ notification-service/
+â”‚
+â”œâ”€â”€ libs/
+â”‚   â””â”€â”€ database/
+â”‚       â””â”€â”€ src/
+â”‚           â””â”€â”€ lib/
+â”‚               â””â”€â”€ prisma/
+â”‚                   â”œâ”€â”€ prisma.module.ts
+â”‚                   â””â”€â”€ prisma.service.ts
+â”‚
+â”œâ”€â”€ prisma/
+â”‚   â”œâ”€â”€ migrations/
+â”‚   â””â”€â”€ schema.prisma
+â”‚
+â”œâ”€â”€ generated/
+â”‚   â””â”€â”€ prisma/
+â”‚
+â”œâ”€â”€ tools/
+â”‚   â””â”€â”€ create-admin.ts
+â”‚
+â”œâ”€â”€ docker-compose.yml
+â”œâ”€â”€ prisma.config.ts
+â”œâ”€â”€ pnpm-workspace.yaml
+â”œâ”€â”€ package.json
+â””â”€â”€ README.md
 ```
 
 ---
@@ -466,14 +466,10 @@ Run:
 pnpm exec tsx .\tools\create-admin.ts
 ```
 
-Development credentials:
+Development credentials are supplied through environment variables:
 
-```text
-Email: admin@payflow.com
-Password: Admin@123
-```
-
-Change these credentials before any production deployment.
+    ADMIN_EMAIL=admin@example.com
+    ADMIN_PASSWORD=change-me-in-production
 
 ---
 
@@ -601,12 +597,12 @@ This project is licensed under the MIT License.
 
 Payflow is an Nx monorepo containing:
 
-- `web` � Customer Next.js application
-- `admin-web` � Administration Next.js application
-- `api-gateway` � NestJS API Gateway
-- `auth-service` � Authentication microservice
-- `wallet-service` � Wallet and ledger microservice
-- `notification-service` � RabbitMQ notification consumer
+- `web` — Customer Next.js application
+- `admin-web` — Administration Next.js application
+- `api-gateway` — NestJS API Gateway
+- `auth-service` — Authentication microservice
+- `wallet-service` — Wallet and ledger microservice
+- `notification-service` — RabbitMQ notification consumer
 
 ### Infrastructure
 
