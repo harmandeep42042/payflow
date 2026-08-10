@@ -801,6 +801,39 @@ export class AdminService {
         },
       });
 
+    const auditAction =
+      status === 'FROZEN'
+        ? 'FREEZE_WALLET'
+        : status === 'CLOSED'
+          ? 'CLOSE_WALLET'
+          : 'ACTIVATE_WALLET';
+
+    await this.auditLogService.create({
+      action: auditAction,
+      targetType: 'WALLET',
+      targetId: updatedWallet.id,
+
+      description:
+        `Wallet status changed from ${wallet.status} to ${updatedWallet.status}`,
+
+      metadata: {
+        previousStatus:
+          wallet.status,
+
+        newStatus:
+          updatedWallet.status,
+
+        userId:
+          updatedWallet.userId,
+
+        currency:
+          updatedWallet.currency,
+
+        balance:
+          updatedWallet.balance.toString(),
+      },
+    });
+
     return {
       message:
         `Wallet status changed to ${status}`,
