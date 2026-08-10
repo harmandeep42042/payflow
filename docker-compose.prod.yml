@@ -119,8 +119,9 @@ services:
     environment:
       NODE_ENV: production
       API_GATEWAY_PORT: 4000
-      AUTH_SERVICE_URL: http://auth-service:4002
-      WALLET_SERVICE_URL: http://wallet-service:4001
+      JWT_SECRET: ${JWT_SECRET}
+      AUTH_SERVICE_URL: http://auth-service:4002/api
+      WALLET_SERVICE_URL: http://wallet-service:4001/api/v1
       PAYMENT_SERVICE_URL: http://payment-service:4005
       NOTIFICATION_SERVICE_URL: http://notification-service:4006
     ports:
