@@ -91,10 +91,12 @@ export class WalletProxyService {
 
   transfer(
     body: unknown,
+    authorization?: string,
   ) {
     return this.post(
       '/wallets/transfer',
       body,
+      authorization,
     );
   }
 
@@ -122,6 +124,7 @@ export class WalletProxyService {
   private async post(
     path: string,
     body: unknown,
+    authorization?: string,
   ) {
     try {
       const response =
@@ -133,6 +136,13 @@ export class WalletProxyService {
               headers: {
                 'Content-Type':
                   'application/json',
+
+                ...(authorization
+                  ? {
+                      Authorization:
+                        authorization,
+                    }
+                  : {}),
               },
             },
           ),

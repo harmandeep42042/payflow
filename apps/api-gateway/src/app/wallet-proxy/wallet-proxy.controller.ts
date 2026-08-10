@@ -5,6 +5,7 @@ import {
   Param,
   Post,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 
@@ -29,6 +30,12 @@ type TransactionHistoryQuery = {
   type?: string;
   page?: string;
   limit?: string;
+};
+
+type AuthenticatedWalletRequest = {
+  headers: {
+    authorization?: string;
+  };
 };
 
 @ApiTags('Wallets')
@@ -166,8 +173,14 @@ export class WalletProxyController {
   transfer(
     @Body()
     body: unknown,
+
+    @Req()
+    request: AuthenticatedWalletRequest,
   ) {
     return this.walletProxyService
-      .transfer(body);
+      .transfer(
+        body,
+        request.headers.authorization,
+      );
   }
 }

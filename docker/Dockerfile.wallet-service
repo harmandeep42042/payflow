@@ -1,4 +1,4 @@
-FROM node:24-alpine
+﻿FROM node:24-alpine
 
 WORKDIR /app
 
@@ -9,7 +9,9 @@ RUN corepack enable && corepack prepare pnpm@11.18.0 --activate
 COPY dist/apps/wallet-service/package.json ./package.json
 COPY dist/apps/wallet-service/pnpm-lock.yaml ./pnpm-lock.yaml
 
-RUN pnpm install --prod --frozen-lockfile --ignore-scripts
+RUN printf "trustLockfile: true\nnetworkConcurrency: 4\nfetchRetries: 5\nfetchRetryMintimeout: 10000\nfetchRetryMaxtimeout: 120000\nfetchTimeout: 300000\n" > pnpm-workspace.yaml
+
+RUN --mount=type=cache,id=payflow-pnpm-store,target=/root/.local/share/pnpm/store/v11 pnpm install --prod --frozen-lockfile --ignore-scripts
 
 COPY dist/apps/wallet-service/main.js ./main.js
 COPY dist/apps/wallet-service/main.js.map ./main.js.map

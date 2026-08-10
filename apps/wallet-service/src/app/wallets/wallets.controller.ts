@@ -6,6 +6,8 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -16,12 +18,24 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 
+import {
+  WalletJwtAuthGuard,
+} from '../wallet-auth/guards/wallet-jwt-auth.guard';
+
 import { CreateWalletDto } from './dto/create-wallet.dto';
 import { DepositWalletDto } from './dto/deposit-wallet.dto';
 import { TransactionHistoryQueryDto } from './dto/transaction-history-query.dto';
 import { TransferWalletDto } from './dto/transfer-wallet.dto';
 import { WithdrawWalletDto } from './dto/withdraw-wallet.dto';
 import { WalletsService } from './wallets.service';
+
+type AuthenticatedWalletRequest = {
+  user?: {
+    id: string;
+    email: string;
+    role: string;
+  };
+};
 
 @ApiTags('Wallets')
 @ApiBearerAuth('access-token')
@@ -126,6 +140,7 @@ export class WalletsController {
   }
 
   @Post('transfer')
+  @UseGuards(WalletJwtAuthGuard)
   @ApiOperation({
     summary:
       'Transfer money between two wallets',
@@ -151,9 +166,16 @@ export class WalletsController {
       'Wallet version changed during transfer',
   })
   transferWallet(
-    @Body() dto: TransferWalletDto,
+    @Body()
+    dto: TransferWalletDto,
+
+    @Req()
+    request: AuthenticatedWalletRequest,
   ) {
-    return this.walletsService.transferWallet(dto);
+    return this.walletsService.transferWallet(
+      dto,
+      request.user?.id,
+    );
   }
 
   @Get('user/:userId')

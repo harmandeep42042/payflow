@@ -1,7 +1,8 @@
-﻿import { WalletEventPattern } from '@payflow/shared-events';
+import { WalletEventPattern } from '@payflow/shared-events';
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -552,7 +553,10 @@ export class WalletsService {
     };
   }
 
-  async transferWallet(dto: TransferWalletDto) {
+  async transferWallet(
+    dto: TransferWalletDto,
+    authenticatedUserId?: string,
+  ) {
     const sourceWalletId = dto.sourceWalletId.trim();
     const destinationWalletId = dto.destinationWalletId.trim();
     const currency = dto.currency.trim().toUpperCase();
@@ -633,6 +637,22 @@ export class WalletsService {
     if (!sourceWallet) {
       throw new NotFoundException('Source wallet not found');
     }
+
+    if (!authenticatedUserId) {
+      throw new ForbiddenException(
+        'Authenticated user identity is required',
+      );
+    }
+
+    if (
+      sourceWallet.userId !==
+      authenticatedUserId
+    ) {
+      throw new ForbiddenException(
+        'You do not own the source wallet',
+      );
+    }
+
 
     if (!destinationWallet) {
       throw new NotFoundException('Destination wallet not found');
