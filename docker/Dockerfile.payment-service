@@ -1,0 +1,19 @@
+FROM node:24-alpine
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+RUN corepack enable && corepack prepare pnpm@11.18.0 --activate
+
+COPY dist/apps/payment-service/package.json ./package.json
+COPY dist/apps/payment-service/pnpm-lock.yaml ./pnpm-lock.yaml
+
+RUN pnpm install --prod --frozen-lockfile --ignore-scripts
+
+COPY dist/apps/payment-service/main.js ./main.js
+COPY dist/apps/payment-service/main.js.map ./main.js.map
+
+EXPOSE 4005
+
+CMD ["node", "main.js"]

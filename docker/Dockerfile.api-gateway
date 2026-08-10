@@ -1,0 +1,19 @@
+FROM node:24-alpine
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+RUN corepack enable && corepack prepare pnpm@11.18.0 --activate
+
+COPY dist/apps/api-gateway/package.json ./package.json
+COPY dist/apps/api-gateway/pnpm-lock.yaml ./pnpm-lock.yaml
+
+RUN pnpm install --prod --frozen-lockfile --ignore-scripts
+
+COPY dist/apps/api-gateway/main.js ./main.js
+COPY dist/apps/api-gateway/main.js.map ./main.js.map
+
+EXPOSE 4000
+
+CMD ["node", "main.js"]

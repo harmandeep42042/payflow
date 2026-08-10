@@ -1,0 +1,22 @@
+﻿FROM node:24-alpine
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
+
+RUN corepack enable && corepack prepare pnpm@11.18.0 --activate
+
+COPY package.json ./package.json
+COPY pnpm-lock.yaml ./pnpm-lock.yaml
+
+RUN pnpm install --prod --frozen-lockfile --ignore-scripts
+
+COPY apps/web/.next/standalone ./
+COPY apps/web/.next/static ./apps/web/.next/static
+COPY apps/web/public ./apps/web/public
+
+EXPOSE 3000
+
+CMD ["node", "apps/web/server.js"]

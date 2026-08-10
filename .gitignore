@@ -70,3 +70,5 @@ current-transaction-history-route.txt
 
 # Local database backup
 *.backup
+.env.production.local
+.pnpm-store/

@@ -1,0 +1,159 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: payflow_prod_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - prod_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: payflow_prod_redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: payflow_prod_rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    volumes:
+      - prod_rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  auth-service:
+    image: payflow-auth-service:test
+    container_name: payflow_prod_auth
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4002
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      REDIS_URL: ${REDIS_URL}
+    ports:
+      - "4002:4002"
+
+  wallet-service:
+    image: payflow-wallet-service:test
+    container_name: payflow_prod_wallet
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4001
+      DATABASE_URL: ${DATABASE_URL}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+    ports:
+      - "4001:4001"
+
+  payment-service:
+    image: payflow-payment-service:test
+    container_name: payflow_prod_payment
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PAYMENT_SERVICE_PORT: 4005
+      DATABASE_URL: ${DATABASE_URL}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET}
+    ports:
+      - "4005:4005"
+
+  notification-service:
+    image: payflow-notification-service:test
+    container_name: payflow_prod_notification
+    restart: unless-stopped
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      NOTIFICATION_SERVICE_PORT: 4006
+      DATABASE_URL: ${DATABASE_URL}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+      RABBITMQ_QUEUE: ${RABBITMQ_QUEUE}
+    ports:
+      - "4006:4006"
+
+  api-gateway:
+    image: payflow-api-gateway:test
+    container_name: payflow_prod_gateway
+    restart: unless-stopped
+    depends_on:
+      - auth-service
+      - wallet-service
+      - payment-service
+      - notification-service
+    environment:
+      NODE_ENV: production
+      API_GATEWAY_PORT: 4000
+      AUTH_SERVICE_URL: http://auth-service:4002
+      WALLET_SERVICE_URL: http://wallet-service:4001
+      PAYMENT_SERVICE_URL: http://payment-service:4005
+      NOTIFICATION_SERVICE_URL: http://notification-service:4006
+    ports:
+      - "4000:4000"
+
+  web:
+    image: payflow-web:test
+    container_name: payflow_prod_web
+    restart: unless-stopped
+    depends_on:
+      - api-gateway
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      NEXT_PUBLIC_API_GATEWAY_URL: http://localhost:4000/api/v1
+    ports:
+      - "3000:3000"
+
+  admin-web:
+    image: payflow-admin-web:test
+    container_name: payflow_prod_admin
+    restart: unless-stopped
+    depends_on:
+      - api-gateway
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      HOSTNAME: 0.0.0.0
+      NEXT_PUBLIC_API_GATEWAY_URL: http://localhost:4000/api/v1
+    ports:
+      - "3001:3001"
+
+volumes:
+  prod_postgres_data:
+  prod_rabbitmq_data:
