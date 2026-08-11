@@ -11,6 +11,9 @@ import {
 import {
   WalletJwtStrategy,
 } from './strategies/wallet-jwt.strategy';
+import {
+  WalletRolesGuard,
+} from './guards/wallet-roles.guard';
 
 @Module({
   imports: [
@@ -22,11 +25,13 @@ import {
   providers: [
     WalletJwtStrategy,
     WalletJwtAuthGuard,
+    WalletRolesGuard,
   ],
 
   exports: [
     PassportModule,
     WalletJwtAuthGuard,
+    WalletRolesGuard,
   ],
 })
 export class WalletAuthModule {}

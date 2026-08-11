@@ -6,9 +6,11 @@ import {
   ParseUUIDPipe,
   Patch,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 
 import {
+  ApiBearerAuth,
   ApiOperation,
   ApiParam,
   ApiQuery,
@@ -23,6 +25,15 @@ import {
   AdminUserRole,
   AdminUserStatus,
 } from './admin.service';
+import {
+  WalletRoles,
+} from '../wallet-auth/decorators/wallet-roles.decorator';
+import {
+  WalletJwtAuthGuard,
+} from '../wallet-auth/guards/wallet-jwt-auth.guard';
+import {
+  WalletRolesGuard,
+} from '../wallet-auth/guards/wallet-roles.guard';
 
 
 type UpdateUserStatusDto = {
@@ -45,6 +56,12 @@ type UpdateWalletStatusDto = {
 };
 
 @ApiTags('Admin')
+@ApiBearerAuth('access-token')
+@UseGuards(
+  WalletJwtAuthGuard,
+  WalletRolesGuard,
+)
+@WalletRoles('ADMIN')
 @Controller('admin')
 export class AdminController {
   constructor(
