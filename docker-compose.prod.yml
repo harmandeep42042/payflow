@@ -71,8 +71,6 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
       RABBITMQ_URL: ${RABBITMQ_URL}
-    ports:
-      - "4001:4001"
 
   payment-service:
     image: payflow-payment-service:test
@@ -138,6 +136,7 @@ services:
       PORT: 3000
       HOSTNAME: 0.0.0.0
       NEXT_PUBLIC_API_GATEWAY_URL: http://localhost:4000/api/v1
+      WALLET_SERVICE_INTERNAL_URL: http://wallet-service:4001/api/v1
     ports:
       - "3000:3000"
 
