@@ -6,13 +6,21 @@
   ParseUUIDPipe,
   Patch,
   Query,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
 
 import {
   NotificationsService,
 } from './notifications.service';
 
+import {
+  AuthenticatedNotificationRequest,
+  NotificationJwtAuthGuard,
+} from './notification-auth/notification-jwt-auth.guard';
+
 @Controller('notifications')
+@UseGuards(NotificationJwtAuthGuard)
 export class NotificationHistoryController {
   constructor(
     private readonly notificationsService:
@@ -21,8 +29,8 @@ export class NotificationHistoryController {
 
   @Get()
   getNotifications(
-    @Query('userId')
-    userId?: string,
+    @Req()
+    request: AuthenticatedNotificationRequest,
 
     @Query('page')
     page?: string,
@@ -39,8 +47,7 @@ export class NotificationHistoryController {
     return this.notificationsService
       .findAll({
         userId:
-          userId?.trim() ||
-          undefined,
+          request.user!.id,
 
         page:
           page
@@ -69,24 +76,25 @@ export class NotificationHistoryController {
       new ParseUUIDPipe(),
     )
     notificationId: string,
+
+    @Req()
+    request: AuthenticatedNotificationRequest,
   ) {
     return this.notificationsService
-      .findById(
+      .findByIdForUser(
         notificationId,
+        request.user!.id,
       );
   }
 
   @Patch('read-all')
   markAllAsRead(
-    @Query(
-      'userId',
-      new ParseUUIDPipe(),
-    )
-    userId: string,
+    @Req()
+    request: AuthenticatedNotificationRequest,
   ) {
     return this.notificationsService
       .markAllAsRead(
-        userId,
+        request.user!.id,
       );
   }
 
@@ -97,24 +105,25 @@ export class NotificationHistoryController {
       new ParseUUIDPipe(),
     )
     notificationId: string,
+
+    @Req()
+    request: AuthenticatedNotificationRequest,
   ) {
     return this.notificationsService
       .markAsRead(
         notificationId,
+        request.user!.id,
       );
   }
 
   @Delete()
   clearNotifications(
-    @Query(
-      'userId',
-      new ParseUUIDPipe(),
-    )
-    userId: string,
+    @Req()
+    request: AuthenticatedNotificationRequest,
   ) {
     return this.notificationsService
       .deleteAllForUser(
-        userId,
+        request.user!.id,
       );
   }
 
@@ -126,16 +135,13 @@ export class NotificationHistoryController {
     )
     notificationId: string,
 
-    @Query(
-      'userId',
-      new ParseUUIDPipe(),
-    )
-    userId: string,
+    @Req()
+    request: AuthenticatedNotificationRequest,
   ) {
     return this.notificationsService
       .deleteForUser(
         notificationId,
-        userId,
+        request.user!.id,
       );
   }
 }

@@ -196,7 +196,7 @@ export class NotificationsService {
 
   async findAll(
     input: {
-      userId?: string;
+      userId: string;
       page?: number;
       limit?: number;
       unreadOnly?: boolean;
@@ -223,12 +223,8 @@ export class NotificationsService {
         : 20;
 
     const where = {
-      ...(input.userId
-        ? {
-            userId:
-              input.userId,
-          }
-        : {}),
+      userId:
+        input.userId,
 
       ...(input.unreadOnly
         ? {
@@ -256,12 +252,8 @@ export class NotificationsService {
 
       this.prisma.notification.count({
         where: {
-          ...(input.userId
-            ? {
-                userId:
-                  input.userId,
-              }
-            : {}),
+          userId:
+            input.userId,
 
           isRead:
             false,
@@ -315,7 +307,7 @@ export class NotificationsService {
 
       filters: {
         userId:
-          input.userId ?? '',
+          input.userId,
 
         unreadOnly:
           Boolean(
@@ -328,15 +320,18 @@ export class NotificationsService {
     };
   }
 
-  async findById(
+  async findByIdForUser(
     notificationId: string,
+    userId: string,
   ) {
     const notification =
       await this.prisma.notification
-        .findUnique({
+        .findFirst({
           where: {
             id:
               notificationId,
+
+            userId,
           },
         });
 
@@ -351,10 +346,12 @@ export class NotificationsService {
 
   async markAsRead(
     notificationId: string,
+    userId: string,
   ) {
     const notification =
-      await this.findById(
+      await this.findByIdForUser(
         notificationId,
+        userId,
       );
 
     if (notification.isRead) {

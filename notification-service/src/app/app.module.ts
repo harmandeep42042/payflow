@@ -3,6 +3,10 @@
 } from '@nestjs/common';
 
 import {
+  JwtModule,
+} from '@nestjs/jwt';
+
+import {
   PrismaModule,
 } from '@payflow/database';
 
@@ -40,8 +44,18 @@ import {
   NotificationPreferencesService,
 } from './notification-preferences.service';
 
+import {
+  NotificationJwtAuthGuard,
+} from './notification-auth/notification-jwt-auth.guard';
+
 @Module({
   imports: [
+    JwtModule.register({
+      secret:
+        process.env.JWT_SECRET ??
+        'payflow_development_secret_change_me',
+    }),
+
     PrismaModule,
     AuthProxyModule,
   ],
@@ -57,6 +71,7 @@ NotificationPreferencesController,
     AppService,
     NotificationsService,
     NotificationsGateway,
+    NotificationJwtAuthGuard,
 NotificationPreferencesService,
   ],
 })

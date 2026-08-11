@@ -2,9 +2,9 @@
   Body,
   Controller,
   Get,
-  ParseUUIDPipe,
   Patch,
-  Query,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
 
 import {
@@ -12,7 +12,13 @@ import {
   UpdateNotificationPreferencesInput,
 } from './notification-preferences.service';
 
+import {
+  AuthenticatedNotificationRequest,
+  NotificationJwtAuthGuard,
+} from './notification-auth/notification-jwt-auth.guard';
+
 @Controller('notification-preferences')
+@UseGuards(NotificationJwtAuthGuard)
 export class NotificationPreferencesController {
   constructor(
     private readonly preferencesService:
@@ -21,25 +27,19 @@ export class NotificationPreferencesController {
 
   @Get()
   getPreferences(
-    @Query(
-      'userId',
-      new ParseUUIDPipe(),
-    )
-    userId: string,
+    @Req()
+    request: AuthenticatedNotificationRequest,
   ) {
     return this.preferencesService
       .getOrCreate(
-        userId,
+        request.user!.id,
       );
   }
 
   @Patch()
   updatePreferences(
-    @Query(
-      'userId',
-      new ParseUUIDPipe(),
-    )
-    userId: string,
+    @Req()
+    request: AuthenticatedNotificationRequest,
 
     @Body()
     input:
@@ -47,7 +47,7 @@ export class NotificationPreferencesController {
   ) {
     return this.preferencesService
       .update(
-        userId,
+        request.user!.id,
         input,
       );
   }
