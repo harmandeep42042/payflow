@@ -55,8 +55,6 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
       REDIS_URL: ${REDIS_URL}
-    ports:
-      - "4002:4002"
 
   wallet-service:
     image: payflow-wallet-service:test
@@ -91,8 +89,6 @@ services:
       WALLET_SERVICE_URL: http://wallet-service:4001/api/v1
       RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
       RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET}
-    ports:
-      - "4005:4005"
 
   notification-service:
     image: payflow-notification-service:test
