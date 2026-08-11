@@ -78,9 +78,15 @@ export class WalletProxyController {
   getUserWallets(
     @Param('userId')
     userId: string,
+
+    @Req()
+    request: AuthenticatedWalletRequest,
   ) {
     return this.walletProxyService
-      .getUserWallets(userId);
+      .getUserWallets(
+        userId,
+        request.headers.authorization,
+      );
   }
 
   @Get(':walletId/transactions')
@@ -118,11 +124,15 @@ export class WalletProxyController {
 
     @Query()
     query: TransactionHistoryQuery,
+
+    @Req()
+    request: AuthenticatedWalletRequest,
   ) {
     return this.walletProxyService
       .getTransactionHistory(
         walletId,
         query,
+        request.headers.authorization,
       );
   }
 
@@ -134,9 +144,15 @@ export class WalletProxyController {
   getWallet(
     @Param('walletId')
     walletId: string,
+
+    @Req()
+    request: AuthenticatedWalletRequest,
   ) {
     return this.walletProxyService
-      .getWallet(walletId);
+      .getWallet(
+        walletId,
+        request.headers.authorization,
+      );
   }
 
   @Post('deposit')
@@ -147,9 +163,15 @@ export class WalletProxyController {
   deposit(
     @Body()
     body: unknown,
+
+    @Req()
+    request: AuthenticatedWalletRequest,
   ) {
     return this.walletProxyService
-      .deposit(body);
+      .deposit(
+        body,
+        request.headers.authorization,
+      );
   }
 
   @Post('withdraw')
@@ -160,9 +182,15 @@ export class WalletProxyController {
   withdraw(
     @Body()
     body: unknown,
+
+    @Req()
+    request: AuthenticatedWalletRequest,
   ) {
     return this.walletProxyService
-      .withdraw(body);
+      .withdraw(
+        body,
+        request.headers.authorization,
+      );
   }
 
   @Post('transfer')

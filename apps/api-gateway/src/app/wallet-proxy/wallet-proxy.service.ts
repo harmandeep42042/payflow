@@ -47,45 +47,57 @@ export class WalletProxyService {
 
   getWallet(
     walletId: string,
+    authorization?: string,
   ) {
     return this.get(
       `/wallets/${walletId}`,
+      undefined,
+      authorization,
     );
   }
 
   getUserWallets(
     userId: string,
+    authorization?: string,
   ) {
     return this.get(
       `/wallets/user/${userId}`,
+      undefined,
+      authorization,
     );
   }
 
   getTransactionHistory(
     walletId: string,
     query: TransactionHistoryQuery,
+    authorization?: string,
   ) {
     return this.get(
       `/wallets/${walletId}/transactions`,
       query,
+      authorization,
     );
   }
 
   deposit(
     body: unknown,
+    authorization?: string,
   ) {
     return this.post(
       '/wallets/deposit',
       body,
+      authorization,
     );
   }
 
   withdraw(
     body: unknown,
+    authorization?: string,
   ) {
     return this.post(
       '/wallets/withdraw',
       body,
+      authorization,
     );
   }
 
@@ -103,6 +115,7 @@ export class WalletProxyService {
   private async get(
     path: string,
     params?: Record<string, unknown>,
+    authorization?: string,
   ) {
     try {
       const response =
@@ -111,6 +124,14 @@ export class WalletProxyService {
             `${this.walletServiceUrl}${path}`,
             {
               params,
+              headers: {
+                ...(authorization
+                  ? {
+                      Authorization:
+                        authorization,
+                    }
+                  : {}),
+              },
             },
           ),
         );

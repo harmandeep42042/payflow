@@ -81,6 +81,7 @@ export class WalletsController {
   }
 
   @Post('deposit')
+  @UseGuards(WalletJwtAuthGuard)
   @ApiOperation({
     summary: 'Deposit money into a wallet',
   })
@@ -105,11 +106,18 @@ export class WalletsController {
   })
   depositWallet(
     @Body() dto: DepositWalletDto,
+
+    @Req()
+    request: AuthenticatedWalletRequest,
   ) {
-    return this.walletsService.depositWallet(dto);
+    return this.walletsService.depositWallet(
+      dto,
+      request.user?.id,
+    );
   }
 
   @Post('withdraw')
+  @UseGuards(WalletJwtAuthGuard)
   @ApiOperation({
     summary: 'Withdraw money from a wallet',
   })
@@ -135,8 +143,14 @@ export class WalletsController {
   })
   withdrawWallet(
     @Body() dto: WithdrawWalletDto,
+
+    @Req()
+    request: AuthenticatedWalletRequest,
   ) {
-    return this.walletsService.withdrawWallet(dto);
+    return this.walletsService.withdrawWallet(
+      dto,
+      request.user?.id,
+    );
   }
 
   @Post('transfer')
@@ -179,6 +193,7 @@ export class WalletsController {
   }
 
   @Get('user/:userId')
+  @UseGuards(WalletJwtAuthGuard)
   @ApiOperation({
     summary: 'Get all wallets belonging to a user',
   })
@@ -200,13 +215,18 @@ export class WalletsController {
   getUserWallets(
     @Param('userId', new ParseUUIDPipe())
     userId: string,
+
+    @Req()
+    request: AuthenticatedWalletRequest,
   ) {
     return this.walletsService.getUserWallets(
       userId,
+      request.user?.id,
     );
   }
 
   @Get(':walletId/transactions')
+  @UseGuards(WalletJwtAuthGuard)
   @ApiOperation({
     summary:
       'Get paginated wallet transaction history',
@@ -254,15 +274,20 @@ export class WalletsController {
     walletId: string,
     @Query()
     query: TransactionHistoryQueryDto,
+
+    @Req()
+    request: AuthenticatedWalletRequest,
   ) {
     return this.walletsService
       .getTransactionHistory(
         walletId,
         query,
+        request.user?.id,
       );
   }
 
   @Get(':walletId')
+  @UseGuards(WalletJwtAuthGuard)
   @ApiOperation({
     summary: 'Get wallet details by wallet ID',
   })
@@ -284,9 +309,13 @@ export class WalletsController {
   getWalletById(
     @Param('walletId', new ParseUUIDPipe())
     walletId: string,
+
+    @Req()
+    request: AuthenticatedWalletRequest,
   ) {
     return this.walletsService.getWalletById(
       walletId,
+      request.user?.id,
     );
   }
 }

@@ -103,7 +103,10 @@ export class WalletsService {
     };
   }
 
-  async depositWallet(dto: DepositWalletDto) {
+  async depositWallet(
+    dto: DepositWalletDto,
+    authenticatedUserId?: string,
+  ) {
     const walletId = dto.walletId.trim();
     const currency = dto.currency.trim().toUpperCase();
     const amount = dto.amount.trim();
@@ -120,6 +123,11 @@ export class WalletsService {
     });
 
     if (existingDeposit) {
+      this.assertWalletOwnership(
+        existingDeposit.wallet.userId,
+        authenticatedUserId,
+      );
+
       return {
         id: existingDeposit.id,
         idempotencyKey: existingDeposit.idempotencyKey,
@@ -146,6 +154,11 @@ export class WalletsService {
     if (!wallet) {
       throw new NotFoundException('Wallet not found');
     }
+
+    this.assertWalletOwnership(
+      wallet.userId,
+      authenticatedUserId,
+    );
 
     if (wallet.status !== 'ACTIVE') {
       throw new BadRequestException('Wallet is not active');
@@ -320,7 +333,10 @@ export class WalletsService {
     };
   }
 
-  async withdrawWallet(dto: WithdrawWalletDto) {
+  async withdrawWallet(
+    dto: WithdrawWalletDto,
+    authenticatedUserId?: string,
+  ) {
     const walletId = dto.walletId.trim();
     const currency = dto.currency.trim().toUpperCase();
     const amount = dto.amount.trim();
@@ -337,6 +353,11 @@ export class WalletsService {
     });
 
     if (existingWithdrawal) {
+      this.assertWalletOwnership(
+        existingWithdrawal.wallet.userId,
+        authenticatedUserId,
+      );
+
       return {
         id: existingWithdrawal.id,
         idempotencyKey: existingWithdrawal.idempotencyKey,
@@ -363,6 +384,11 @@ export class WalletsService {
     if (!wallet) {
       throw new NotFoundException('Wallet not found');
     }
+
+    this.assertWalletOwnership(
+      wallet.userId,
+      authenticatedUserId,
+    );
 
     if (wallet.status !== 'ACTIVE') {
       throw new BadRequestException('Wallet is not active');
@@ -551,6 +577,23 @@ export class WalletsService {
       },
       replayed: false,
     };
+  }
+
+  private assertWalletOwnership(
+    walletUserId: string,
+    authenticatedUserId?: string,
+  ) {
+    if (!authenticatedUserId) {
+      throw new ForbiddenException(
+        'Authenticated user identity is required',
+      );
+    }
+
+    if (walletUserId !== authenticatedUserId) {
+      throw new ForbiddenException(
+        'You do not own this wallet',
+      );
+    }
   }
 
   async transferWallet(
@@ -886,7 +929,10 @@ export class WalletsService {
     };
   }
 
-  async getWalletById(walletId: string) {
+  async getWalletById(
+    walletId: string,
+    authenticatedUserId?: string,
+  ) {
     const wallet = await this.prisma.wallet.findUnique({
       where: {
         id: walletId,
@@ -899,6 +945,11 @@ export class WalletsService {
     if (!wallet) {
       throw new NotFoundException('Wallet not found');
     }
+
+    this.assertWalletOwnership(
+      wallet.userId,
+      authenticatedUserId,
+    );
 
     return {
       id: wallet.id,
@@ -913,7 +964,23 @@ export class WalletsService {
     };
   }
 
-  async getUserWallets(userId: string) {
+  async getUserWallets(
+    userId: string,
+    authenticatedUserId?: string,
+  ) {
+    if (!authenticatedUserId) {
+      this.assertWalletOwnership(
+        userId,
+        authenticatedUserId,
+      );
+    }
+
+    if (userId !== authenticatedUserId) {
+      throw new ForbiddenException(
+        "You cannot access another user's wallets",
+      );
+    }
+
     const user = await this.prisma.user.findUnique({
       where: {
         id: userId,
@@ -951,6 +1018,7 @@ export class WalletsService {
   async getTransactionHistory(
     walletId: string,
     query: TransactionHistoryQueryDto,
+    authenticatedUserId?: string,
   ) {
     const normalizedWalletId = walletId.trim();
     const page = query.page ?? 1;
@@ -974,6 +1042,11 @@ export class WalletsService {
     if (!wallet) {
       throw new NotFoundException('Wallet not found');
     }
+
+    this.assertWalletOwnership(
+      wallet.userId,
+      authenticatedUserId,
+    );
 
     const depositItems =
       type === 'ALL' || type === 'DEPOSIT'
