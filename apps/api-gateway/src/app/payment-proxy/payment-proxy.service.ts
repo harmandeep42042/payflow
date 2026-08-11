@@ -36,46 +36,65 @@ export class PaymentProxyService {
 
   createOrder(
     body: unknown,
+    authorization?: string,
   ) {
     return this.post(
       '/payments/orders',
       body,
+      authorization,
     );
   }
 
   confirmOrder(
     orderId: string,
+    authorization?: string,
   ) {
     return this.post(
       `/payments/orders/${orderId}/confirm`,
       {},
+      authorization,
     );
   }
 
   getOrder(
     orderId: string,
+    authorization?: string,
   ) {
     return this.get(
       `/payments/orders/${orderId}`,
+      authorization,
     );
   }
 
   getUserPayments(
     userId: string,
+    authorization?: string,
   ) {
     return this.get(
       `/payments/users/${userId}`,
+      authorization,
     );
   }
 
   private async get(
     path: string,
+    authorization?: string,
   ) {
     try {
       const response =
         await firstValueFrom(
           this.httpService.get(
             `${this.paymentServiceUrl}${path}`,
+            {
+              headers: {
+                ...(authorization
+                  ? {
+                      Authorization:
+                        authorization,
+                    }
+                  : {}),
+              },
+            },
           ),
         );
 
@@ -90,6 +109,7 @@ export class PaymentProxyService {
   private async post(
     path: string,
     body: unknown,
+    authorization?: string,
   ) {
     try {
       const response =
@@ -101,6 +121,13 @@ export class PaymentProxyService {
               headers: {
                 'Content-Type':
                   'application/json',
+
+                ...(authorization
+                  ? {
+                      Authorization:
+                        authorization,
+                    }
+                  : {}),
               },
             },
           ),

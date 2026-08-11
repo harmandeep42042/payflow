@@ -5,6 +5,7 @@
   Param,
   ParseUUIDPipe,
   Post,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 
@@ -22,6 +23,12 @@ import {
 import {
   PaymentProxyService,
 } from './payment-proxy.service';
+
+type AuthenticatedPaymentRequest = {
+  headers: {
+    authorization?: string;
+  };
+};
 
 @ApiTags('Payments')
 @ApiBearerAuth('access-token')
@@ -43,10 +50,14 @@ export class PaymentProxyController {
   createOrder(
     @Body()
     body: unknown,
+
+    @Req()
+    request: AuthenticatedPaymentRequest,
   ) {
     return this.paymentProxyService
       .createOrder(
         body,
+        request.headers.authorization,
       );
   }
 
@@ -69,10 +80,14 @@ export class PaymentProxyController {
       new ParseUUIDPipe(),
     )
     orderId: string,
+
+    @Req()
+    request: AuthenticatedPaymentRequest,
   ) {
     return this.paymentProxyService
       .confirmOrder(
         orderId,
+        request.headers.authorization,
       );
   }
 
@@ -95,10 +110,14 @@ export class PaymentProxyController {
       new ParseUUIDPipe(),
     )
     orderId: string,
+
+    @Req()
+    request: AuthenticatedPaymentRequest,
   ) {
     return this.paymentProxyService
       .getOrder(
         orderId,
+        request.headers.authorization,
       );
   }
 
@@ -121,10 +140,14 @@ export class PaymentProxyController {
       new ParseUUIDPipe(),
     )
     userId: string,
+
+    @Req()
+    request: AuthenticatedPaymentRequest,
   ) {
     return this.paymentProxyService
       .getUserPayments(
         userId,
+        request.headers.authorization,
       );
   }
 }

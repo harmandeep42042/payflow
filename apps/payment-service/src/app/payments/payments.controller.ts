@@ -6,9 +6,12 @@
   Param,
   ParseUUIDPipe,
   Post,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
 
 import {
+  ApiBearerAuth,
   ApiOperation,
   ApiParam,
   ApiResponse,
@@ -23,7 +26,25 @@ import {
   PaymentsService,
 } from './payments.service';
 
+import {
+  PaymentJwtAuthGuard,
+} from '../payment-auth/guards/payment-jwt-auth.guard';
+
+type AuthenticatedPaymentRequest = {
+  user?: {
+    id: string;
+    email: string;
+    role: string;
+  };
+
+  headers: {
+    authorization?: string;
+  };
+};
+
 @ApiTags('Payments')
+@ApiBearerAuth('access-token')
+@UseGuards(PaymentJwtAuthGuard)
 @Controller('payments')
 export class PaymentsController {
   constructor(
@@ -44,9 +65,15 @@ export class PaymentsController {
   createOrder(
     @Body()
     dto: CreatePaymentOrderDto,
+
+    @Req()
+    request: AuthenticatedPaymentRequest,
   ) {
     return this.paymentsService
-      .createOrder(dto);
+      .createOrder(
+        dto,
+        request.user?.id,
+      );
   }
 
   @Post(
@@ -68,10 +95,15 @@ export class PaymentsController {
       new ParseUUIDPipe(),
     )
     orderId: string,
+
+    @Req()
+    request: AuthenticatedPaymentRequest,
   ) {
     return this.paymentsService
       .confirmOrder(
         orderId,
+        request.user?.id,
+        request.headers.authorization,
       );
   }
 
@@ -89,10 +121,16 @@ export class PaymentsController {
   async getOrder(
     @Param('orderId')
     orderId: string,
+
+    @Req()
+    request: AuthenticatedPaymentRequest,
   ) {
     const order =
       await this.paymentsService
-        .getOrder(orderId);
+        .getOrder(
+          orderId,
+          request.user?.id,
+        );
 
     if (!order) {
       throw new NotFoundException(
@@ -117,10 +155,14 @@ export class PaymentsController {
   getUserPayments(
     @Param('userId')
     userId: string,
+
+    @Req()
+    request: AuthenticatedPaymentRequest,
   ) {
     return this.paymentsService
       .getUserPayments(
         userId,
+        request.user?.id,
       );
   }
 }

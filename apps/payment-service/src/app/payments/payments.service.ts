@@ -1,6 +1,7 @@
 ﻿import {
   BadGatewayException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -48,7 +49,14 @@ export class PaymentsService {
 
   async createOrder(
     dto: CreatePaymentOrderDto,
+    authenticatedUserId?: string,
   ) {
+    this.assertUserOwnership(
+      dto.userId,
+      authenticatedUserId,
+      'You cannot create a payment for another user',
+    );
+
     const existingPayment =
       await this.prisma.payment.findUnique({
         where: {
@@ -62,6 +70,26 @@ export class PaymentsService {
         'A payment order already exists for this idempotency key',
       );
     }
+
+    const wallet =
+      await this.prisma.wallet.findUnique({
+        where: {
+          id:
+            dto.walletId,
+        },
+      });
+
+    if (!wallet) {
+      throw new NotFoundException(
+        'Wallet not found',
+      );
+    }
+
+    this.assertUserOwnership(
+      wallet.userId,
+      authenticatedUserId,
+      'You do not own this wallet',
+    );
 
     const amount =
       (
@@ -115,6 +143,8 @@ export class PaymentsService {
 
   async confirmOrder(
     orderId: string,
+    authenticatedUserId?: string,
+    authorization?: string,
   ) {
     const payment =
       await this.prisma.payment.findUnique({
@@ -129,6 +159,11 @@ export class PaymentsService {
         'Payment order not found',
       );
     }
+
+    this.assertUserOwnership(
+      payment.userId,
+      authenticatedUserId,
+    );
 
     /*
      * If payment is already complete,
@@ -190,6 +225,19 @@ export class PaymentsService {
           this.http.post(
             `${this.walletServiceUrl}/wallets/deposit`,
             walletDepositBody,
+            {
+              headers: {
+                'Content-Type':
+                  'application/json',
+
+                ...(authorization
+                  ? {
+                      Authorization:
+                        authorization,
+                    }
+                  : {}),
+              },
+            },
           ),
         );
 
@@ -288,18 +336,36 @@ export class PaymentsService {
 
   async getOrder(
     orderId: string,
+    authenticatedUserId?: string,
   ) {
-    return this.prisma.payment.findUnique({
-      where: {
-        id:
-          orderId,
-      },
-    });
+    const payment =
+      await this.prisma.payment.findUnique({
+        where: {
+          id:
+            orderId,
+        },
+      });
+
+    if (payment) {
+      this.assertUserOwnership(
+        payment.userId,
+        authenticatedUserId,
+      );
+    }
+
+    return payment;
   }
 
   async getUserPayments(
     userId: string,
+    authenticatedUserId?: string,
   ) {
+    this.assertUserOwnership(
+      userId,
+      authenticatedUserId,
+      "You cannot access another user's payments",
+    );
+
     return this.prisma.payment.findMany({
       where: {
         userId,
@@ -312,5 +378,23 @@ export class PaymentsService {
 
       take: 50,
     });
+  }
+
+  private assertUserOwnership(
+    resourceUserId: string,
+    authenticatedUserId?: string,
+    message = 'You do not own this payment',
+  ) {
+    if (!authenticatedUserId) {
+      throw new ForbiddenException(
+        'Authenticated user identity is required',
+      );
+    }
+
+    if (resourceUserId !== authenticatedUserId) {
+      throw new ForbiddenException(
+        message,
+      );
+    }
   }
 }

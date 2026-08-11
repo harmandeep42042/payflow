@@ -87,6 +87,8 @@ services:
       NODE_ENV: production
       PAYMENT_SERVICE_PORT: 4005
       DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      WALLET_SERVICE_URL: http://wallet-service:4001/api/v1
       RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
       RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET}
     ports:
@@ -124,7 +126,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       AUTH_SERVICE_URL: http://auth-service:4002/api
       WALLET_SERVICE_URL: http://wallet-service:4001/api/v1
-      PAYMENT_SERVICE_URL: http://payment-service:4005
+      PAYMENT_SERVICE_URL: http://payment-service:4005/api/v1
       NOTIFICATION_SERVICE_URL: http://notification-service:4006
     ports:
       - "4000:4000"

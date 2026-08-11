@@ -22,9 +22,15 @@ import {
   RazorpayService,
 } from './razorpay/razorpay.service';
 
+import {
+  PaymentAuthModule,
+} from '../payment-auth/payment-auth.module';
+
 @Module({
   imports: [
     PrismaModule,
+
+    PaymentAuthModule,
 
     HttpModule.register({
       timeout: 5000,
