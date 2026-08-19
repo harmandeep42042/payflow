@@ -6,6 +6,7 @@ import {
 import {
   NestFactory,
 } from '@nestjs/core';
+import helmet from 'helmet';
 
 import {
   MicroserviceOptions,
@@ -27,14 +28,44 @@ async function bootstrap():
     await NestFactory.create(
       AppModule,
     );
+  app.use(helmet());
+
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .disable('x-powered-by');
 
   app.setGlobalPrefix(
     'api/v1',
   );
+  const allowedOrigins = (
+    process.env['CORS_ALLOWED_ORIGINS'] ??
+    'http://localhost:3000,http://localhost:3001'
+  )
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
 
   app.enableCors({
-    origin:
-      true,
+    origin: (
+      origin,
+      callback,
+    ) => {
+      if (
+        !origin ||
+        allowedOrigins.includes(origin)
+      ) {
+        callback(null, true);
+        return;
+      }
+
+      callback(
+        new Error(
+          'Origin is not allowed by CORS policy',
+        ),
+        false,
+      );
+    },
 
     credentials:
       true,

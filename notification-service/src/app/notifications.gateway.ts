@@ -22,6 +22,13 @@ import {
   Socket,
 } from 'socket.io';
 
+const notificationAllowedOrigins = (
+  process.env['CORS_ALLOWED_ORIGINS'] ??
+  'http://localhost:3000,http://localhost:3001'
+)
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 type JoinUserRoomPayload = {
   userId?: string;
 };
@@ -60,10 +67,29 @@ type RealtimeNotification = {
 
   cors: {
     origin:
-      true,
+      notificationAllowedOrigins,
 
     credentials:
       true,
+  },
+
+  allowRequest: (
+    request,
+    callback,
+  ) => {
+    const origin =
+      request.headers.origin;
+
+    const allowed =
+      !origin ||
+      notificationAllowedOrigins.includes(
+        origin,
+      );
+
+    callback(
+      null,
+      allowed,
+    );
   },
 })
 export class NotificationsGateway

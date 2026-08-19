@@ -105,8 +105,6 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       RABBITMQ_URL: ${RABBITMQ_URL}
       RABBITMQ_QUEUE: ${RABBITMQ_QUEUE}
-    ports:
-      - "4006:4006"
 
   api-gateway:
     image: payflow-api-gateway:test

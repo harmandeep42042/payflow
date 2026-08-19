@@ -3,6 +3,7 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import helmet from 'helmet';
 
 import {
   createProxyMiddleware,
@@ -42,6 +43,12 @@ async function bootstrap(): Promise<void> {
       notificationSocketProxy.upgrade,
     );
 
+  app.use(helmet());
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .disable('x-powered-by');
+
   app.setGlobalPrefix('api/v1');
 
   app.useGlobalPipes(
@@ -51,34 +58,67 @@ async function bootstrap(): Promise<void> {
     }),
   );
 
-  app.enableCors();
+  const allowedOrigins = (
+    process.env.CORS_ALLOWED_ORIGINS ??
+    'http://localhost:3000,http://localhost:3001'
+  )
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
 
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('Payflow API Gateway')
-    .setDescription(
-      'Enterprise API Gateway for Payflow Microservices',
-    )
-    .setVersion('1.0.0')
-    .addBearerAuth(
-      {
-        type: 'http',
-        scheme: 'bearer',
-        bearerFormat: 'JWT',
-      },
-      'access-token',
-    )
-    .build();
+  app.enableCors({
+    origin: (
+      origin,
+      callback,
+    ) => {
+      if (
+        !origin ||
+        allowedOrigins.includes(origin)
+      ) {
+        callback(null, true);
+        return;
+      }
 
-  const swaggerDocument = SwaggerModule.createDocument(
-    app,
-    swaggerConfig,
-  );
+      callback(
+        new Error(
+          'Origin is not allowed by CORS policy',
+        ),
+        false,
+      );
+    },
+    credentials: true,
+  });
 
-  SwaggerModule.setup(
-    'swagger',
-    app,
-    swaggerDocument,
-  );
+  if (process.env.NODE_ENV !== 'production') {
+    const swaggerConfig =
+      new DocumentBuilder()
+        .setTitle('Payflow API Gateway')
+        .setDescription(
+          'Enterprise API Gateway for Payflow Microservices',
+        )
+        .setVersion('1.0.0')
+        .addBearerAuth(
+          {
+            type: 'http',
+            scheme: 'bearer',
+            bearerFormat: 'JWT',
+          },
+          'access-token',
+        )
+        .build();
+
+    const swaggerDocument =
+      SwaggerModule.createDocument(
+        app,
+        swaggerConfig,
+      );
+
+    SwaggerModule.setup(
+      'swagger',
+      app,
+      swaggerDocument,
+    );
+  }
 
   const port = Number(
     process.env.API_GATEWAY_PORT ?? 4000,

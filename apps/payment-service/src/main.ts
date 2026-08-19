@@ -6,6 +6,7 @@ import {
 import {
   NestFactory,
 } from '@nestjs/core';
+import helmet from 'helmet';
 
 import {
   DocumentBuilder,
@@ -22,17 +23,17 @@ async function bootstrap():
     await NestFactory.create(
       AppModule,
     );
+  app.use(helmet());
+
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .disable('x-powered-by');
 
   app.setGlobalPrefix(
     'api/v1',
   );
-
-  app.enableCors({
-    origin: true,
-    credentials: true,
-  });
-
-  app.useGlobalPipes(
+app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
       transform: true,
@@ -40,29 +41,31 @@ async function bootstrap():
     }),
   );
 
-  const swaggerConfig =
-    new DocumentBuilder()
-      .setTitle(
-        'Payflow Payment Service API',
-      )
-      .setDescription(
-        'Payment order and provider integration service',
-      )
-      .setVersion('1.0.0')
-      .addBearerAuth()
-      .build();
-
-  const swaggerDocument =
-    SwaggerModule.createDocument(
+  if (process.env.NODE_ENV !== 'production') {
+    const swaggerConfig =
+      new DocumentBuilder()
+        .setTitle(
+          'Payflow Payment Service API',
+        )
+        .setDescription(
+          'Payment order and provider integration service',
+        )
+        .setVersion('1.0.0')
+        .addBearerAuth()
+        .build();
+  
+    const swaggerDocument =
+      SwaggerModule.createDocument(
+        app,
+        swaggerConfig,
+      );
+  
+    SwaggerModule.setup(
+      'swagger',
       app,
-      swaggerConfig,
+      swaggerDocument,
     );
-
-  SwaggerModule.setup(
-    'swagger',
-    app,
-    swaggerDocument,
-  );
+  }
 
   const port =
     Number(

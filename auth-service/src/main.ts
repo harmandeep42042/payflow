@@ -3,6 +3,7 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import helmet from 'helmet';
 import {
   DocumentBuilder,
   SwaggerModule,
@@ -16,9 +17,16 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor'
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
 
+  app.use(helmet());
+
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .disable('x-powered-by');
+
   app.setGlobalPrefix('api');
 
-  app.enableCors();
+
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -37,38 +45,40 @@ async function bootstrap(): Promise<void> {
     new ResponseInterceptor(),
   );
 
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('Payflow Auth Service')
-    .setDescription(
-      'Authentication, JWT, refresh token and RBAC APIs',
-    )
-    .setVersion('1.0')
-    .addBearerAuth(
-      {
-        type: 'http',
-        scheme: 'bearer',
-        bearerFormat: 'JWT',
-      },
-      'access-token',
-    )
-    .build();
-
-  const swaggerDocument =
-    SwaggerModule.createDocument(
+  if (process.env.NODE_ENV !== 'production') {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('Payflow Auth Service')
+      .setDescription(
+        'Authentication, JWT, refresh token and RBAC APIs',
+      )
+      .setVersion('1.0')
+      .addBearerAuth(
+        {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+        },
+        'access-token',
+      )
+      .build();
+  
+    const swaggerDocument =
+      SwaggerModule.createDocument(
+        app,
+        swaggerConfig,
+      );
+  
+    SwaggerModule.setup(
+      'swagger',
       app,
-      swaggerConfig,
-    );
-
-  SwaggerModule.setup(
-    'swagger',
-    app,
-    swaggerDocument,
-    {
-      swaggerOptions: {
-        persistAuthorization: true,
+      swaggerDocument,
+      {
+        swaggerOptions: {
+          persistAuthorization: true,
+        },
       },
-    },
-  );
+    );
+  }
 
   const port = Number(
     process.env.PORT ?? 4002,
