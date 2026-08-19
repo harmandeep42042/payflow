@@ -1,3 +1,5 @@
+import { AppService } from './app.service';
+import { AppController } from './app.controller';
 import {
   AuditLogModule,
 } from './audit-log/audit-log.module';
@@ -23,6 +25,12 @@ import { WalletsModule } from './wallets/wallets.module';
     OutboxModule,
     AdminModule,
     RecipientLookupModule,
+  ],
+  controllers: [
+    AppController,
+  ],
+  providers: [
+    AppService,
   ],
 })
 export class AppModule {}
