@@ -28,13 +28,19 @@ export class EmailService {
     expiresInMinutes: number;
   }): Promise<EmailDeliveryResult> {
     if (!this.isMailEnabled()) {
-      this.logger.warn(
-        [
-          'MAIL_ENABLED=false',
-          `Development OTP for ${input.email}: ${input.otp}`,
-          `Expires in ${input.expiresInMinutes} minutes`,
-        ].join(' | '),
-      );
+      if (process.env.NODE_ENV !== 'production') {
+        this.logger.warn(
+          [
+            'MAIL_ENABLED=false',
+            `Development OTP for ${input.email}: ${input.otp}`,
+            `Expires in ${input.expiresInMinutes} minutes`,
+          ].join(' | '),
+        );
+      } else {
+        this.logger.warn(
+          'MAIL_ENABLED=false | OTP delivery disabled',
+        );
+      }
 
       return {
         delivery: 'console',
@@ -123,13 +129,19 @@ export class EmailService {
     resetToken: string;
   }): Promise<EmailDeliveryResult> {
     if (!this.isMailEnabled()) {
-      this.logger.warn(
-        [
-          'MAIL_ENABLED=false',
-          `Development password reset token for ${input.email}`,
-          input.resetToken,
-        ].join(' | '),
-      );
+      if (process.env.NODE_ENV !== 'production') {
+        this.logger.warn(
+          [
+            'MAIL_ENABLED=false',
+            `Development password reset token for ${input.email}`,
+            input.resetToken,
+          ].join(' | '),
+        );
+      } else {
+        this.logger.warn(
+          'MAIL_ENABLED=false | Password reset delivery disabled',
+        );
+      }
 
       return {
         delivery: 'console',
