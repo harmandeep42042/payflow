@@ -9,6 +9,7 @@ import { JwtService } from '@nestjs/jwt';
 import {
   createHash,
   randomInt,
+  randomUUID,
 } from 'crypto';
 
 import { PrismaService } from '@payflow/database';
@@ -238,6 +239,7 @@ export class OtpService {
           email: user.email,
           role: user.role,
           type: 'refresh',
+          jti: randomUUID(),
         },
         {
           secret:

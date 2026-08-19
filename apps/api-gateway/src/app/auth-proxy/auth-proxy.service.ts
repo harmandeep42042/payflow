@@ -65,6 +65,19 @@ export class AuthProxyService {
   refresh(body: unknown) {
     return this.post('/auth/refresh', body);
   }
+  requestOtp(body: unknown) {
+    return this.post(
+      '/auth/otp/request',
+      body,
+    );
+  }
+
+  verifyOtp(body: unknown) {
+    return this.post(
+      '/auth/otp/verify',
+      body,
+    );
+  }
 
   logout(body: unknown) {
     return this.post('/auth/logout', body);

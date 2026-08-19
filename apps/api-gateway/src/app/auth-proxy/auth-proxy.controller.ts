@@ -60,6 +60,25 @@ export class AuthProxyController {
   refresh(@Body() body: unknown) {
     return this.authProxyService.refresh(body);
   }
+  @Post('otp/request')
+  @HttpCode(HttpStatus.OK)
+  requestOtp(
+    @Body()
+    body: unknown,
+  ) {
+    return this.authProxyService
+      .requestOtp(body);
+  }
+
+  @Post('otp/verify')
+  @HttpCode(HttpStatus.OK)
+  verifyOtp(
+    @Body()
+    body: unknown,
+  ) {
+    return this.authProxyService
+      .verifyOtp(body);
+  }
 
   @Post('logout')
   @HttpCode(HttpStatus.OK)
