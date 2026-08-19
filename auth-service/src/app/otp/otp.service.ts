@@ -243,8 +243,12 @@ export class OtpService {
         },
         {
           secret:
-            process.env.JWT_REFRESH_SECRET ??
-            'payflow_refresh_development_secret',
+            process.env.JWT_REFRESH_SECRET ||
+              (() => {
+                throw new Error(
+                  'JWT_REFRESH_SECRET environment variable is required',
+                );
+              })(),
           expiresIn: '7d',
         },
       );
