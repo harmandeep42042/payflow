@@ -1,4 +1,4 @@
-﻿import {
+import {
   Injectable,
   Logger,
   NotFoundException,
@@ -510,6 +510,32 @@ export class NotificationsService {
 
         message:
           `${currency} ${amount} was withdrawn from your wallet.`,
+      };
+    }
+
+    if (
+      eventName ===
+      'wallet.transfer.sent'
+    ) {
+      return {
+        title:
+          'Money sent',
+
+        message:
+          `${currency} ${amount} was sent successfully.`,
+      };
+    }
+
+    if (
+      eventName ===
+      'wallet.transfer.received'
+    ) {
+      return {
+        title:
+          'Money received',
+
+        message:
+          `${currency} ${amount} was received successfully.`,
       };
     }
 
