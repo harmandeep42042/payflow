@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { PrismaService } from '@payflow/database';
 
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -822,6 +822,7 @@ export class AuthService {
         email: user.email,
         role: user.role,
         type: 'refresh',
+        jti: randomUUID(),
       },
       {
         secret:
