@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import {
   useEffect,
@@ -101,38 +101,52 @@ function getNotificationIcon(
     type ===
     'wallet.deposit.completed'
   ) {
-    return 'â‚¹';
+    return '\u20B9';
   }
 
   if (
     type ===
     'wallet.withdrawal.completed'
   ) {
-    return 'â†“';
+    return '\u2193';
+  }
+
+  if (
+    type ===
+    'wallet.transfer.sent'
+  ) {
+    return '\u2191';
+  }
+
+  if (
+    type ===
+    'wallet.transfer.received'
+  ) {
+    return '\u2193';
   }
 
   if (
     type ===
     'wallet.transfer.completed'
   ) {
-    return 'â†—';
+    return '\u2197';
   }
 
   if (
     type ===
     'payment.completed'
   ) {
-    return 'âœ“';
+    return '\u2713';
   }
 
   if (
     type ===
     'user.registered'
   ) {
-    return 'ðŸ‘‹';
+    return '\u2605';
   }
 
-  return 'â€¢';
+  return '\u2022';
 }
 
 export default function NotificationBell() {
@@ -596,7 +610,7 @@ export default function NotificationBell() {
             {filteredNotifications.length === 0 ? (
               <div className="px-6 py-12 text-center">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-2xl">
-                  ðŸ””
+                  Ã°Å¸â€â€
                 </div>
 
                 <p className="mt-4 font-semibold text-slate-700">
@@ -662,7 +676,7 @@ export default function NotificationBell() {
   }}
   className="rounded-md px-2 py-1 text-xs font-bold text-slate-400 transition hover:bg-red-50 hover:text-red-600"
 >
-  ×
+  Ã—
 </span>
 
                         {!notification.isRead ? (

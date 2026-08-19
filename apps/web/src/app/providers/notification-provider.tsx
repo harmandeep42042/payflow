@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import {
   createContext,
@@ -208,6 +208,7 @@ function findUserId(): string | null {
   }
 
   const tokenKeys = [
+    'payflow_user_access_token',
     'accessToken',
     'access_token',
     'payflow_access_token',
@@ -246,10 +247,54 @@ export function NotificationProvider({
 }: {
   children: ReactNode;
 }) {
-  const userId =
-    typeof window !== 'undefined'
-      ? findUserId()
-      : null;
+  const [
+    userId,
+    setUserId,
+  ] = useState<string | null>(
+    null,
+  );
+
+  useEffect(() => {
+    const syncUserId = (): void => {
+      setUserId(
+        findUserId(),
+      );
+    };
+
+    syncUserId();
+
+    window.addEventListener(
+      'storage',
+      syncUserId,
+    );
+
+    window.addEventListener(
+      'focus',
+      syncUserId,
+    );
+
+    window.addEventListener(
+      'payflow:auth-changed',
+      syncUserId,
+    );
+
+    return () => {
+      window.removeEventListener(
+        'storage',
+        syncUserId,
+      );
+
+      window.removeEventListener(
+        'focus',
+        syncUserId,
+      );
+
+      window.removeEventListener(
+        'payflow:auth-changed',
+        syncUserId,
+      );
+    };
+  }, []);
 
   const [
     notifications,
@@ -475,8 +520,7 @@ useEffect(() => {
     if (!accessToken) {
       return;
     }
-
-    const socket: Socket =
+const socket: Socket =
       io(
         notificationSocketUrl,
         {
@@ -519,6 +563,7 @@ useEffect(() => {
       },
     );
 
+
     socket.on(
       'disconnect',
       () => {
@@ -547,6 +592,7 @@ useEffect(() => {
       socket.disconnect();
     };
   }, [
+    userId,
     addNotification,
   ]);
 

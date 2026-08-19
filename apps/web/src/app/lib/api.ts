@@ -169,6 +169,12 @@ export function saveUserSession(
     PROFILE_KEY,
     JSON.stringify(response.user),
   );
+
+  window.dispatchEvent(
+    new Event(
+      'payflow:auth-changed',
+    ),
+  );
 }
 
 export function getStoredUser():
