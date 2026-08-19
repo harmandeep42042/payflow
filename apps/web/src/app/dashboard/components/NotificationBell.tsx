@@ -19,11 +19,13 @@ import {
   useNotifications,
 } from '../../hooks/use-notifications';
 
+import {
+  API_GATEWAY_URL,
+  getUserAccessToken,
+} from '../../lib/api';
+
 const notificationApiUrl =
-  process.env[
-    'NEXT_PUBLIC_NOTIFICATION_API_URL'
-  ] ??
-  'http' + '://' + 'localhost:4006/api/v1';
+  API_GATEWAY_URL;
 
 function formatRelativeTime(
   dateValue: string,
@@ -229,11 +231,23 @@ export default function NotificationBell() {
     );
 
     try {
+      const accessToken =
+        getUserAccessToken();
+
+      if (!accessToken) {
+        return;
+      }
+
       await fetch(
         `${notificationApiUrl}/notifications/${notification.id}/read`,
         {
           method:
             'PATCH',
+
+          headers: {
+            Authorization:
+              `Bearer ${accessToken}`,
+          },
         },
       );
     } catch {
@@ -303,18 +317,24 @@ export default function NotificationBell() {
     }
 
     try {
-      const query =
-        new URLSearchParams({
-          userId,
-        });
+      const accessToken =
+        getUserAccessToken();
+
+      if (!accessToken) {
+        return;
+      }
 
       const response =
         await fetch(
           notificationApiUrl +
-            '/notifications?' +
-            query.toString(),
+            '/notifications',
           {
             method: 'DELETE',
+
+            headers: {
+              Authorization:
+                `Bearer ${accessToken}`,
+            },
           },
         );
 
@@ -350,20 +370,25 @@ export default function NotificationBell() {
     }
 
     try {
-      const query =
-        new URLSearchParams({
-          userId,
-        });
+      const accessToken =
+        getUserAccessToken();
+
+      if (!accessToken) {
+        return;
+      }
 
       const response =
         await fetch(
           notificationApiUrl +
             '/notifications/' +
-            encodeURIComponent(notificationId) +
-            '?' +
-            query.toString(),
+            encodeURIComponent(notificationId),
           {
             method: 'DELETE',
+
+            headers: {
+              Authorization:
+                `Bearer ${accessToken}`,
+            },
           },
         );
 
@@ -409,18 +434,24 @@ export default function NotificationBell() {
     );
 
     try {
-      const query =
-        new URLSearchParams({
-          userId,
-        });
+      const accessToken =
+        getUserAccessToken();
+
+      if (!accessToken) {
+        return;
+      }
 
       const response =
         await fetch(
           notificationApiUrl +
-            '/notifications/read-all?' +
-            query.toString(),
+            '/notifications/read-all',
           {
             method: 'PATCH',
+
+            headers: {
+              Authorization:
+                `Bearer ${accessToken}`,
+            },
           },
         );
 

@@ -7,6 +7,11 @@ import {
 
 import Link from 'next/link';
 
+import {
+  API_GATEWAY_URL,
+  getUserAccessToken,
+} from '../lib/api';
+
 type NotificationPreferences = {
   id: string;
   userId: string;
@@ -35,10 +40,7 @@ type PreferenceItem = {
 };
 
 const notificationApiUrl =
-  process.env[
-    'NEXT_PUBLIC_NOTIFICATION_API_URL'
-  ] ??
-  'http' + '://' + 'localhost:4006/api/v1';
+  API_GATEWAY_URL;
 
 const channelItems:
   PreferenceItem[] = [
@@ -224,30 +226,34 @@ export default function NotificationSettingsPage() {
       return;
     }
 
-    const resolvedUserId =
-      userId;
-
     let cancelled =
       false;
 
     async function loadPreferences():
       Promise<void> {
       try {
-        const query =
-          new URLSearchParams({
-            userId:
-              resolvedUserId,
-          });
+        const accessToken =
+          getUserAccessToken();
+
+        if (!accessToken) {
+          throw new Error(
+            'Authentication is required.',
+          );
+        }
 
         const response =
           await fetch(
             notificationApiUrl +
-              '/notification-preferences?' +
-              query.toString(),
+              '/notification-preferences',
             {
               method: 'GET',
               cache:
                 'no-store',
+
+              headers: {
+                Authorization:
+                  `Bearer ${accessToken}`,
+              },
             },
           );
 
@@ -321,22 +327,28 @@ export default function NotificationSettingsPage() {
     });
 
     try {
-      const query =
-        new URLSearchParams({
-          userId,
-        });
+      const accessToken =
+        getUserAccessToken();
+
+      if (!accessToken) {
+        throw new Error(
+          'Authentication is required.',
+        );
+      }
 
       const response =
         await fetch(
           notificationApiUrl +
-            '/notification-preferences?' +
-            query.toString(),
+            '/notification-preferences',
           {
             method: 'PATCH',
 
             headers: {
               'Content-Type':
                 'application/json',
+
+              Authorization:
+                `Bearer ${accessToken}`,
             },
 
             body:

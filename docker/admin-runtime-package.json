@@ -1,0 +1,11 @@
+{
+    "name":  "payflow-admin-runtime",
+    "version":  "1.0.0",
+    "private":  true,
+    "dependencies":  {
+                         "next":  "16.1.7",
+                         "react":  "19.2.8",
+                         "react-dom":  "19.2.8",
+                         "styled-jsx":  "5.1.6"
+                     }
+}

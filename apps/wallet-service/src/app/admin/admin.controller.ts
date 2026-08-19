@@ -1,4 +1,5 @@
-import {
+﻿import {
+  Request,
   Body,
   Controller,
   Get,
@@ -35,6 +36,15 @@ import {
   WalletRolesGuard,
 } from '../wallet-auth/guards/wallet-roles.guard';
 
+
+
+type AdminAuthenticatedRequest = {
+  user: {
+    id: string;
+    email: string;
+    role: string;
+  };
+};
 
 type UpdateUserStatusDto = {
   status:
@@ -150,11 +160,15 @@ export class AdminController {
 
     @Body()
     body: UpdateUserStatusDto,
+
+    @Request()
+    request: AdminAuthenticatedRequest,
   ) {
     return this.adminService
       .updateUserStatus(
         userId,
         body.status,
+        request.user,
       );
   }
   @Get('wallets')
@@ -234,10 +248,14 @@ export class AdminController {
 
     @Body()
     body: UpdateWalletStatusDto,
+
+    @Request()
+    request: AdminAuthenticatedRequest,
   ) {
     return this.adminService.updateWalletStatus(
       walletId,
       body.status,
+      request.user,
     );
   }
 
@@ -428,3 +446,5 @@ export class AdminController {
     });
   }
 }
+
+

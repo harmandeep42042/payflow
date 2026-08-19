@@ -5,6 +5,10 @@ import {
 import { NestFactory } from '@nestjs/core';
 
 import {
+  createProxyMiddleware,
+} from 'http-proxy-middleware';
+
+import {
   DocumentBuilder,
   SwaggerModule,
 } from '@nestjs/swagger';
@@ -13,6 +17,30 @@ import { AppModule } from './app/app.module';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
+
+  const notificationServiceUrl =
+    process.env.NOTIFICATION_SERVICE_URL ??
+    'http://notification-service:4006';
+
+  const notificationSocketProxy =
+    createProxyMiddleware({
+      pathFilter: '/socket.io',
+      target: notificationServiceUrl,
+      changeOrigin: true,
+      ws: true,
+    });
+
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .use(notificationSocketProxy);
+
+  app
+    .getHttpServer()
+    .on(
+      'upgrade',
+      notificationSocketProxy.upgrade,
+    );
 
   app.setGlobalPrefix('api/v1');
 

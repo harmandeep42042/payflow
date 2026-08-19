@@ -1,4 +1,4 @@
-import {
+﻿import {
   BadRequestException,
   Injectable,
   NotFoundException,
@@ -24,6 +24,13 @@ type RecentTransaction = {
   destinationWalletId: string | null;
   createdAt: Date;
   completedAt: Date | null;
+};
+
+
+type AdminActor = {
+  id: string;
+  email: string;
+  role: string;
 };
 
 export type AdminUserStatus =
@@ -731,6 +738,7 @@ export class AdminService {
       | 'ACTIVE'
       | 'FROZEN'
       | 'CLOSED',
+    actor: AdminActor,
   ) {
     const wallet =
       await this.prisma.wallet.findUnique({
@@ -812,6 +820,8 @@ export class AdminService {
       action: auditAction,
       targetType: 'WALLET',
       targetId: updatedWallet.id,
+      actorUserId: actor.id,
+      actorEmail: actor.email,
 
       description:
         `Wallet status changed from ${wallet.status} to ${updatedWallet.status}`,
@@ -2272,6 +2282,7 @@ export class AdminService {
       | 'ACTIVE'
       | 'BLOCKED'
       | 'SUSPENDED',
+    actor: AdminActor,
   ) {
     const allowedStatuses = [
       'ACTIVE',
@@ -2388,6 +2399,8 @@ export class AdminService {
       action: auditAction,
       targetType: 'USER',
       targetId: updatedUser.id,
+      actorUserId: actor.id,
+      actorEmail: actor.email,
 
       description:
         `User status changed from ${user.status} to ${updatedUser.status}`,

@@ -72,3 +72,5 @@ current-transaction-history-route.txt
 *.backup
 .env.production.local
 .pnpm-store/
+*.sql
+*.dump

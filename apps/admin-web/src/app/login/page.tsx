@@ -1,3 +1,4 @@
+﻿
 'use client';
 
 import {
@@ -22,7 +23,7 @@ export default function AdminLoginPage() {
   );
 
   const [password, setPassword] = useState(
-    'Admin@123',
+    'Admin@12345',
   );
 
   const [error, setError] = useState('');

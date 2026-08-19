@@ -1,4 +1,4 @@
-import {
+﻿import {
   Body,
   Controller,
   Get,
@@ -6,6 +6,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -15,6 +16,7 @@ import {
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
+import type { Request } from 'express';
 
 import {
   Roles,
@@ -86,18 +88,16 @@ export class AdminProxyController {
     summary:
       'Get live administration dashboard data',
   })
-  getDashboard() {
-    return this.adminProxyService
-      .getDashboard();
+  getDashboard(@Req() req: Request) {
+    return this.adminProxyService.getDashboard(req.headers.authorization);
   }
 
   @Get('users')
   getUsers(
-    @Query()
-    query: AdminUsersQuery,
+    @Query() query: AdminUsersQuery,
+    @Req() req: Request,
   ) {
-    return this.adminProxyService
-      .getUsers(query);
+    return this.adminProxyService.getUsers(query, req.headers.authorization);
   }
 
 
@@ -116,9 +116,9 @@ export class AdminProxyController {
       new ParseUUIDPipe(),
     )
     userId: string,
+    @Req() req: Request,
   ) {
-    return this.adminProxyService
-      .getUserById(userId);
+    return this.adminProxyService.getUserById(userId, req.headers.authorization);
   }
 
   @Patch('users/:userId/status')
@@ -139,20 +139,30 @@ export class AdminProxyController {
 
     @Body()
     body: UpdateUserStatusBody,
+
+    @Req()
+    req: Request,
   ) {
     return this.adminProxyService
       .updateUserStatus(
         userId,
         body,
+        req.headers.authorization,
       );
   }
   @Get('wallets')
   getWallets(
     @Query()
     query: AdminWalletsQuery,
+
+    @Req()
+    req: Request,
   ) {
     return this.adminProxyService
-      .getWallets(query);
+      .getWallets(
+        query,
+        req.headers.authorization,
+      );
   }
 
   @Get('transactions')
@@ -199,9 +209,15 @@ export class AdminProxyController {
   getTransactions(
     @Query()
     query: AdminTransactionsQuery,
+
+    @Req()
+    req: Request,
   ) {
     return this.adminProxyService
-      .getTransactions(query);
+      .getTransactions(
+        query,
+        req.headers.authorization,
+      );
   }
 
   @Patch('wallets/:walletId/status')
@@ -222,11 +238,15 @@ export class AdminProxyController {
 
     @Body()
     body: UpdateWalletStatusBody,
+
+    @Req()
+    req: Request,
   ) {
     return this.adminProxyService
       .updateWalletStatus(
         walletId,
         body,
+        req.headers.authorization,
       );
   }
 
@@ -240,17 +260,21 @@ export class AdminProxyController {
     description: 'Transaction UUID',
   })
   getTransactionById(
-    @Param(
-      'transactionId',
-      new ParseUUIDPipe(),
-    )
-    transactionId: string,
-  ) {
-    return this.adminProxyService
-      .getTransactionById(
-        transactionId,
-      );
-  }
+      @Param(
+        'transactionId',
+        new ParseUUIDPipe(),
+      )
+      transactionId: string,
+
+      @Req()
+      req: Request,
+    ) {
+      return this.adminProxyService
+        .getTransactionById(
+          transactionId,
+          req.headers.authorization,
+        );
+    }
 
 
   @Get('audit-logs')
@@ -281,30 +305,36 @@ export class AdminProxyController {
     required: false,
   })
   getAuditLogs(
-    @Query('page')
-    page?: string,
+      @Req()
+      req: Request,
 
-    @Query('limit')
-    limit?: string,
+      @Query('page')
+      page?: string,
 
-    @Query('action')
-    action?: string,
+      @Query('limit')
+      limit?: string,
 
-    @Query('targetType')
-    targetType?: string,
+      @Query('action')
+      action?: string,
 
-    @Query('actorUserId')
-    actorUserId?: string,
-  ) {
-    return this.adminProxyService
-      .getAuditLogs({
-        page,
-        limit,
-        action,
-        targetType,
-        actorUserId,
-      });
-  }
+      @Query('targetType')
+      targetType?: string,
+
+      @Query('actorUserId')
+      actorUserId?: string,
+    ) {
+      return this.adminProxyService
+        .getAuditLogs(
+          {
+            page,
+            limit,
+            action,
+            targetType,
+            actorUserId,
+          },
+          req.headers.authorization,
+        );
+    }
   @Get('analytics')
   @ApiOperation({
     summary:
@@ -317,10 +347,25 @@ export class AdminProxyController {
     example: 7,
   })
   getAnalytics(
+    @Req()
+    req: Request,
+
     @Query('days')
     days?: string,
   ) {
     return this.adminProxyService
-      .getAnalytics(days);
+      .getAnalytics(
+        days,
+        req.headers.authorization,
+      );
   }
 }
+
+
+
+
+
+
+
+
+

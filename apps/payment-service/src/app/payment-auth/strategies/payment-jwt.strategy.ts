@@ -32,8 +32,12 @@ export class PaymentJwtStrategy
       ignoreExpiration: false,
 
       secretOrKey:
-        process.env.JWT_SECRET ??
-        'payflow_development_secret_change_me',
+        process.env.JWT_SECRET ||
+        (() => {
+          throw new Error(
+            'JWT_SECRET environment variable is required',
+          );
+        })(),
     });
   }
 

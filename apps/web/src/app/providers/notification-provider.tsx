@@ -14,6 +14,11 @@ import {
   Socket,
 } from 'socket.io-client';
 
+import {
+  API_GATEWAY_URL,
+  getUserAccessToken,
+} from '../lib/api';
+
 export type RealtimeNotification = {
   id: string;
   userId: string | null;
@@ -90,16 +95,13 @@ export const NotificationContext =
   >(undefined);
 
 const notificationSocketUrl =
-  process.env[
-    'NEXT_PUBLIC_NOTIFICATION_SOCKET_URL'
-  ] ??
-  'http' + '://' + 'localhost:4006/notifications';
+  API_GATEWAY_URL.replace(
+    /\/api\/v1\/?$/,
+    '',
+  ) + '/notifications';
 
 const notificationApiUrl =
-  process.env[
-    'NEXT_PUBLIC_NOTIFICATION_API_URL'
-  ] ??
-  'http' + '://' + 'localhost:4006/api/v1';
+  API_GATEWAY_URL;
 
 function decodeJwtPayload(
   token: string,
@@ -367,9 +369,15 @@ useEffect(() => {
   async function loadNotificationHistory():
     Promise<void> {
     try {
+      const accessToken =
+        getUserAccessToken();
+
+      if (!accessToken) {
+        return;
+      }
+
       const query =
         new URLSearchParams({
-          userId: userId ?? '',
           page: '1',
           limit: '100',
         });
@@ -380,6 +388,11 @@ useEffect(() => {
           {
             method: 'GET',
             cache: 'no-store',
+
+            headers: {
+              Authorization:
+                `Bearer ${accessToken}`,
+            },
           },
         );
 
@@ -456,6 +469,13 @@ useEffect(() => {
       return;
     }
 
+    const accessToken =
+      getUserAccessToken();
+
+    if (!accessToken) {
+      return;
+    }
+
     const socket: Socket =
       io(
         notificationSocketUrl,
@@ -464,6 +484,22 @@ useEffect(() => {
             'websocket',
             'polling',
           ],
+
+          auth: (
+            callback,
+          ) => {
+            const currentAccessToken =
+              getUserAccessToken();
+
+            callback(
+              currentAccessToken
+                ? {
+                    token:
+                      currentAccessToken,
+                  }
+                : {},
+            );
+          },
 
           reconnection:
             true,
@@ -480,13 +516,6 @@ useEffect(() => {
       'connect',
       () => {
         setIsConnected(true);
-
-        socket.emit(
-          'notifications.join',
-          {
-            userId,
-          },
-        );
       },
     );
 
@@ -514,13 +543,6 @@ useEffect(() => {
     );
 
     return () => {
-      socket.emit(
-        'notifications.leave',
-        {
-          userId,
-        },
-      );
-
       socket.removeAllListeners();
       socket.disconnect();
     };

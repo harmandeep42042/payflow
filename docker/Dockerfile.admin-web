@@ -1,4 +1,4 @@
-﻿FROM node:24-alpine
+FROM node:24-alpine
 
 WORKDIR /app
 
@@ -8,12 +8,12 @@ ENV HOSTNAME=0.0.0.0
 
 RUN corepack enable && corepack prepare pnpm@11.18.0 --activate
 
-COPY package.json ./package.json
-COPY pnpm-lock.yaml ./pnpm-lock.yaml
+COPY docker/admin-runtime-package.json ./package.json
+COPY docker/admin-runtime-pnpm-workspace.yaml ./pnpm-workspace.yaml
 
-RUN pnpm install --prod --frozen-lockfile --ignore-scripts
+RUN pnpm install --prod --no-frozen-lockfile
 
-COPY apps/admin-web/.next/standalone ./
+COPY apps/admin-web/.next/standalone/apps/admin-web ./apps/admin-web
 COPY apps/admin-web/.next/static ./apps/admin-web/.next/static
 COPY apps/admin-web/public ./apps/admin-web/public
 

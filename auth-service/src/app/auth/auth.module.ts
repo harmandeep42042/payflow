@@ -1,4 +1,4 @@
-﻿import { Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
@@ -25,8 +25,12 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     JwtModule.register({
       global: true,
       secret:
-        process.env.JWT_SECRET ??
-        'payflow_development_secret_change_me',
+        process.env.JWT_SECRET ||
+        (() => {
+          throw new Error(
+            'JWT_SECRET environment variable is required',
+          );
+        })(),
       signOptions: {
         expiresIn: '15m',
       },

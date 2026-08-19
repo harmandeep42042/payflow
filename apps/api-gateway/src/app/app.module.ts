@@ -31,6 +31,10 @@ import {
 } from './payment-proxy/payment-proxy.module';
 
 import {
+  NotificationProxyModule,
+} from './notification-proxy/notification-proxy.module';
+
+import {
   WalletProxyModule,
 } from './wallet-proxy/wallet-proxy.module';
 
@@ -44,6 +48,7 @@ import {
     AuthProxyModule,
     WalletProxyModule,
     PaymentProxyModule,
+    NotificationProxyModule,
     AdminProxyModule,
   ],
 
