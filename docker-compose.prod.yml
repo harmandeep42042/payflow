@@ -105,6 +105,8 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       RABBITMQ_URL: ${RABBITMQ_URL}
       RABBITMQ_QUEUE: ${RABBITMQ_QUEUE}
+      AUTH_SERVICE_URL: http://auth-service:4002/api
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3001}
 
   api-gateway:
     image: payflow-api-gateway:test
@@ -123,6 +125,7 @@ services:
       WALLET_SERVICE_URL: http://wallet-service:4001/api/v1
       PAYMENT_SERVICE_URL: http://payment-service:4005/api/v1
       NOTIFICATION_SERVICE_URL: http://notification-service:4006
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3001}
     ports:
       - "4000:4000"
 
