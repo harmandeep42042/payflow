@@ -9,6 +9,16 @@ import {
 
 import { Request, Response } from 'express';
 
+type DatabaseErrorLike = Error & {
+  code?: unknown;
+  cause?: unknown;
+  driverAdapterError?: {
+    cause?: {
+      kind?: unknown;
+    };
+  };
+};
+
 @Catch()
 export class AllExceptionsFilter
   implements ExceptionFilter
@@ -59,6 +69,16 @@ export class AllExceptionsFilter
           (responseBody.message as string) ??
           message;
       }
+    } else if (
+      this.isDatabaseUnavailable(
+        exception,
+      )
+    ) {
+      status =
+        HttpStatus.SERVICE_UNAVAILABLE;
+
+      message =
+        'Authentication service is temporarily unavailable';
     }
 
     this.logger.error(
@@ -75,5 +95,68 @@ export class AllExceptionsFilter
       path: request.url,
       message,
     });
+  }
+
+  private isDatabaseUnavailable(
+    exception: unknown,
+  ): boolean {
+    if (!(exception instanceof Error)) {
+      return false;
+    }
+
+    const databaseError =
+      exception as DatabaseErrorLike;
+
+    if (
+      databaseError.code === 'P1001' ||
+      databaseError.code === 'P1002' ||
+      databaseError.code === 'P2024'
+    ) {
+      return true;
+    }
+
+    const adapterFailureKind =
+      databaseError
+        .driverAdapterError
+        ?.cause
+        ?.kind;
+
+    if (
+      adapterFailureKind ===
+        'DatabaseNotReachable' ||
+      adapterFailureKind ===
+        'DatabaseConnectionFailed'
+    ) {
+      return true;
+    }
+
+    const errorMessage =
+      exception.message.toLowerCase();
+
+    return (
+      errorMessage.includes(
+        "can't reach database server",
+      ) ||
+      errorMessage.includes(
+        'database not reachable',
+      ) ||
+      errorMessage.includes(
+        'database server is unreachable',
+      ) ||
+      (
+        errorMessage.includes(
+          'econnrefused',
+        ) &&
+        errorMessage.includes(
+          'postgres',
+        )
+      ) ||
+      errorMessage.includes(
+        'eai_again postgres',
+      ) ||
+      errorMessage.includes(
+        'enotfound postgres',
+      )
+    );
   }
 }
