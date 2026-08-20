@@ -1,0 +1,17 @@
+{$CUSTOMER_DOMAIN} {
+    encode gzip zstd
+
+    reverse_proxy web:3000
+}
+
+{$ADMIN_DOMAIN} {
+    encode gzip zstd
+
+    reverse_proxy admin-web:3001
+}
+
+{$API_DOMAIN} {
+    encode gzip zstd
+
+    reverse_proxy api-gateway:4000
+}

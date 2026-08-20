@@ -1,0 +1,42 @@
+services:
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: payflow_prod_caddy
+    restart: unless-stopped
+
+    depends_on:
+      - web
+      - admin-web
+      - api-gateway
+
+    environment:
+      CUSTOMER_DOMAIN: ${CUSTOMER_DOMAIN}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN}
+      API_DOMAIN: ${API_DOMAIN}
+
+    ports:
+      - "80:80"
+      - "443:443"
+
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+
+  web:
+    ports: []
+
+
+  admin-web:
+    ports: []
+
+
+  api-gateway:
+    ports: []
+
+
+volumes:
+  caddy_data:
+  caddy_config:
