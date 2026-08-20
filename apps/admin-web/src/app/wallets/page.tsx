@@ -570,7 +570,7 @@ export default function WalletsPage() {
 
                         <p className="mt-1 text-xs text-slate-400">
                           {wallet.user.role}
-                          {' â€¢ '}
+                          {' • '}
                           {wallet.user.status}
                         </p>
                       </td>
@@ -627,19 +627,19 @@ export default function WalletsPage() {
                             wallet._count
                               .deposits
                           }
-                          {' Â· '}
+                          {' · '}
                           W:{' '}
                           {
                             wallet._count
                               .withdrawals
                           }
-                          {' Â· '}
+                          {' · '}
                           Out:{' '}
                           {
                             wallet._count
                               .outgoingTransfers
                           }
-                          {' Â· '}
+                          {' · '}
                           In:{' '}
                           {
                             wallet._count
