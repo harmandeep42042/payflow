@@ -1,4 +1,6 @@
-﻿import {
+﻿import { RewardProxyModule } from './reward-proxy/reward-proxy.module';
+
+import {
   Module,
 } from '@nestjs/common';
 
@@ -48,6 +50,7 @@ import {
     AuthProxyModule,
     WalletProxyModule,
     PaymentProxyModule,
+    RewardProxyModule,
     NotificationProxyModule,
     AdminProxyModule,
   ],
@@ -61,3 +64,4 @@ import {
   ],
 })
 export class AppModule {}
+

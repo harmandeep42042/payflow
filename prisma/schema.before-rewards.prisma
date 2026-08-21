@@ -19,7 +19,7 @@ model User {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
-  wallets                Wallet[]
+  wallets       Wallet[]
   refreshTokens          RefreshToken[]
   notificationPreference NotificationPreference?
 }
@@ -208,23 +208,23 @@ model NotificationLog {
   @@index([eventType])
 }
 
+
 model NotificationPreference {
-  id                 String   @id @default(uuid())
-  userId             String   @unique
-  inAppEnabled       Boolean  @default(true)
-  emailEnabled       Boolean  @default(true)
-  transfersEnabled   Boolean  @default(true)
-  depositsEnabled    Boolean  @default(true)
-  withdrawalsEnabled Boolean  @default(true)
-  paymentsEnabled    Boolean  @default(true)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id                  String   @id @default(uuid())
+  userId              String   @unique
+  inAppEnabled        Boolean  @default(true)
+  emailEnabled        Boolean  @default(true)
+  transfersEnabled    Boolean  @default(true)
+  depositsEnabled     Boolean  @default(true)
+  withdrawalsEnabled  Boolean  @default(true)
+  paymentsEnabled     Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
-
 enum NotificationStatus {
   PENDING
   SENT
@@ -393,59 +393,3 @@ model Notification {
   @@index([createdAt])
 }
 
-enum RewardType {
-  CASHBACK
-  SCRATCH_CARD
-  POINTS
-}
-
-enum RewardStatus {
-  AVAILABLE
-  CLAIMED
-  EXPIRED
-  CANCELLED
-}
-
-model RewardCampaign {
-  id               String     @id @default(uuid())
-  name             String
-  description      String?
-  rewardType       RewardType @default(SCRATCH_CARD)
-  minPaymentAmount Decimal?   @db.Decimal(18, 2)
-  minRewardAmount  Decimal    @default(1) @db.Decimal(18, 2)
-  maxRewardAmount  Decimal    @default(20) @db.Decimal(18, 2)
-  active           Boolean    @default(true)
-  startsAt         DateTime?
-  endsAt           DateTime?
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
-
-  rewards Reward[]
-
-  @@index([active])
-  @@index([startsAt, endsAt])
-}
-
-model Reward {
-  id         String       @id @default(uuid())
-  userId     String
-  walletId   String
-  paymentId  String?      @unique
-  campaignId String?
-  rewardType RewardType   @default(SCRATCH_CARD)
-  amount     Decimal      @db.Decimal(18, 2)
-  currency   String       @default("INR") @db.VarChar(3)
-  status     RewardStatus @default(AVAILABLE)
-  claimedAt  DateTime?
-  expiresAt  DateTime?
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
-
-  campaign RewardCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
-
-  @@index([userId, createdAt])
-  @@index([walletId])
-  @@index([status])
-  @@index([campaignId])
-  @@index([expiresAt])
-}

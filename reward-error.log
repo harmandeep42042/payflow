@@ -1,0 +1,76 @@
+[1m[31mDebugger listening on ws://localhost:9229/b3f59e79-0c0e-4cb7-accc-8f7987baea81
+Debugger listening on ws://localhost:9229/b3f59e79-0c0e-4cb7-accc-8f7987baea81
+For help, see: https://nodejs.org/learn/getting-started/debugging
+[39m[22m
+Warning: command "webpack-cli build" exited with non-zero status code
+[7m[1m[31m NX [39m[22m[27m  [31mRunning target [1mbuild[22m for project reward-service failed[39m
+[2mFailed tasks:[22m
+[2m-[22m reward-service:build:development
+[2mHint: run the command with[22m --verbose [2mfor more details.[22m
+[1m[31mBuild failed, waiting for changes to restart...[39m[22m
+Warning: command "webpack-cli build" exited with non-zero status code
+[7m[1m[31m NX [39m[22m[27m  [31mRunning target [1mbuild[22m for project reward-service failed[39m
+[2mFailed tasks:[22m
+[2m-[22m reward-service:build:development
+[2mHint: run the command with[22m --verbose [2mfor more details.[22m
+[1m[31mBuild failed, waiting for changes to restart...[39m[22m
+Warning: command "webpack-cli build" exited with non-zero status code
+[7m[1m[31m NX [39m[22m[27m  [31mRunning target [1mbuild[22m for project reward-service failed[39m
+[2mFailed tasks:[22m
+[2m-[22m reward-service:build:development
+[2mHint: run the command with[22m --verbose [2mfor more details.[22m
+[1m[31mBuild failed, waiting for changes to restart...[39m[22m
+Warning: command "webpack-cli build" exited with non-zero status code
+[7m[1m[31m NX [39m[22m[27m  [31mRunning target [1mbuild[22m for project reward-service failed[39m
+[2mFailed tasks:[22m
+[2m-[22m reward-service:build:development
+[2mHint: run the command with[22m --verbose [2mfor more details.[22m
+[1m[31mBuild failed, waiting for changes to restart...[39m[22m
+Warning: command "webpack-cli build" exited with non-zero status code
+[7m[1m[31m NX [39m[22m[27m  [31mRunning target [1mbuild[22m for project reward-service failed[39m
+[2mFailed tasks:[22m
+[2m-[22m reward-service:build:development
+[2mHint: run the command with[22m --verbose [2mfor more details.[22m
+[1m[31mBuild failed, waiting for changes to restart...[39m[22m
+Warning: command "webpack-cli build" exited with non-zero status code
+[7m[1m[31m NX [39m[22m[27m  [31mRunning target [1mbuild[22m for project reward-service failed[39m
+[2mFailed tasks:[22m
+[2m-[22m reward-service:build:development
+[2mHint: run the command with[22m --verbose [2mfor more details.[22m
+[1m[31mBuild failed, waiting for changes to restart...[39m[22m
+Warning: command "webpack-cli build" exited with non-zero status code
+[7m[1m[31m NX [39m[22m[27m  [31mRunning target [1mbuild[22m for project reward-service failed[39m
+[2mFailed tasks:[22m
+[2m-[22m reward-service:build:development
+[2mHint: run the command with[22m --verbose [2mfor more details.[22m
+[1m[31mBuild failed, waiting for changes to restart...[39m[22m
+Warning: command "webpack-cli build" exited with non-zero status code
+[7m[1m[31m NX [39m[22m[27m  [31mRunning target [1mbuild[22m for project reward-service failed[39m
+[2mFailed tasks:[22m
+[2m-[22m reward-service:build:development
+[2mHint: run the command with[22m --verbose [2mfor more details.[22m
+[1m[31mBuild failed, waiting for changes to restart...[39m[22m
+[1m[31mStarting inspector on localhost:9229 failed: address already in use
+[39m[22m
+[1m[31m[31m[Nest] 18320  - [31m08/20/2026, 4:37:31 PM [31m  ERROR[31m [38;5;3m[NestApplication] [31m[31mError: listen EADDRINUSE: address already in use 0.0.0.0:4007[31m[38;5;3m +5ms[31m
+[39m[22m
+[1m[31mError: listen EADDRINUSE: address already in use 0.0.0.0:4007
+    at Server.setupListenHandle [as _listen2] (node:net:2009:16)
+    at listenInCluster (node:net:2066:12)
+    at node:net:2275:7
+    at processTicksAndRejections (node:internal/process/task_queues:90:21)
+[39m[22m
+[1m[31mStarting inspector on localhost:9229 failed: address already in use
+[39m[22m
+[1m[31m[31m[Nest] 17688  - [31m08/20/2026, 4:38:02 PM [31m  ERROR[31m [38;5;3m[NestApplication] [31m[31mError: listen EADDRINUSE: address already in use 0.0.0.0:4007[31m[38;5;3m +8ms[31m
+[39m[22m
+[1m[31mError: listen EADDRINUSE: address already in use 0.0.0.0:4007
+    at Server.setupListenHandle [as _listen2] (node:net:2009:16)
+    at listenInCluster (node:net:2066:12)
+    at node:net:2275:7
+    at processTicksAndRejections (node:internal/process/task_queues:90:21)
+[39m[22m
+[1m[31mDebugger listening on ws://localhost:9229/05d4eb34-df55-4f8f-ae5a-8273613aff24
+Debugger listening on ws://localhost:9229/05d4eb34-df55-4f8f-ae5a-8273613aff24
+For help, see: https://nodejs.org/learn/getting-started/debugging
+[39m[22m

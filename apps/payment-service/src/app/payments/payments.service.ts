@@ -39,6 +39,12 @@ export class PaymentsService {
       '',
     );
 
+  private readonly rewardServiceUrl =
+    (
+      process.env['REWARD_SERVICE_URL'] ??
+      'http://localhost:4007/api/v1'
+    ).replace(/\/$/, '');
+
   constructor(
     private readonly prisma:
       PrismaService,
@@ -319,6 +325,32 @@ export class PaymentsService {
         },
       });
 
+    let rewardResult: unknown = null;
+
+    try {
+      const rewardResponse = await firstValueFrom(
+        this.http.post(
+          `${this.rewardServiceUrl}/rewards/generate`,
+          {
+            userId: payment.userId,
+            walletId: payment.walletId,
+            paymentId: payment.id,
+          },
+          {
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          },
+        ),
+      );
+
+      rewardResult = rewardResponse.data;
+    } catch {
+      rewardResult = {
+        generated: false,
+      };
+    }
+
     return {
       message:
         'Payment completed successfully',
@@ -328,6 +360,9 @@ export class PaymentsService {
 
       wallet:
         walletResult,
+
+      reward:
+        rewardResult,
 
       replayed:
         false,
@@ -398,3 +433,4 @@ export class PaymentsService {
     }
   }
 }
+

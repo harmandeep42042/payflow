@@ -1,0 +1,251 @@
+Already up to date
+Done in 402ms using pnpm v11.18.0
+Already up to date
+Done in 346ms using pnpm v11.18.0
+
+[7m[1m[36m NX [39m[22m[27m  [36mRunning target [1mserve[22m for project reward-service and [1m1[22m task it depends on:[39m
+
+[2m[36m[39m[22m
+
+[2m> [22m[2mnx run[22m reward-service:build  [2m[local cache][22m
+
+[2m> [22mwebpack-cli build
+
+webpack compiled [1m[32msuccessfully[39m[22m (d554519bf4b66cac)
+
+[2m> [22m[2mnx run[22m reward-service:serve:development
+
+[2m> [22m[2mnx run[22m reward-service:build:development  [2m[local cache][22m
+[2m> [22mwebpack-cli build
+webpack compiled [1m[32msuccessfully[39m[22m (d554519bf4b66cac)
+[2m[32m[39m[22m
+[7m[1m[32m NX [39m[22m[27m  [32mSuccessfully ran target [1mbuild[22m for project reward-service[39m
+[2mNx read the output from the cache instead of running the command for 1 out of 1 tasks.[22m
+  Run duration:      74ms
+  Cache:             1/1 hit (100%)
+  Critical path:     10ms (1 task)
+  Recoverable time:  <1ms
+[32m[Nest] 27996  - [39m08/20/2026, 4:30:03 PM [32m    LOG[39m [38;5;3m[NestFactory] [39m[32mStarting Nest application...[39m
+[32m[Nest] 27996  - [39m08/20/2026, 4:30:03 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mAppModule dependencies initialized[39m[38;5;3m +10ms[39m
+[32m[Nest] 27996  - [39m08/20/2026, 4:30:03 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mPrismaModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 27996  - [39m08/20/2026, 4:30:03 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mRewardsModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 27996  - [39m08/20/2026, 4:30:03 PM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mRewardsController {/api/v1/rewards}:[39m[38;5;3m +3ms[39m
+[32m[Nest] 27996  - [39m08/20/2026, 4:30:03 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/v1/rewards/health, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 27996  - [39m08/20/2026, 4:30:03 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/v1/rewards, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 27996  - [39m08/20/2026, 4:30:03 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/v1/rewards/generate, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 27996  - [39m08/20/2026, 4:30:03 PM [32m    LOG[39m [38;5;3m[PrismaService] [39m[32mConnected to PostgreSQL[39m
+[32m[Nest] 27996  - [39m08/20/2026, 4:30:03 PM [32m    LOG[39m [38;5;3m[NestApplication] [39m[32mNest application successfully started[39m[38;5;3m +0ms[39m
+[32m[Nest] 27996  - [39m08/20/2026, 4:30:03 PM [32m    LOG[39m [38;5;3m[Bootstrap] [39m[32mReward Service running on http://localhost:4007[39m
+[7m[1m[36m NX [39m[22m[27m [1mFile change detected. Restarting...[22m
+[2m> [22m[2mnx run[22m reward-service:build:development
+[2m> [22mwebpack-cli build
+[1m[31mERROR[39m[22m in [1mD:\my work\payflow\apps\reward-service\src\app\rewards\rewards.service.ts[39m[22m
+[1m./src/app/rewards/rewards.service.ts[39m[22m [1m[32m31:0[39m[22m
+[90m[tsl] [39m[1m[31mERROR[39m[22m[1m[31m in [39m[22m[1m[36mD:\my work\payflow\apps\reward-service\src\app\rewards\rewards.service.ts(31,1)[39m[22m
+[1m[31m      TS1005: '}' expected.[39m[22m
+webpack compiled with [1m[31m1 error[39m[22m (009564f45f8cfc23)
+[2m[31m[39m[22m
+  Run duration:      3.6s
+  Critical path:     3.5s (1 task)
+  Recoverable time:  <1ms
+  Recommendations:
+    - Speed up or split the longest tasks on the critical path:
+        reward-service:build:development    3.5s
+[7m[1m[36m NX [39m[22m[27m [1mFile change detected. Restarting...[22m
+[2m> [22m[2mnx run[22m reward-service:build:development
+[2m> [22mwebpack-cli build
+[1m[31mERROR[39m[22m in [1mD:\my work\payflow\apps\reward-service\src\app\rewards\rewards.service.ts[39m[22m
+[1m./src/app/rewards/rewards.service.ts[39m[22m [1m[32m39:0[39m[22m
+[90m[tsl] [39m[1m[31mERROR[39m[22m[1m[31m in [39m[22m[1m[36mD:\my work\payflow\apps\reward-service\src\app\rewards\rewards.service.ts(39,1)[39m[22m
+[1m[31m      TS1005: '}' expected.[39m[22m
+webpack compiled with [1m[31m1 error[39m[22m (b2104f8385376067)
+[2m[31m[39m[22m
+  Run duration:      3.9s
+  Critical path:     3.8s (1 task)
+  Recoverable time:  <1ms
+  Recommendations:
+    - Speed up or split the longest tasks on the critical path:
+        reward-service:build:development    3.8s
+[7m[1m[36m NX [39m[22m[27m [1mFile change detected. Restarting...[22m
+[2m> [22m[2mnx run[22m reward-service:build:development
+[2m> [22mwebpack-cli build
+[1m[31mERROR[39m[22m in [1mD:\my work\payflow\apps\reward-service\src\app\rewards\rewards.service.ts[39m[22m
+[1m./src/app/rewards/rewards.service.ts[39m[22m [1m[32m45:0[39m[22m
+[90m[tsl] [39m[1m[31mERROR[39m[22m[1m[31m in [39m[22m[1m[36mD:\my work\payflow\apps\reward-service\src\app\rewards\rewards.service.ts(45,1)[39m[22m
+[1m[31m      TS1005: '}' expected.[39m[22m
+webpack compiled with [1m[31m1 error[39m[22m (641873417574f4bc)
+[2m[31m[39m[22m
+  Run duration:      4.2s
+  Critical path:     4.1s (1 task)
+  Recoverable time:  <1ms
+  Recommendations:
+    - Speed up or split the longest tasks on the critical path:
+        reward-service:build:development    4.1s
+[7m[1m[36m NX [39m[22m[27m [1mFile change detected. Restarting...[22m
+[2m> [22m[2mnx run[22m reward-service:build:development
+[2m> [22mwebpack-cli build
+[1m[31mERROR[39m[22m in [1mD:\my work\payflow\apps\reward-service\src\app\rewards\rewards.service.ts[39m[22m
+[1m./src/app/rewards/rewards.service.ts[39m[22m [1m[32m49:0[39m[22m
+[90m[tsl] [39m[1m[31mERROR[39m[22m[1m[31m in [39m[22m[1m[36mD:\my work\payflow\apps\reward-service\src\app\rewards\rewards.service.ts(49,1)[39m[22m
+[1m[31m      TS1005: '}' expected.[39m[22m
+webpack compiled with [1m[31m1 error[39m[22m (2d2c9df4a9318f5c)
+[2m[31m[39m[22m
+  Run duration:      3.8s
+  Critical path:     3.7s (1 task)
+  Recoverable time:  <1ms
+  Recommendations:
+    - Speed up or split the longest tasks on the critical path:
+        reward-service:build:development    3.7s
+[7m[1m[36m NX [39m[22m[27m [1mFile change detected. Restarting...[22m
+[2m> [22m[2mnx run[22m reward-service:build:development
+[2m> [22mwebpack-cli build
+[1m[31mERROR[39m[22m in [1mD:\my work\payflow\apps\reward-service\src\app\rewards\rewards.service.ts[39m[22m
+[1m./src/app/rewards/rewards.service.ts[39m[22m [1m[32m53:0[39m[22m
+[90m[tsl] [39m[1m[31mERROR[39m[22m[1m[31m in [39m[22m[1m[36mD:\my work\payflow\apps\reward-service\src\app\rewards\rewards.service.ts(53,1)[39m[22m
+[1m[31m      TS1005: '}' expected.[39m[22m
+webpack compiled with [1m[31m1 error[39m[22m (bce21be1cede9889)
+[2m[31m[39m[22m
+  Run duration:      3.9s
+  Critical path:     3.8s (1 task)
+  Recoverable time:  <1ms
+  Recommendations:
+    - Speed up or split the longest tasks on the critical path:
+        reward-service:build:development    3.8s
+[7m[1m[36m NX [39m[22m[27m [1mFile change detected. Restarting...[22m
+[2m> [22m[2mnx run[22m reward-service:build:development
+[2m> [22mwebpack-cli build
+[1m[31mERROR[39m[22m in [1mD:\my work\payflow\apps\reward-service\src\app\rewards\rewards.service.ts[39m[22m
+[1m./src/app/rewards/rewards.service.ts[39m[22m [1m[32m56:0[39m[22m
+[90m[tsl] [39m[1m[31mERROR[39m[22m[1m[31m in [39m[22m[1m[36mD:\my work\payflow\apps\reward-service\src\app\rewards\rewards.service.ts(56,1)[39m[22m
+[1m[31m      TS1005: '}' expected.[39m[22m
+webpack compiled with [1m[31m1 error[39m[22m (2f22aa5290524103)
+[2m[31m[39m[22m
+  Run duration:      3.8s
+  Critical path:     3.7s (1 task)
+  Recoverable time:  <1ms
+  Recommendations:
+    - Speed up or split the longest tasks on the critical path:
+        reward-service:build:development    3.7s
+[7m[1m[36m NX [39m[22m[27m [1mFile change detected. Restarting...[22m
+[2m> [22m[2mnx run[22m reward-service:build:development
+[2m> [22mwebpack-cli build
+[1m[31mERROR[39m[22m in [1mD:\my work\payflow\apps\reward-service\src\app\rewards\rewards.service.ts[39m[22m
+[1m./src/app/rewards/rewards.service.ts[39m[22m [1m[32m59:0[39m[22m
+[90m[tsl] [39m[1m[31mERROR[39m[22m[1m[31m in [39m[22m[1m[36mD:\my work\payflow\apps\reward-service\src\app\rewards\rewards.service.ts(59,1)[39m[22m
+[1m[31m      TS1005: '}' expected.[39m[22m
+webpack compiled with [1m[31m1 error[39m[22m (3228abfd718de6d0)
+[2m[31m[39m[22m
+  Run duration:      4.3s
+  Critical path:     4.2s (1 task)
+  Recoverable time:  <1ms
+  Recommendations:
+    - Speed up or split the longest tasks on the critical path:
+        reward-service:build:development    4.2s
+[7m[1m[36m NX [39m[22m[27m [1mFile change detected. Restarting...[22m
+[2m> [22m[2mnx run[22m reward-service:build:development
+[2m> [22mwebpack-cli build
+[1m[31mERROR[39m[22m in [1mD:\my work\payflow\apps\reward-service\src\app\rewards\rewards.service.ts[39m[22m
+[1m./src/app/rewards/rewards.service.ts[39m[22m [1m[32m65:0-1[39m[22m
+[90m[tsl] [39m[1m[31mERROR[39m[22m[1m[31m in [39m[22m[1m[36mD:\my work\payflow\apps\reward-service\src\app\rewards\rewards.service.ts(65,1)[39m[22m
+[1m[31m      TS1005: ',' expected.[39m[22m
+[1m[31mERROR[39m[22m in [1mD:\my work\payflow\apps\reward-service\src\app\rewards\rewards.service.ts[39m[22m
+[1m./src/app/rewards/rewards.service.ts[39m[22m [1m[32m66:0[39m[22m
+[90m[tsl] [39m[1m[31mERROR[39m[22m[1m[31m in [39m[22m[1m[36mD:\my work\payflow\apps\reward-service\src\app\rewards\rewards.service.ts(66,1)[39m[22m
+[1m[31m      TS1005: '}' expected.[39m[22m
+webpack compiled with [1m[31m2 errors[39m[22m (dbb1514c4cb6ca9f)
+[2m[31m[39m[22m
+  Run duration:      6.2s
+  Critical path:     6.1s (1 task)
+  Recoverable time:  <1ms
+  Recommendations:
+    - Speed up or split the longest tasks on the critical path:
+        reward-service:build:development    6.1s
+[7m[1m[36m NX [39m[22m[27m [1mFile change detected. Restarting...[22m
+[2m> [22m[2mnx run[22m reward-service:build:development
+[2m> [22mwebpack-cli build
+webpack compiled [1m[32msuccessfully[39m[22m (db0ba95669d0e41c)
+[2m[32m[39m[22m
+[7m[1m[32m NX [39m[22m[27m  [32mSuccessfully ran target [1mbuild[22m for project reward-service[39m
+  Run duration:      5.0s
+  Cache:             0/1 hit (0%)
+  Critical path:     4.9s (1 task)
+  Recoverable time:  <1ms
+  Recommendations:
+    - Drastically reduce your run duration by sharing a cache across your team and CI → https://nx.dev/ci/features/remote-cache?utm_source=nx-cli&utm_medium=cli&utm_campaign=performance-report&utm_content=remote-cache.
+    - Speed up or split the longest tasks on the critical path:
+        reward-service:build:development    4.9s
+[32m[Nest] 18320  - [39m08/20/2026, 4:37:31 PM [32m    LOG[39m [38;5;3m[NestFactory] [39m[32mStarting Nest application...[39m
+[32m[Nest] 18320  - [39m08/20/2026, 4:37:31 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mAppModule dependencies initialized[39m[38;5;3m +12ms[39m
+[32m[Nest] 18320  - [39m08/20/2026, 4:37:31 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mPrismaModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 18320  - [39m08/20/2026, 4:37:31 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mRewardsModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 18320  - [39m08/20/2026, 4:37:31 PM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mRewardsController {/api/v1/rewards}:[39m[38;5;3m +4ms[39m
+[32m[Nest] 18320  - [39m08/20/2026, 4:37:31 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/v1/rewards/health, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 18320  - [39m08/20/2026, 4:37:31 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/v1/rewards, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 18320  - [39m08/20/2026, 4:37:31 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/v1/rewards/generate, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 18320  - [39m08/20/2026, 4:37:31 PM [32m    LOG[39m [38;5;3m[PrismaService] [39m[32mConnected to PostgreSQL[39m
+[32m[Nest] 18320  - [39m08/20/2026, 4:37:31 PM [32m    LOG[39m [38;5;3m[NestApplication] [39m[32mNest application successfully started[39m[38;5;3m +1ms[39m
+[7m[1m[36m NX [39m[22m[27m [1mProcess exited with code 1, waiting for changes to restart...[22m
+[7m[1m[36m NX [39m[22m[27m [1mFile change detected. Restarting...[22m
+[2m> [22m[2mnx run[22m reward-service:build:development
+[2m> [22mwebpack-cli build
+webpack compiled [1m[32msuccessfully[39m[22m (9d102a32e7ef3309)
+[2m[32m[39m[22m
+[7m[1m[32m NX [39m[22m[27m  [32mSuccessfully ran target [1mbuild[22m for project reward-service[39m
+  Run duration:      4.6s
+  Cache:             0/1 hit (0%)
+  Critical path:     4.5s (1 task)
+  Recoverable time:  <1ms
+  Recommendations:
+    - Drastically reduce your run duration by sharing a cache across your team and CI → https://nx.dev/ci/features/remote-cache?utm_source=nx-cli&utm_medium=cli&utm_campaign=performance-report&utm_content=remote-cache.
+    - Speed up or split the longest tasks on the critical path:
+        reward-service:build:development    4.5s
+[32m[Nest] 17688  - [39m08/20/2026, 4:38:02 PM [32m    LOG[39m [38;5;3m[NestFactory] [39m[32mStarting Nest application...[39m
+[32m[Nest] 17688  - [39m08/20/2026, 4:38:02 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mAppModule dependencies initialized[39m[38;5;3m +11ms[39m
+[32m[Nest] 17688  - [39m08/20/2026, 4:38:02 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mPrismaModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 17688  - [39m08/20/2026, 4:38:02 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mRewardsModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 17688  - [39m08/20/2026, 4:38:02 PM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mRewardsController {/api/v1/rewards}:[39m[38;5;3m +5ms[39m
+[32m[Nest] 17688  - [39m08/20/2026, 4:38:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/v1/rewards/health, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17688  - [39m08/20/2026, 4:38:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/v1/rewards, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 17688  - [39m08/20/2026, 4:38:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/v1/rewards/generate, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17688  - [39m08/20/2026, 4:38:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/v1/rewards/:rewardId/claim, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 17688  - [39m08/20/2026, 4:38:02 PM [32m    LOG[39m [38;5;3m[PrismaService] [39m[32mConnected to PostgreSQL[39m
+[32m[Nest] 17688  - [39m08/20/2026, 4:38:02 PM [32m    LOG[39m [38;5;3m[NestApplication] [39m[32mNest application successfully started[39m[38;5;3m +1ms[39m
+[7m[1m[36m NX [39m[22m[27m [1mProcess exited with code 1, waiting for changes to restart...[22m
+[7m[1m[36m NX [39m[22m[27m [1mFile change detected. Restarting...[22m
+[2m> [22m[2mnx run[22m reward-service:build:development
+[2m> [22mwebpack-cli build
+webpack compiled [1m[32msuccessfully[39m[22m (f9726bdf3a91741b)
+[2m[32m[39m[22m
+[7m[1m[32m NX [39m[22m[27m  [32mSuccessfully ran target [1mbuild[22m for project reward-service[39m
+  Run duration:      4.6s
+  Cache:             0/1 hit (0%)
+  Critical path:     4.5s (1 task)
+  Recoverable time:  <1ms
+  Recommendations:
+    - Drastically reduce your run duration by sharing a cache across your team and CI → https://nx.dev/ci/features/remote-cache?utm_source=nx-cli&utm_medium=cli&utm_campaign=performance-report&utm_content=remote-cache.
+    - Speed up or split the longest tasks on the critical path:
+        reward-service:build:development    4.5s
+[32m[Nest] 16396  - [39m08/20/2026, 4:38:46 PM [32m    LOG[39m [38;5;3m[NestFactory] [39m[32mStarting Nest application...[39m
+[32m[Nest] 16396  - [39m08/20/2026, 4:38:46 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mAppModule dependencies initialized[39m[38;5;3m +13ms[39m
+[32m[Nest] 16396  - [39m08/20/2026, 4:38:46 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mPrismaModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 16396  - [39m08/20/2026, 4:38:46 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mRewardsModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 16396  - [39m08/20/2026, 4:38:46 PM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mRewardsController {/api/v1/rewards}:[39m[38;5;3m +4ms[39m
+[32m[Nest] 16396  - [39m08/20/2026, 4:38:46 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/v1/rewards/health, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 16396  - [39m08/20/2026, 4:38:46 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/v1/rewards, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 16396  - [39m08/20/2026, 4:38:46 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/v1/rewards/generate, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 16396  - [39m08/20/2026, 4:38:46 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/v1/rewards/:rewardId/claim, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 16396  - [39m08/20/2026, 4:38:46 PM [32m    LOG[39m [38;5;3m[PrismaService] [39m[32mConnected to PostgreSQL[39m
+[32m[Nest] 16396  - [39m08/20/2026, 4:38:46 PM [32m    LOG[39m [38;5;3m[NestApplication] [39m[32mNest application successfully started[39m[38;5;3m +1ms[39m
+[32m[Nest] 16396  - [39m08/20/2026, 4:38:46 PM [32m    LOG[39m [38;5;3m[Bootstrap] [39m[32mReward Service running on http://localhost:4007[39m
+[7m[1m[36m NX [39m[22m[27m [1mProcess exited with code 4294967295, waiting for changes to restart...[22m
+
+[2m[32m[39m[22m
+
+[7m[1m[32m NX [39m[22m[27m  [32mSuccessfully ran target [1mserve[22m for project reward-service and [1m1[22m task it depends on[39m
+
+[2mNx read the output from the cache instead of running the command for 1 out of 2 tasks.[22m
+
+  Run duration:      83ms
+  Cache:             1/1 hit (100%)
+  Critical path:     17ms (1 task)
+  Recoverable time:  <1ms

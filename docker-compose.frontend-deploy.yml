@@ -1,0 +1,6 @@
+services:
+  web:
+    image: payflow-web:deploy
+
+  admin-web:
+    image: payflow-admin-web:deploy

@@ -24,16 +24,18 @@ services:
       - caddy_data:/data
       - caddy_config:/config
 
+
   web:
-    image: payflow-web:deploy
     ports: []
 
+
   admin-web:
-    image: payflow-admin-web:deploy
     ports: []
+
 
   api-gateway:
     ports: []
+
 
 volumes:
   caddy_data:
