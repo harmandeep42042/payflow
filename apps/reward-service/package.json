@@ -1,0 +1,8 @@
+{
+  "name": "reward-service",
+  "version": "0.0.1",
+  "private": true,
+  "dependencies": {
+    "@prisma/client": "7.9.1"
+  }
+}

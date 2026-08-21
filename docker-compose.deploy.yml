@@ -1,8 +1,8 @@
-services:
+﻿services:
 
   caddy:
     image: caddy:2-alpine
-    container_name: payflow_prod_caddy
+    container_name: payflow_deploy_caddy
     restart: unless-stopped
 
     depends_on:
@@ -16,24 +16,115 @@ services:
       API_DOMAIN: ${API_DOMAIN}
 
     ports:
-      - "80:80"
-      - "443:443"
+      - "8080:80"
+      - "8443:443"
 
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
 
+    networks:
+      - payflow_default
+
   web:
     image: payflow-web:deploy
-    ports: []
+    container_name: payflow_deploy_web
+    restart: unless-stopped
+    env_file:
+      - ./.env.production.local
+    networks:
+      - payflow_default
 
   admin-web:
     image: payflow-admin-web:deploy
-    ports: []
+    container_name: payflow_deploy_admin
+    restart: unless-stopped
+    env_file:
+      - ./.env.production.local
+    networks:
+      - payflow_default
+
+  auth-service:
+    image: payflow-auth-service:test
+    container_name: payflow_deploy_auth
+    restart: unless-stopped
+    env_file:
+      - ./.env.production.local
+    environment:
+      PORT: 4002
+    networks:
+      - payflow_default
+
+  wallet-service:
+    image: payflow-wallet-service:test
+    container_name: payflow_deploy_wallet
+    restart: unless-stopped
+    env_file:
+      - ./.env.production.local
+    environment:
+      PORT: 4001
+    networks:
+      - payflow_default
+
+  payment-service:
+    image: payflow-payment-service:rewards
+    container_name: payflow_deploy_payment
+    restart: unless-stopped
+    env_file:
+      - ./.env.production.local
+    environment:
+      PORT: 4005
+      PAYMENT_SERVICE_PORT: 4005
+      WALLET_SERVICE_URL: http://payflow_deploy_wallet:4001/api/v1
+      REWARD_SERVICE_URL: http://payflow_deploy_reward:4007/api/v1
+    networks:
+      - payflow_default
+
+  notification-service:
+    image: payflow-notification-service:test
+    container_name: payflow_deploy_notification
+    restart: unless-stopped
+    env_file:
+      - ./.env.production.local
+    environment:
+      NOTIFICATION_SERVICE_PORT: 4006
+      AUTH_SERVICE_URL: http://payflow_deploy_auth:4002/api
+    networks:
+      - payflow_default
+
+  reward-service:
+    image: payflow-reward-service:deploy
+    container_name: payflow_deploy_reward
+    restart: unless-stopped
+    env_file:
+      - ./.env.production.local
+    environment:
+      PORT: 4007
+      REWARD_SERVICE_PORT: 4007
+    networks:
+      - payflow_default
 
   api-gateway:
-    ports: []
+    image: payflow-api-gateway:rewards
+    container_name: payflow_deploy_gateway
+    restart: unless-stopped
+    env_file:
+      - ./.env.production.local
+    environment:
+      PORT: 4000
+      AUTH_SERVICE_URL: http://payflow_deploy_auth:4002/api
+      WALLET_SERVICE_URL: http://payflow_deploy_wallet:4001/api/v1
+      PAYMENT_SERVICE_URL: http://payflow_deploy_payment:4005/api/v1
+      NOTIFICATION_SERVICE_URL: http://payflow_deploy_notification:4006
+      REWARD_SERVICE_URL: http://payflow_deploy_reward:4007/api/v1
+    networks:
+      - payflow_default
+
+networks:
+  payflow_default:
+    external: true
+    name: payflow_default
 
 volumes:
   caddy_data:

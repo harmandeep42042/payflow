@@ -1,0 +1,24 @@
+﻿FROM node:24-alpine
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+RUN corepack enable && corepack prepare pnpm@11.18.0 --activate
+
+COPY dist/apps/reward-service/package.json ./package.json
+COPY dist/apps/reward-service/pnpm-lock.yaml ./pnpm-lock.yaml
+
+RUN pnpm config set fetch-retries 5 \
+    && pnpm config set fetch-retry-mintimeout 20000 \
+    && pnpm config set fetch-retry-maxtimeout 120000 \
+    && pnpm config set fetch-timeout 600000 \
+    && pnpm config set network-concurrency 4 \
+    && pnpm install --prod --frozen-lockfile --ignore-scripts
+
+COPY dist/apps/reward-service/main.js ./main.js
+COPY dist/apps/reward-service/main.js.map ./main.js.map
+
+EXPOSE 4007
+
+CMD ["node", "main.js"]
