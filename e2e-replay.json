@@ -1,0 +1,8 @@
+﻿{
+  "sourceWalletId": "e04dd809-c9af-4f7e-930e-60773a92e115",
+  "destinationWalletId": "1ee9e78a-2725-4244-855a-0f224eb044db",
+  "amount": "1.00",
+  "currency": "INR",
+  "description": "Customer E2E transfer test",
+  "idempotencyKey": "e2e-transfer-20260821-124324"
+}

@@ -1,4 +1,4 @@
-import {
+﻿import {
   BadGatewayException,
   ConflictException,
   ForbiddenException,
@@ -72,10 +72,9 @@ export class PaymentsService {
       });
 
     if (existingPayment) {
-      return {
-        ...existingPayment,
-        replayed: true,
-      };
+      throw new ConflictException(
+        'A payment order already exists for this idempotency key',
+      );
     }
 
     const wallet =
