@@ -23,6 +23,13 @@ import {
 } from '@payflow/database';
 
 import {
+  OutboxEventProducer,
+  PaymentCompletedEventPayload,
+  PaymentEventPattern,
+  PaymentEventVersion,
+} from '@payflow/shared-events';
+
+import {
   CreatePaymentOrderDto,
 } from './dto/create-payment-order.dto';
 
@@ -263,26 +270,72 @@ export class PaymentsService {
      * Conditional update protects us
      * from concurrent confirmation calls.
      */
-    const updateResult =
-      await this.prisma.payment.updateMany({
-        where: {
-          id:
-            payment.id,
+    const completionResult =
+      await this.prisma.$transaction(
+        async (tx) => {
+          const updateResult =
+            await tx.payment.updateMany({
+              where: {
+                id:
+                  payment.id,
 
-          status:
-            'CREATED',
+                status:
+                  'CREATED',
+              },
+
+              data: {
+                status:
+                  'COMPLETED',
+
+                providerPaymentId,
+
+                completedAt:
+                  new Date(),
+              },
+            });
+
+          if (updateResult.count === 0) {
+            return {
+              completed: false,
+            } as const;
+          }
+
+          const eventPayload:
+            PaymentCompletedEventPayload = {
+              version:
+                PaymentEventVersion.Completed,
+              paymentId:
+                payment.id,
+              userId:
+                payment.userId,
+              walletId:
+                payment.walletId,
+              amount:
+                payment.amount.toString(),
+              currency:
+                payment.currency,
+            };
+
+          await tx.outboxEvent.create({
+            data: {
+              producer:
+                OutboxEventProducer.Payment,
+              aggregateType:
+                'PAYMENT',
+              aggregateId:
+                payment.id,
+              eventType:
+                PaymentEventPattern.Completed,
+              payload:
+                eventPayload,
+            },
+          });
+
+          return {
+            completed: true,
+          } as const;
         },
-
-        data: {
-          status:
-            'COMPLETED',
-
-          providerPaymentId,
-
-          completedAt:
-            new Date(),
-        },
-      });
+      );
 
     /*
      * Another concurrent request may
@@ -292,8 +345,7 @@ export class PaymentsService {
      * deposit idempotency key is identical.
      */
     if (
-      updateResult.count ===
-      0
+      !completionResult.completed
     ) {
       const currentPayment =
         await this.prisma.payment.findUnique({

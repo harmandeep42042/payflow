@@ -73,4 +73,5 @@ current-transaction-history-route.txt
 .env.production.local
 .pnpm-store/
 *.sql
+!prisma/migrations/20260821120000_add_outbox_event_producer/migration.sql
 *.dump

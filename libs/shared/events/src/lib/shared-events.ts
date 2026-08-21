@@ -12,6 +12,36 @@ export const WalletEventPattern = {
     'wallet.transaction.failed',
 } as const;
 
+export const PaymentEventPattern = {
+  Completed: 'PAYMENT_COMPLETED',
+} as const;
+
+export const OutboxEventProducer = {
+  Wallet: 'WALLET',
+  Payment: 'PAYMENT',
+} as const;
+
+export const PaymentEventVersion = {
+  Completed: 1,
+} as const;
+
+export type PaymentEventPatternValue =
+  (typeof PaymentEventPattern)[keyof typeof PaymentEventPattern];
+
+export type PaymentCompletedEventPayload = {
+  version: typeof PaymentEventVersion.Completed;
+  paymentId: string;
+  userId: string;
+  walletId: string;
+  amount: string;
+  currency: string;
+};
+
+export type PaymentCompletedEvent =
+  PaymentCompletedEventPayload & {
+    type: typeof PaymentEventPattern.Completed;
+  };
+
 export type WalletEventPatternValue =
   (typeof WalletEventPattern)[keyof typeof WalletEventPattern];
 

@@ -1,4 +1,7 @@
-import { WalletEventPattern } from '@payflow/shared-events';
+import {
+  OutboxEventProducer,
+  WalletEventPattern,
+} from '@payflow/shared-events';
 import {
   BadRequestException,
   ConflictException,
@@ -268,6 +271,7 @@ export class WalletsService {
 
       const outboxEvent = await tx.outboxEvent.create({
         data: {
+          producer: OutboxEventProducer.Wallet,
           aggregateType: 'DEPOSIT',
           aggregateId: updatedDeposit.id,
           eventType: WalletEventPattern.DepositCompleted,
@@ -514,6 +518,7 @@ export class WalletsService {
 
       const outboxEvent = await tx.outboxEvent.create({
         data: {
+          producer: OutboxEventProducer.Wallet,
           aggregateType: 'WITHDRAWAL',
           aggregateId: updatedWithdrawal.id,
           eventType: WalletEventPattern.WithdrawalCompleted,
@@ -852,6 +857,7 @@ export class WalletsService {
 
       const outboxEvent = await tx.outboxEvent.create({
         data: {
+          producer: OutboxEventProducer.Wallet,
           aggregateType: 'TRANSFER',
           aggregateId: updatedTransfer.id,
           eventType: WalletEventPattern.TransferCompleted,

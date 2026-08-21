@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@payflow/database';
+import { OutboxEventProducer } from '@payflow/shared-events';
 
 @Injectable()
 export class OutboxService {
@@ -8,6 +9,7 @@ export class OutboxService {
   async getPendingEvents() {
     return this.prisma.outboxEvent.findMany({
       where: {
+        producer: OutboxEventProducer.Wallet,
         status: 'PENDING',
       },
       orderBy: {

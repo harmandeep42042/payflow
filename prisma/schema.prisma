@@ -175,6 +175,7 @@ model LedgerEntry {
 
 model OutboxEvent {
   id            String       @id @default(uuid())
+  producer      String?
   aggregateType String
   aggregateId   String
   eventType     String
@@ -186,6 +187,7 @@ model OutboxEvent {
   lastError     String?
 
   @@index([status, createdAt])
+  @@index([producer, status, createdAt])
   @@index([aggregateType, aggregateId])
 }
 

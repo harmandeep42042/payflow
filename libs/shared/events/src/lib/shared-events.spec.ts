@@ -1,4 +1,8 @@
 import {
+  OutboxEventProducer,
+  PaymentCompletedEvent,
+  PaymentEventPattern,
+  PaymentEventVersion,
   WalletEventPattern,
   WalletTransferCompletedEvent,
 } from './shared-events';
@@ -46,5 +50,34 @@ describe('shared-events', () => {
     expect(event.sender.email).toBe(
       'sender@payflow.com',
     );
+  });
+
+  it('provides a versioned payment completed contract', () => {
+    const event: PaymentCompletedEvent = {
+      type: PaymentEventPattern.Completed,
+      version: PaymentEventVersion.Completed,
+      paymentId: 'payment-1',
+      userId: 'user-1',
+      walletId: 'wallet-1',
+      amount: '10.00',
+      currency: 'INR',
+    };
+
+    expect(event).toEqual({
+      type: 'PAYMENT_COMPLETED',
+      version: 1,
+      paymentId: 'payment-1',
+      userId: 'user-1',
+      walletId: 'wallet-1',
+      amount: '10.00',
+      currency: 'INR',
+    });
+  });
+
+  it('provides explicit outbox producer ownership', () => {
+    expect(OutboxEventProducer).toEqual({
+      Wallet: 'WALLET',
+      Payment: 'PAYMENT',
+    });
   });
 });
