@@ -18,14 +18,13 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 
-import {
-  WalletJwtAuthGuard,
-} from '../wallet-auth/guards/wallet-jwt-auth.guard';
+import { WalletJwtAuthGuard } from '../wallet-auth/guards/wallet-jwt-auth.guard';
 
 import { CreateWalletDto } from './dto/create-wallet.dto';
 import { DepositWalletDto } from './dto/deposit-wallet.dto';
 import { TransactionHistoryQueryDto } from './dto/transaction-history-query.dto';
 import { TransferWalletDto } from './dto/transfer-wallet.dto';
+import { TransferByVpaDto } from './dto/transfer-by-vpa.dto';
 import { WithdrawWalletDto } from './dto/withdraw-wallet.dto';
 import { WalletsService } from './wallets.service';
 
@@ -41,9 +40,7 @@ type AuthenticatedWalletRequest = {
 @ApiBearerAuth('access-token')
 @Controller('wallets')
 export class WalletsController {
-  constructor(
-    private readonly walletsService: WalletsService,
-  ) {}
+  constructor(private readonly walletsService: WalletsService) {}
 
   @Get()
   @ApiOperation({
@@ -71,12 +68,9 @@ export class WalletsController {
   })
   @ApiResponse({
     status: 409,
-    description:
-      'Wallet already exists for the selected currency',
+    description: 'Wallet already exists for the selected currency',
   })
-  createWallet(
-    @Body() dto: CreateWalletDto,
-  ) {
+  createWallet(@Body() dto: CreateWalletDto) {
     return this.walletsService.createWallet(dto);
   }
 
@@ -91,18 +85,15 @@ export class WalletsController {
   })
   @ApiResponse({
     status: 400,
-    description:
-      'Invalid wallet status, currency or amount',
+    description: 'Invalid wallet status, currency or amount',
   })
   @ApiResponse({
     status: 404,
-    description:
-      'Wallet or ledger account not found',
+    description: 'Wallet or ledger account not found',
   })
   @ApiResponse({
     status: 409,
-    description:
-      'Wallet was updated by another transaction',
+    description: 'Wallet was updated by another transaction',
   })
   depositWallet(
     @Body() dto: DepositWalletDto,
@@ -110,10 +101,7 @@ export class WalletsController {
     @Req()
     request: AuthenticatedWalletRequest,
   ) {
-    return this.walletsService.depositWallet(
-      dto,
-      request.user?.id,
-    );
+    return this.walletsService.depositWallet(dto, request.user?.id);
   }
 
   @Post('withdraw')
@@ -123,23 +111,19 @@ export class WalletsController {
   })
   @ApiResponse({
     status: 201,
-    description:
-      'Withdrawal completed successfully',
+    description: 'Withdrawal completed successfully',
   })
   @ApiResponse({
     status: 400,
-    description:
-      'Invalid request or insufficient wallet balance',
+    description: 'Invalid request or insufficient wallet balance',
   })
   @ApiResponse({
     status: 404,
-    description:
-      'Wallet or ledger account not found',
+    description: 'Wallet or ledger account not found',
   })
   @ApiResponse({
     status: 409,
-    description:
-      'Wallet balance or version changed',
+    description: 'Wallet balance or version changed',
   })
   withdrawWallet(
     @Body() dto: WithdrawWalletDto,
@@ -147,37 +131,63 @@ export class WalletsController {
     @Req()
     request: AuthenticatedWalletRequest,
   ) {
-    return this.walletsService.withdrawWallet(
-      dto,
-      request.user?.id,
-    );
+    return this.walletsService.withdrawWallet(dto, request.user?.id);
   }
 
-  @Post('transfer')
+  @Post('transfer-by-vpa')
   @UseGuards(WalletJwtAuthGuard)
   @ApiOperation({
-    summary:
-      'Transfer money between two wallets',
+    summary: 'Transfer money to a recipient by VPA',
   })
   @ApiResponse({
     status: 201,
-    description:
-      'Wallet transfer completed successfully',
+    description: 'VPA transfer completed successfully',
   })
   @ApiResponse({
     status: 400,
-    description:
-      'Invalid wallets, currency or insufficient balance',
+    description: 'Invalid amount, currency or recipient',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Authenticated user is not allowed to transfer',
   })
   @ApiResponse({
     status: 404,
-    description:
-      'Source or destination wallet not found',
+    description: 'Recipient or source wallet not found',
   })
   @ApiResponse({
     status: 409,
-    description:
-      'Wallet version changed during transfer',
+    description: 'Transfer conflict or duplicate operation',
+  })
+  transferByVpa(
+    @Body()
+    dto: TransferByVpaDto,
+
+    @Req()
+    request: AuthenticatedWalletRequest,
+  ) {
+    return this.walletsService.transferByVpa(dto, request.user?.id);
+  }
+  @Post('transfer')
+  @UseGuards(WalletJwtAuthGuard)
+  @ApiOperation({
+    summary: 'Transfer money between two wallets',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Wallet transfer completed successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid wallets, currency or insufficient balance',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Source or destination wallet not found',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Wallet version changed during transfer',
   })
   transferWallet(
     @Body()
@@ -186,10 +196,7 @@ export class WalletsController {
     @Req()
     request: AuthenticatedWalletRequest,
   ) {
-    return this.walletsService.transferWallet(
-      dto,
-      request.user?.id,
-    );
+    return this.walletsService.transferWallet(dto, request.user?.id);
   }
 
   @Get('user/:userId')
@@ -200,13 +207,11 @@ export class WalletsController {
   @ApiParam({
     name: 'userId',
     description: 'User UUID',
-    example:
-      '4f2b1d1d-5e7d-45df-a26b-98c9d1234567',
+    example: '4f2b1d1d-5e7d-45df-a26b-98c9d1234567',
   })
   @ApiResponse({
     status: 200,
-    description:
-      'User wallets returned successfully',
+    description: 'User wallets returned successfully',
   })
   @ApiResponse({
     status: 404,
@@ -219,33 +224,23 @@ export class WalletsController {
     @Req()
     request: AuthenticatedWalletRequest,
   ) {
-    return this.walletsService.getUserWallets(
-      userId,
-      request.user?.id,
-    );
+    return this.walletsService.getUserWallets(userId, request.user?.id);
   }
 
   @Get(':walletId/transactions')
   @UseGuards(WalletJwtAuthGuard)
   @ApiOperation({
-    summary:
-      'Get paginated wallet transaction history',
+    summary: 'Get paginated wallet transaction history',
   })
   @ApiParam({
     name: 'walletId',
     description: 'Wallet UUID',
-    example:
-      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    example: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   })
   @ApiQuery({
     name: 'type',
     required: false,
-    enum: [
-      'ALL',
-      'DEPOSIT',
-      'WITHDRAWAL',
-      'TRANSFER',
-    ],
+    enum: ['ALL', 'DEPOSIT', 'WITHDRAWAL', 'TRANSFER'],
     example: 'ALL',
   })
   @ApiQuery({
@@ -262,8 +257,7 @@ export class WalletsController {
   })
   @ApiResponse({
     status: 200,
-    description:
-      'Transaction history returned successfully',
+    description: 'Transaction history returned successfully',
   })
   @ApiResponse({
     status: 404,
@@ -278,12 +272,11 @@ export class WalletsController {
     @Req()
     request: AuthenticatedWalletRequest,
   ) {
-    return this.walletsService
-      .getTransactionHistory(
-        walletId,
-        query,
-        request.user?.id,
-      );
+    return this.walletsService.getTransactionHistory(
+      walletId,
+      query,
+      request.user?.id,
+    );
   }
 
   @Get(':walletId')
@@ -294,13 +287,11 @@ export class WalletsController {
   @ApiParam({
     name: 'walletId',
     description: 'Wallet UUID',
-    example:
-      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    example: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   })
   @ApiResponse({
     status: 200,
-    description:
-      'Wallet details returned successfully',
+    description: 'Wallet details returned successfully',
   })
   @ApiResponse({
     status: 404,
@@ -313,9 +304,6 @@ export class WalletsController {
     @Req()
     request: AuthenticatedWalletRequest,
   ) {
-    return this.walletsService.getWalletById(
-      walletId,
-      request.user?.id,
-    );
+    return this.walletsService.getWalletById(walletId, request.user?.id);
   }
 }

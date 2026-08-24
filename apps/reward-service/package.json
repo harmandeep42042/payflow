@@ -3,6 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "dependencies": {
-    "@prisma/client": "7.9.1"
+    "@prisma/client": "7.9.1",
+    "tslib": "^2.8.1"
   }
 }

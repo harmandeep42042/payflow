@@ -15,10 +15,15 @@ import { CreateWalletDto } from './dto/create-wallet.dto';
 import { DepositWalletDto } from './dto/deposit-wallet.dto';
 import { WithdrawWalletDto } from './dto/withdraw-wallet.dto';
 import { TransactionHistoryQueryDto } from './dto/transaction-history-query.dto';
+import { RecipientLookupService } from '../recipient-lookup/recipient-lookup.service';
+import { TransferByVpaDto } from './dto/transfer-by-vpa.dto';
 
 @Injectable()
 export class WalletsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly recipientLookupService: RecipientLookupService,
+  ) {}
 
   getStatus() {
     return {
@@ -106,10 +111,7 @@ export class WalletsService {
     };
   }
 
-  async depositWallet(
-    dto: DepositWalletDto,
-    authenticatedUserId?: string,
-  ) {
+  async depositWallet(dto: DepositWalletDto, authenticatedUserId?: string) {
     const walletId = dto.walletId.trim();
     const currency = dto.currency.trim().toUpperCase();
     const amount = dto.amount.trim();
@@ -158,10 +160,7 @@ export class WalletsService {
       throw new NotFoundException('Wallet not found');
     }
 
-    this.assertWalletOwnership(
-      wallet.userId,
-      authenticatedUserId,
-    );
+    this.assertWalletOwnership(wallet.userId, authenticatedUserId);
 
     if (wallet.status !== 'ACTIVE') {
       throw new BadRequestException('Wallet is not active');
@@ -337,10 +336,7 @@ export class WalletsService {
     };
   }
 
-  async withdrawWallet(
-    dto: WithdrawWalletDto,
-    authenticatedUserId?: string,
-  ) {
+  async withdrawWallet(dto: WithdrawWalletDto, authenticatedUserId?: string) {
     const walletId = dto.walletId.trim();
     const currency = dto.currency.trim().toUpperCase();
     const amount = dto.amount.trim();
@@ -389,10 +385,7 @@ export class WalletsService {
       throw new NotFoundException('Wallet not found');
     }
 
-    this.assertWalletOwnership(
-      wallet.userId,
-      authenticatedUserId,
-    );
+    this.assertWalletOwnership(wallet.userId, authenticatedUserId);
 
     if (wallet.status !== 'ACTIVE') {
       throw new BadRequestException('Wallet is not active');
@@ -589,22 +582,57 @@ export class WalletsService {
     authenticatedUserId?: string,
   ) {
     if (!authenticatedUserId) {
-      throw new ForbiddenException(
-        'Authenticated user identity is required',
-      );
+      throw new ForbiddenException('Authenticated user identity is required');
     }
 
     if (walletUserId !== authenticatedUserId) {
-      throw new ForbiddenException(
-        'You do not own this wallet',
-      );
+      throw new ForbiddenException('You do not own this wallet');
     }
   }
+  async transferByVpa(dto: TransferByVpaDto, authenticatedUserId?: string) {
+    if (!authenticatedUserId) {
+      throw new ForbiddenException('Authenticated user identity is required');
+    }
 
-  async transferWallet(
-    dto: TransferWalletDto,
-    authenticatedUserId?: string,
-  ) {
+    const vpa = dto.vpa.trim().toLowerCase();
+    const currency = dto.currency.trim().toUpperCase();
+
+    if (!vpa) {
+      throw new BadRequestException('Recipient VPA is required');
+    }
+
+    const sourceWallet = await this.prisma.wallet.findUnique({
+      where: {
+        userId_currency: {
+          userId: authenticatedUserId,
+          currency,
+        },
+      },
+    });
+
+    if (!sourceWallet) {
+      throw new NotFoundException(`Source ${currency} wallet not found`);
+    }
+
+    const recipient = await this.recipientLookupService.resolveRecipient({
+      vpa,
+      currency,
+      excludeUserId: authenticatedUserId,
+    });
+
+    return this.transferWallet(
+      {
+        sourceWalletId: sourceWallet.id,
+        destinationWalletId: recipient.recipient.walletId,
+        amount: dto.amount,
+        currency,
+        description: dto.description,
+        idempotencyKey: dto.idempotencyKey,
+      },
+      authenticatedUserId,
+    );
+  }
+  async transferWallet(dto: TransferWalletDto, authenticatedUserId?: string) {
     const sourceWalletId = dto.sourceWalletId.trim();
     const destinationWalletId = dto.destinationWalletId.trim();
     const currency = dto.currency.trim().toUpperCase();
@@ -687,20 +715,12 @@ export class WalletsService {
     }
 
     if (!authenticatedUserId) {
-      throw new ForbiddenException(
-        'Authenticated user identity is required',
-      );
+      throw new ForbiddenException('Authenticated user identity is required');
     }
 
-    if (
-      sourceWallet.userId !==
-      authenticatedUserId
-    ) {
-      throw new ForbiddenException(
-        'You do not own the source wallet',
-      );
+    if (sourceWallet.userId !== authenticatedUserId) {
+      throw new ForbiddenException('You do not own the source wallet');
     }
-
 
     if (!destinationWallet) {
       throw new NotFoundException('Destination wallet not found');
@@ -724,9 +744,7 @@ export class WalletsService {
     }
 
     if (!sourceWallet.ledgerAccount) {
-      throw new NotFoundException(
-        'Source wallet ledger account not found',
-      );
+      throw new NotFoundException('Source wallet ledger account not found');
     }
 
     if (!destinationWallet.ledgerAccount) {
@@ -736,14 +754,11 @@ export class WalletsService {
     }
 
     if (Number(sourceWallet.balance.toString()) < requestedAmount) {
-      throw new BadRequestException(
-        'Insufficient source wallet balance',
-      );
+      throw new BadRequestException('Insufficient source wallet balance');
     }
 
     const sourceLedgerAccountId = sourceWallet.ledgerAccount.id;
-    const destinationLedgerAccountId =
-      destinationWallet.ledgerAccount.id;
+    const destinationLedgerAccountId = destinationWallet.ledgerAccount.id;
 
     const result = await this.prisma.$transaction(async (tx) => {
       const transfer = await tx.transfer.create({
@@ -835,8 +850,8 @@ export class WalletsService {
         },
       });
 
-      const [updatedSourceWallet, updatedDestinationWallet] =
-        await Promise.all([
+      const [updatedSourceWallet, updatedDestinationWallet] = await Promise.all(
+        [
           tx.wallet.findUnique({
             where: {
               id: sourceWalletId,
@@ -847,12 +862,11 @@ export class WalletsService {
               id: destinationWalletId,
             },
           }),
-        ]);
+        ],
+      );
 
       if (!updatedSourceWallet || !updatedDestinationWallet) {
-        throw new NotFoundException(
-          'Updated wallet records not found',
-        );
+        throw new NotFoundException('Updated wallet records not found');
       }
 
       const outboxEvent = await tx.outboxEvent.create({
@@ -869,12 +883,10 @@ export class WalletsService {
             currency,
             description: description ?? null,
             idempotencyKey,
-            sourceWalletBalance:
-              updatedSourceWallet.balance.toString(),
+            sourceWalletBalance: updatedSourceWallet.balance.toString(),
             destinationWalletBalance:
               updatedDestinationWallet.balance.toString(),
-            completedAt:
-              updatedTransfer.completedAt?.toISOString() ?? null,
+            completedAt: updatedTransfer.completedAt?.toISOString() ?? null,
           },
           status: 'PENDING',
         },
@@ -935,10 +947,7 @@ export class WalletsService {
     };
   }
 
-  async getWalletById(
-    walletId: string,
-    authenticatedUserId?: string,
-  ) {
+  async getWalletById(walletId: string, authenticatedUserId?: string) {
     const wallet = await this.prisma.wallet.findUnique({
       where: {
         id: walletId,
@@ -952,10 +961,7 @@ export class WalletsService {
       throw new NotFoundException('Wallet not found');
     }
 
-    this.assertWalletOwnership(
-      wallet.userId,
-      authenticatedUserId,
-    );
+    this.assertWalletOwnership(wallet.userId, authenticatedUserId);
 
     return {
       id: wallet.id,
@@ -970,21 +976,13 @@ export class WalletsService {
     };
   }
 
-  async getUserWallets(
-    userId: string,
-    authenticatedUserId?: string,
-  ) {
+  async getUserWallets(userId: string, authenticatedUserId?: string) {
     if (!authenticatedUserId) {
-      this.assertWalletOwnership(
-        userId,
-        authenticatedUserId,
-      );
+      this.assertWalletOwnership(userId, authenticatedUserId);
     }
 
     if (userId !== authenticatedUserId) {
-      throw new ForbiddenException(
-        "You cannot access another user's wallets",
-      );
+      throw new ForbiddenException("You cannot access another user's wallets");
     }
 
     const user = await this.prisma.user.findUnique({
@@ -1049,10 +1047,7 @@ export class WalletsService {
       throw new NotFoundException('Wallet not found');
     }
 
-    this.assertWalletOwnership(
-      wallet.userId,
-      authenticatedUserId,
-    );
+    this.assertWalletOwnership(wallet.userId, authenticatedUserId);
 
     const depositItems =
       type === 'ALL' || type === 'DEPOSIT'
@@ -1159,47 +1154,33 @@ export class WalletsService {
       })),
 
       ...transferItems.map((transfer) => {
-        const outgoing =
-          transfer.sourceWalletId === normalizedWalletId;
+        const outgoing = transfer.sourceWalletId === normalizedWalletId;
 
         return {
           id: transfer.id,
           type: 'TRANSFER' as const,
-          direction: outgoing
-            ? ('DEBIT' as const)
-            : ('CREDIT' as const),
+          direction: outgoing ? ('DEBIT' as const) : ('CREDIT' as const),
           walletId: normalizedWalletId,
           counterpartyWalletId: outgoing
             ? transfer.destinationWalletId
             : transfer.sourceWalletId,
           sourceWalletId: transfer.sourceWalletId,
-          destinationWalletId:
-            transfer.destinationWalletId,
+          destinationWalletId: transfer.destinationWalletId,
 
           counterparty: outgoing
             ? {
-                walletId:
-                  transfer.destinationWallet.id,
-                userId:
-                  transfer.destinationWallet.user.id,
-                firstName:
-                  transfer.destinationWallet.user.firstName,
-                lastName:
-                  transfer.destinationWallet.user.lastName,
-                email:
-                  transfer.destinationWallet.user.email,
+                walletId: transfer.destinationWallet.id,
+                userId: transfer.destinationWallet.user.id,
+                firstName: transfer.destinationWallet.user.firstName,
+                lastName: transfer.destinationWallet.user.lastName,
+                email: transfer.destinationWallet.user.email,
               }
             : {
-                walletId:
-                  transfer.sourceWallet.id,
-                userId:
-                  transfer.sourceWallet.user.id,
-                firstName:
-                  transfer.sourceWallet.user.firstName,
-                lastName:
-                  transfer.sourceWallet.user.lastName,
-                email:
-                  transfer.sourceWallet.user.email,
+                walletId: transfer.sourceWallet.id,
+                userId: transfer.sourceWallet.user.id,
+                firstName: transfer.sourceWallet.user.firstName,
+                lastName: transfer.sourceWallet.user.lastName,
+                email: transfer.sourceWallet.user.email,
               },
 
           amount: transfer.amount.toString(),
@@ -1213,14 +1194,11 @@ export class WalletsService {
         };
       }),
     ].sort(
-      (first, second) =>
-        second.createdAt.getTime() -
-        first.createdAt.getTime(),
+      (first, second) => second.createdAt.getTime() - first.createdAt.getTime(),
     );
 
     const total = transactions.length;
-    const paginatedTransactions =
-      transactions.slice(skip, skip + limit);
+    const paginatedTransactions = transactions.slice(skip, skip + limit);
 
     return {
       wallet: {
@@ -1250,5 +1228,3 @@ export class WalletsService {
     };
   }
 }
-
-

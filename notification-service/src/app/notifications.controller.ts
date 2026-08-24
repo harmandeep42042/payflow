@@ -15,6 +15,22 @@ import {
   NotificationsService,
 } from './notifications.service';
 
+type DeadLetterChannel = {
+  ack(message: unknown): void;
+  nack(message: unknown, allUpTo: boolean, requeue: boolean): void;
+  assertQueue(queue: string, options: Record<string, unknown>): Promise<unknown>;
+  sendToQueue(queue: string, content: Buffer, options: Record<string, unknown>): boolean;
+};
+
+type DeadLetterMessage = {
+  content: Buffer;
+  properties?: {
+    headers?: Record<string, unknown>;
+    contentType?: string;
+    contentEncoding?: string;
+  };
+};
+
 @Controller()
 export class NotificationsController {
   private readonly logger =
@@ -72,10 +88,10 @@ export class NotificationsController {
     context: RmqContext,
   ): Promise<void> {
     const channel =
-      context.getChannelRef();
+      context.getChannelRef() as DeadLetterChannel;
 
     const message =
-      context.getMessage();
+      context.getMessage() as unknown as DeadLetterMessage;
 
     try {
       this.logger.log(
@@ -178,11 +194,7 @@ export class NotificationsController {
           : String(error),
       );
 
-      channel.nack(
-        message,
-        false,
-        true,
-      );
+      await this.deadLetter(channel, message, 'wallet.transfer.completed');
     }
   }
 
@@ -226,10 +238,10 @@ export class NotificationsController {
     context: RmqContext,
   ): Promise<void> {
     const channel =
-      context.getChannelRef();
+      context.getChannelRef() as DeadLetterChannel;
 
     const message =
-      context.getMessage();
+      context.getMessage() as unknown as DeadLetterMessage;
 
     try {
       this.logger.log(
@@ -257,11 +269,37 @@ export class NotificationsController {
           : String(error),
       );
 
-      channel.nack(
-        message,
-        false,
-        true,
+      await this.deadLetter(channel, message, eventName);
+    }
+  }
+
+  private async deadLetter(
+    channel: DeadLetterChannel,
+    message: DeadLetterMessage,
+    eventName: string,
+  ): Promise<void> {
+    const primaryQueue = process.env['RABBITMQ_QUEUE'] ?? 'wallet_events';
+    const deadLetterQueue = `${primaryQueue}.dead`;
+
+    try {
+      await channel.assertQueue(deadLetterQueue, { durable: true });
+      channel.sendToQueue(deadLetterQueue, message.content, {
+        persistent: true,
+        contentType: message.properties?.contentType,
+        contentEncoding: message.properties?.contentEncoding,
+        headers: {
+          ...message.properties?.headers,
+          'x-payflow-dead-letter-reason': 'notification-processing-failed',
+          'x-payflow-event-name': eventName,
+        },
+      });
+      channel.ack(message);
+    } catch (routingError) {
+      this.logger.error(
+        `Failed to route ${eventName} to the notification dead-letter queue`,
+        routingError instanceof Error ? routingError.stack : String(routingError),
       );
+      channel.nack(message, false, true);
     }
   }
 }

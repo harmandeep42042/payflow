@@ -10,7 +10,11 @@ export class RewardsService {
 
   async getUserRewards(userId: string) {
     if (!userId) throw new BadRequestException('userId is required');
-    const rewards = await this.prisma.reward.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } });
+    const rewards = await this.prisma.reward.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
     return { success: true, count: rewards.length, rewards };
   }
 
@@ -25,8 +29,15 @@ export class RewardsService {
     const amount = Math.floor(Math.random() * 20) + 1;
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 30);
-    const reward = await this.prisma.reward.create({ data: { userId, walletId, paymentId: paymentId || null, rewardType: 'SCRATCH_CARD', amount, currency: 'INR', status: 'AVAILABLE', expiresAt } });
-    return { success: true, created: true, reward };
+    try {
+      const reward = await this.prisma.reward.create({ data: { userId, walletId, paymentId: paymentId || null, rewardType: 'SCRATCH_CARD', amount, currency: 'INR', status: 'AVAILABLE', expiresAt } });
+      return { success: true, created: true, reward };
+    } catch (error) {
+      if (!paymentId || !this.isPaymentIdUniqueConflict(error)) throw error;
+      const existingReward = await this.prisma.reward.findUnique({ where: { paymentId } });
+      if (!existingReward) throw error;
+      return { success: true, created: false, reward: existingReward };
+    }
   }
 
   async claimReward(rewardId: string, userId: string) {
@@ -57,5 +68,13 @@ export class RewardsService {
       return { completedDeposit, updatedWallet, systemDebitEntry, customerCreditEntry };
     });
     return { success: true, rewardId: reward.id, amount: reward.amount.toString(), currency: reward.currency, status: 'CLAIMED', claimedAt: new Date(), wallet: { id: result.updatedWallet.id, balance: result.updatedWallet.balance.toString(), version: result.updatedWallet.version }, depositId: result.completedDeposit.id, ledgerEntries: { debitId: result.systemDebitEntry.id, creditId: result.customerCreditEntry.id } };
+  }
+
+  private isPaymentIdUniqueConflict(error: unknown): boolean {
+    if (!error || typeof error !== 'object' || !('code' in error) || error.code !== 'P2002') return false;
+    if (!('meta' in error) || !error.meta || typeof error.meta !== 'object' || !('target' in error.meta)) return false;
+    const target = error.meta.target;
+    if (Array.isArray(target)) return target.includes('paymentId');
+    return typeof target === 'string' && target.includes('paymentId');
   }
 }

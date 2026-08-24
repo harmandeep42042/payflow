@@ -1,12 +1,8 @@
-import { AppService } from './app.service';
+﻿import { AppService } from './app.service';
 import { AppController } from './app.controller';
-import {
-  AuditLogModule,
-} from './audit-log/audit-log.module';
+import { AuditLogModule } from './audit-log/audit-log.module';
 import { Module } from '@nestjs/common';
-import {
-  RecipientLookupModule,
-} from './recipient-lookup/recipient-lookup.module';
+import { RecipientLookupModule } from './recipient-lookup/recipient-lookup.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaModule } from '@payflow/database';
 
@@ -14,6 +10,7 @@ import { AdminModule } from './admin/admin.module';
 import { OutboxModule } from './outbox/outbox.module';
 import { RabbitMqModule } from './rabbitmq/rabbitmq.module';
 import { WalletsModule } from './wallets/wallets.module';
+import { WalletQrModule } from './wallet-qr/wallet-qr.module';
 
 @Module({
   imports: [
@@ -25,12 +22,9 @@ import { WalletsModule } from './wallets/wallets.module';
     OutboxModule,
     AdminModule,
     RecipientLookupModule,
+    WalletQrModule,
   ],
-  controllers: [
-    AppController,
-  ],
-  providers: [
-    AppService,
-  ],
+  controllers: [AppController],
+  providers: [AppService],
 })
 export class AppModule {}
