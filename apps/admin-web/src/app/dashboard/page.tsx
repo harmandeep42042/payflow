@@ -1,629 +1,492 @@
 'use client';
 
-import {
-  useCallback,
-  useEffect,
-  useState,
-} from 'react';
+import Link from 'next/link';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-
+import {
+  AdminShell,
+  ErrorState,
+  MetricCard,
+  PageHeader,
+} from '../components/admin';
+import {
+  AnalyticsIcon,
+  ArrowUpRightIcon,
+  Button,
+  Card,
+  RefreshIcon,
+  Skeleton,
+  StatusBadge,
+  TransactionsIcon,
+  UsersIcon,
+  WalletIcon,
+} from '../components/ui';
+import {
+  LatestDashboardRequest,
+  normalizeDashboard,
+  type DashboardData,
+} from '../components/dashboard';
+import { formatTransactionAmount, formatTransactionDate } from '../components/transactions';
 import {
   AdminUser,
   adminAuthenticatedRequest,
   clearAdminSession,
-  getStoredAdmin,
-  hasValidAdminSession,
+  logoutAdmin,
+  restoreAdminSession,
 } from '../lib/api';
 
-type DashboardStats = {
-  totalUsers: number;
-  activeUsers: number;
-  blockedUsers: number;
-  suspendedUsers: number;
+function formatDate(value: string): string {
+  return formatTransactionDate(value);
+}
+function greeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
 
-  totalWallets: number;
-  activeWallets: number;
-  frozenWallets: number;
-  closedWallets: number;
-
-  totalTransactions: number;
-  totalDeposits: number;
-  totalWithdrawals: number;
-  totalTransfers: number;
-
-  totalBalance: string;
-  totalDepositAmount: string;
-  totalWithdrawalAmount: string;
-  totalTransferAmount: string;
-};
-
-type RecentUser = {
-  id: string;
-  email: string;
-  phone?: string | null;
-  firstName: string;
-  lastName?: string | null;
-  role: string;
-  status: string;
-  createdAt: string;
-};
-
-type RecentTransaction = {
-  id: string;
-  type:
-    | 'DEPOSIT'
-    | 'WITHDRAWAL'
-    | 'TRANSFER';
-  amount: string;
-  currency: string;
-  status: string;
-  reference?: string | null;
-  description?: string | null;
-  walletId?: string | null;
-  sourceWalletId?: string | null;
-  destinationWalletId?: string | null;
-  createdAt: string;
-  completedAt?: string | null;
-};
-
-type AdminDashboardResponse = {
-  stats: DashboardStats;
-  recentUsers: RecentUser[];
-  recentTransactions: RecentTransaction[];
-};
-
-function formatMoney(
-  amount: string,
-): string {
-  return Number(amount).toLocaleString(
-    'en-IN',
-    {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    },
+function DashboardLoading() {
+  return (
+    <main
+      aria-busy="true"
+      aria-label="Loading admin dashboard"
+      className="min-h-screen bg-[#F6F8FA] p-4 sm:p-8"
+    >
+      <div className="mx-auto max-w-7xl">
+        <Skeleton className="h-7 w-64" />
+        <Skeleton className="mt-3 h-4 w-96 max-w-full" />
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 4 }, (_, index) => (
+            <Skeleton className="h-40" key={index} />
+          ))}
+        </div>
+        <div className="mt-6 grid gap-4 xl:grid-cols-3">
+          <Skeleton className="h-80 xl:col-span-2" />
+          <Skeleton className="h-80" />
+        </div>
+      </div>
+    </main>
   );
 }
 
 export default function AdminDashboardPage() {
   const router = useRouter();
-
-  const [admin, setAdmin] =
-    useState<AdminUser | null>(null);
-
-  const [dashboard, setDashboard] =
-    useState<AdminDashboardResponse | null>(
-      null,
-    );
-
-  const [isLoading, setIsLoading] =
-    useState(true);
-
-  const [
-    autoRefreshEnabled,
-    setAutoRefreshEnabled,
-  ] = useState(true);
-
-  const [
-    lastUpdatedAt,
-    setLastUpdatedAt,
-  ] = useState<Date | null>(
+  const [admin, setAdmin] = useState<AdminUser | null>(null);
+  const [dashboard, setDashboard] = useState<DashboardData | null>(
     null,
   );
-
+  const [isLoading, setIsLoading] = useState(true);
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [error, setError] = useState('');
+  const latestRequestRef = useRef(new LatestDashboardRequest());
 
-  const loadDashboard = useCallback(
-    async (): Promise<void> => {
-      try {
-        setError('');
-        setIsLoading(true);
-
-        const response =
-          await adminAuthenticatedRequest<AdminDashboardResponse>(
-            '/admin/dashboard',
-          );
-
-        setDashboard(response);
-
-        setLastUpdatedAt(
-          new Date(),
+  const loadDashboard = useCallback(async (): Promise<void> => {
+    const { controller, requestId } = latestRequestRef.current.begin();
+    try {
+      setError('');
+      setIsLoading(true);
+      const response =
+        await adminAuthenticatedRequest<unknown>(
+          '/admin/dashboard',
+          { signal: controller.signal },
         );
-      } catch (requestError) {
-        const message =
-          requestError instanceof Error
-            ? requestError.message
-            : 'Unable to load admin dashboard';
+      if (!latestRequestRef.current.isLatest(requestId)) return;
+      setDashboard(normalizeDashboard(response));
+      setLastUpdatedAt(new Date());
+    } catch (requestError) {
+      if (!latestRequestRef.current.isLatest(requestId)) return;
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : 'Unable to load admin dashboard',
+      );
+    } finally {
+      if (latestRequestRef.current.isLatest(requestId)) setIsLoading(false);
+    }
+  }, []);
 
-        if (
-          message
-            .toLowerCase()
-            .includes('session')
-        ) {
-          clearAdminSession();
-          router.replace('/login');
-          return;
-        }
-
-        setError(message);
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [router],
-  );
+  useEffect(() => () => latestRequestRef.current.abort(), []);
 
   useEffect(() => {
-    if (!hasValidAdminSession()) {
-      router.replace('/login');
-      return;
-    }
-
-    const storedAdmin = getStoredAdmin();
-
-    if (!storedAdmin) {
-      clearAdminSession();
-      router.replace('/login');
-      return;
-    }
-
-    setAdmin(storedAdmin);
-
-    void loadDashboard();
+    void restoreAdminSession()
+      .then((storedAdmin) => {
+        setAdmin(storedAdmin);
+        return loadDashboard();
+      })
+      .catch(() => {
+        clearAdminSession();
+        router.replace('/login');
+      });
   }, [loadDashboard, router]);
   useEffect(() => {
-    if (!autoRefreshEnabled) {
-      return;
-    }
+    if (!autoRefreshEnabled) return;
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void loadDashboard();
+    }, 10_000);
+    return () => window.clearInterval(intervalId);
+  }, [autoRefreshEnabled, loadDashboard]);
 
-    const intervalId =
-      window.setInterval(() => {
-        void loadDashboard();
-      }, 10_000);
-
-    return () => {
-      window.clearInterval(
-        intervalId,
-      );
-    };
-  }, [
-    autoRefreshEnabled,
-    loadDashboard,
-  ]);
-
-
-  function handleLogout(): void {
-    clearAdminSession();
+  async function handleLogout(): Promise<void> {
+    await logoutAdmin();
     router.push('/login');
     router.refresh();
   }
-
-  if (!admin || isLoading) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-100">
-        <p className="font-semibold text-slate-600">
-          Loading admin dashboard...
-        </p>
-      </main>
-    );
-  }
+  if (!admin || (isLoading && !dashboard)) return <DashboardLoading />;
 
   const stats = dashboard?.stats;
-
-  const cards = [
+  const adminDisplayName =
+    typeof admin.firstName === 'string' && admin.firstName.trim()
+      ? admin.firstName.trim()
+      : 'Admin';
+  const primaryMetrics = [
     {
-      title: 'Total Users',
-      value: String(
-        stats?.totalUsers ?? 0,
-      ),
-      description: `${
-        stats?.activeUsers ?? 0
-      } active users`,
-      style: 'bg-sky-500',
+      label: 'Total users',
+      value: String(stats?.totalUsers ?? 0),
+      description: `${stats?.activeUsers ?? 0} active users`,
+      icon: <UsersIcon className="size-5" />,
     },
     {
-      title: 'Total Wallets',
-      value: String(
-        stats?.totalWallets ?? 0,
-      ),
-      description: `${
-        stats?.activeWallets ?? 0
-      } active wallets`,
-      style: 'bg-emerald-500',
+      label: 'Total wallets',
+      value: String(stats?.totalWallets ?? 0),
+      description: `${stats?.activeWallets ?? 0} active wallets`,
+      icon: <WalletIcon className="size-5" />,
     },
     {
-      title: 'Transactions',
-      value: String(
-        stats?.totalTransactions ?? 0,
-      ),
-      description: `${
-        stats?.totalDeposits ?? 0
-      } deposits, ${
-        stats?.totalTransfers ?? 0
-      } transfers`,
-      style: 'bg-violet-500',
+      label: 'Transactions',
+      value: String(stats?.totalTransactions ?? 0),
+      description: `${stats?.totalDeposits ?? 0} deposits, ${stats?.totalTransfers ?? 0} transfers`,
+      icon: <TransactionsIcon className="size-5" />,
     },
     {
-      title: 'System Balance',
-      value: `INR ${formatMoney(
-        stats?.totalBalance ?? '0',
-      )}`,
-      description:
-        'Combined wallet balance',
-      style: 'bg-slate-900',
+      label: 'Restricted records',
+      value: String((stats?.blockedUsers ?? 0) + (stats?.suspendedUsers ?? 0) + (stats?.frozenWallets ?? 0)),
+      description: 'Blocked, suspended or frozen',
+      icon: <AnalyticsIcon className="size-5" />,
+    },
+  ];
+  const activityGroups = [
+    {
+      label: 'User accounts',
+      total: stats?.totalUsers ?? 0,
+      items: [
+        ['Active', stats?.activeUsers ?? 0],
+        ['Suspended', stats?.suspendedUsers ?? 0],
+        ['Blocked', stats?.blockedUsers ?? 0],
+      ],
+    },
+    {
+      label: 'Wallet states',
+      total: stats?.totalWallets ?? 0,
+      items: [
+        ['Active', stats?.activeWallets ?? 0],
+        ['Frozen', stats?.frozenWallets ?? 0],
+        ['Closed', stats?.closedWallets ?? 0],
+      ],
+    },
+    {
+      label: 'Transaction mix',
+      total: stats?.totalTransactions ?? 0,
+      items: [
+        ['Deposits', stats?.totalDeposits ?? 0],
+        ['Withdrawals', stats?.totalWithdrawals ?? 0],
+        ['Transfers', stats?.totalTransfers ?? 0],
+      ],
     },
   ];
 
   return (
-    <main className="min-h-screen bg-slate-100">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
-          <div>
-            <h1 className="text-2xl font-bold text-sky-600">
-              Payflow Admin
-            </h1>
-
-            <p className="text-sm text-slate-500">
-              Administration Dashboard
-            </p>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <div className="hidden text-right sm:block">
-              <p className="font-semibold text-slate-900">
-                {admin.firstName}{' '}
-                {admin.lastName ?? ''}
-              </p>
-
-              <p className="text-sm text-slate-500">
-                {admin.email}
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="rounded-xl border border-slate-300 bg-white px-4 py-2 font-semibold text-slate-700 transition hover:bg-slate-100"
-            >
-              Logout
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <div className="mx-auto max-w-7xl px-6 py-10">
-        <section className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-wider text-sky-600">
-              Admin overview
-            </p>
-
-            <h2 className="mt-2 text-3xl font-bold text-slate-900">
-              Welcome, {admin.firstName}
-            </h2>
-
-            <p className="mt-2 text-slate-600">
-              Live Payflow system statistics from
-              PostgreSQL.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={() =>
-                router.push('/users')
-              }
-              className="rounded-xl border border-sky-500 bg-white px-5 py-3 font-semibold text-sky-600 transition hover:bg-sky-50"
-            >
-              Manage users
-            </button>
-
-            <button
-              type="button"
-              onClick={() =>
-                router.push('/wallets')
-              }
-              className="rounded-xl border border-emerald-500 bg-white px-5 py-3 font-semibold text-emerald-600 transition hover:bg-emerald-50"
-            >
-              Manage wallets
-            </button>
-
-            <button
-              type="button"
-              onClick={() =>
-                router.push('/transactions')
-              }
-              className="rounded-xl border border-violet-500 bg-white px-5 py-3 font-semibold text-violet-600 transition hover:bg-violet-50"
-            >
-              Manage transactions
-            </button>
-
-            <button
-              type="button"
-              onClick={() =>
-                router.push('/analytics')
-              }
-              className="rounded-xl border border-amber-500 bg-white px-5 py-3 font-semibold text-amber-600 transition hover:bg-amber-50"
-            >
-              View analytics
-            </button>
-
-            <button
-              type="button"
-              onClick={() =>
-                router.push('/audit-logs')
-              }
-              className="rounded-xl border border-red-500 bg-white px-5 py-3 font-semibold text-red-600 transition hover:bg-red-50"
-            >
-              View audit logs
-            </button>            <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+    <AdminShell admin={admin} onLogout={() => void handleLogout()}>
+      <PageHeader
+        eyebrow="Admin overview"
+        title={`${greeting()}, ${adminDisplayName}`}
+        description="Monitor users, wallets and transaction activity across Payflow."
+        actions={
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="flex min-h-10 items-center gap-3 rounded-md border border-slate-200 bg-white px-3">
               <span
-                className={`h-3 w-3 rounded-full ${
-                  autoRefreshEnabled
-                    ? 'bg-emerald-500'
-                    : 'bg-slate-300'
-                }`}
+                className={`size-2 rounded-full ${autoRefreshEnabled ? 'bg-emerald-600' : 'bg-slate-300'}`}
+                aria-hidden="true"
               />
-
               <div>
-                <p className="text-sm font-semibold text-slate-700">
-                  Live refresh
+                <p className="text-xs font-semibold text-slate-700">
+                  {autoRefreshEnabled ? 'Live refresh' : 'Refresh paused'}
                 </p>
-
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-500 tabular-nums">
                   {lastUpdatedAt
-                    ? `Updated ${lastUpdatedAt.toLocaleTimeString(
-                        'en-IN',
-                      )}`
+                    ? `Updated ${lastUpdatedAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`
                     : 'Waiting for data'}
                 </p>
               </div>
-
-              <button
-                type="button"
-                onClick={() =>
-                  setAutoRefreshEnabled(
-                    (current) =>
-                      !current,
-                  )
-                }
-                className="ml-2 rounded-lg border border-slate-300 px-3 py-1 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              <Button
+                size="sm"
+                variant="ghost"
+                aria-pressed={autoRefreshEnabled}
+                onClick={() => setAutoRefreshEnabled((current) => !current)}
               >
-                {autoRefreshEnabled
-                  ? 'Pause'
-                  : 'Resume'}
-              </button>
+                {autoRefreshEnabled ? 'Pause' : 'Resume'}
+              </Button>
             </div>
-
-
-
-            <button
-              type="button"
-              onClick={() =>
-                void loadDashboard()
-              }
-              className="rounded-xl bg-sky-500 px-5 py-3 font-semibold text-white transition hover:bg-sky-600"
-            >
-              Refresh data
-            </button>
+            <Button disabled={isLoading} onClick={() => void loadDashboard()}>
+              <RefreshIcon
+                className={`size-4 ${isLoading ? 'animate-spin' : ''}`}
+              />
+              {isLoading ? 'Refreshing...' : 'Refresh data'}
+            </Button>
           </div>
-        </section>
+        }
+      />
 
-        {error ? (
-          <div className="mt-6 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-red-700">
-            {error}
-          </div>
-        ) : null}
+      {error ? (
+        <div className="mt-6">
+          <ErrorState message={error} onRetry={() => void loadDashboard()} />
+        </div>
+      ) : null}
 
-        <section className="mt-8 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-          {cards.map((stat) => (
-            <article
-              key={stat.title}
-              className={`${stat.style} rounded-2xl p-6 text-white shadow-lg`}
-            >
-              <p className="text-sm text-white/75">
-                {stat.title}
-              </p>
-
-              <p className="mt-3 text-3xl font-bold">
-                {stat.value}
-              </p>
-
-              <p className="mt-2 text-sm text-white/75">
-                {stat.description}
-              </p>
-            </article>
+      <section aria-labelledby="key-metrics-title" className="mt-7">
+        <div className="mb-3 flex items-center justify-between">
+          <h2
+            id="key-metrics-title"
+            className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-500"
+          >
+            Key metrics
+          </h2>
+          <p className="hidden text-xs text-slate-400 sm:block">
+            Current platform totals
+          </p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {primaryMetrics.map((metric) => (
+            <MetricCard key={metric.label} {...metric} />
           ))}
-        </section>
+        </div>
+      </section>
 
-        <section className="mt-8 grid gap-6 md:grid-cols-3">
-          <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="text-sm text-slate-500">
-              Deposited amount
-            </p>
-
-            <p className="mt-3 text-2xl font-bold text-emerald-600">
-              INR{' '}
-              {formatMoney(
-                stats?.totalDepositAmount ??
-                  '0',
-              )}
-            </p>
-          </article>
-
-          <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="text-sm text-slate-500">
-              Withdrawn amount
-            </p>
-
-            <p className="mt-3 text-2xl font-bold text-red-600">
-              INR{' '}
-              {formatMoney(
-                stats?.totalWithdrawalAmount ??
-                  '0',
-              )}
-            </p>
-          </article>
-
-          <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="text-sm text-slate-500">
-              Transferred amount
-            </p>
-
-            <p className="mt-3 text-2xl font-bold text-violet-600">
-              INR{' '}
-              {formatMoney(
-                stats?.totalTransferAmount ??
-                  '0',
-              )}
-            </p>
-          </article>
-        </section>
-
-        <section className="mt-10 grid gap-6 lg:grid-cols-2">
-          <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h3 className="text-xl font-bold text-slate-900">
-              Recent users
-            </h3>
-
-            <p className="mt-1 text-sm text-slate-500">
-              Latest registered Payflow users.
-            </p>
-
-            <div className="mt-6 space-y-4">
-              {(dashboard?.recentUsers ?? []).map(
-                (recentUser) => (
-                  <div
-                    key={recentUser.id}
-                    className="rounded-xl bg-slate-50 p-5"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="font-semibold text-slate-900">
-                          {
-                            recentUser.firstName
-                          }{' '}
-                          {recentUser.lastName ??
-                            ''}
-                        </p>
-
-                        <p className="mt-1 text-sm text-slate-500">
-                          {recentUser.email}
-                        </p>
-
-                        <p className="mt-1 text-xs text-slate-400">
-                          {new Date(
-                            recentUser.createdAt,
-                          ).toLocaleString(
-                            'en-IN',
-                          )}
-                        </p>
-                      </div>
-
-                      <div className="flex flex-col items-end gap-2">
-                        <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-bold text-sky-700">
-                          {recentUser.role}
-                        </span>
-
-                        <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">
-                          {recentUser.status}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ),
-              )}
-
-              {(dashboard?.recentUsers.length ??
-                0) === 0 ? (
-                <p className="rounded-xl bg-slate-50 p-6 text-center text-slate-500">
-                  No users found.
-                </p>
-              ) : null}
+      <section className="mt-6">
+        <Card className="overflow-hidden">
+          <div className="border-b border-slate-200 px-5 py-4">
+            <div className="flex items-center gap-2">
+              <AnalyticsIcon className="size-5 text-slate-400" />
+              <h2 className="text-base font-semibold text-slate-900">
+                Activity summary
+              </h2>
             </div>
-          </article>
-
-          <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h3 className="text-xl font-bold text-slate-900">
-              Recent transactions
-            </h3>
-
             <p className="mt-1 text-sm text-slate-500">
-              Latest activity across all wallets.
+              Current operational distribution.
             </p>
-
-            <div className="mt-6 space-y-4">
-              {(
-                dashboard?.recentTransactions ??
-                []
-              ).map((transaction) => {
-                const isDeposit =
-                  transaction.type ===
-                  'DEPOSIT';
-
-                const details =
-                  transaction.reference ??
-                  transaction.description ??
-                  transaction.walletId ??
-                  transaction.sourceWalletId ??
-                  '-';
-
-                return (
-                  <div
-                    key={transaction.id}
-                    className="flex items-start justify-between gap-4 rounded-xl bg-slate-50 p-4"
-                  >
-                    <div>
-                      <p className="font-semibold text-slate-900">
-                        {transaction.type}
-                      </p>
-
-                      <p className="mt-1 max-w-xs break-all text-sm text-slate-500">
-                        {details}
-                      </p>
-
-                      <p className="mt-1 text-xs text-slate-400">
-                        {new Date(
-                          transaction.createdAt,
-                        ).toLocaleString(
-                          'en-IN',
-                        )}
-                      </p>
+          </div>
+          <div className="grid divide-y divide-slate-100 md:grid-cols-3 md:divide-x md:divide-y-0">
+            {activityGroups.map((group) => (
+              <div className="px-5 py-4" key={group.label}>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-slate-800">
+                    {group.label}
+                  </h3>
+                  <span className="text-sm font-semibold text-slate-900 tabular-nums">
+                    {group.total}
+                  </span>
+                </div>
+                <dl className="mt-3 grid grid-cols-3 gap-2">
+                  {group.items.map(([label, value]) => (
+                    <div key={label}>
+                      <dt className="truncate text-xs text-slate-500">
+                        {label}
+                      </dt>
+                      <dd className="mt-0.5 font-medium text-slate-800 tabular-nums">
+                        {value}
+                      </dd>
                     </div>
+                  ))}
+                </dl>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </section>
 
-                    <div className="text-right">
-                      <p
-                        className={`font-bold ${
-                          isDeposit
-                            ? 'text-emerald-600'
-                            : 'text-red-600'
-                        }`}
+      <section className="mt-6 grid min-w-0 gap-4 2xl:grid-cols-2">
+        <Card className="min-w-0 overflow-hidden">
+          <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-6">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">
+                Recent users
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Latest registered Payflow users.
+              </p>
+            </div>
+            <Link
+              href="/users"
+              className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-blue-700 hover:text-blue-800"
+            >
+              View all users<span className="sr-only"> in user management</span>
+              <ArrowUpRightIcon className="size-4" />
+            </Link>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[680px] text-left text-[13px]">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th scope="col" className="px-5 py-3 font-semibold sm:px-6">
+                    User
+                  </th>
+                  <th scope="col" className="px-4 py-3 font-semibold">
+                    Email
+                  </th>
+                  <th scope="col" className="px-4 py-3 font-semibold">
+                    Role
+                  </th>
+                  <th scope="col" className="px-4 py-3 font-semibold">
+                    Status
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-5 py-3 text-right font-semibold sm:px-6"
+                  >
+                    Registered
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {(dashboard?.recentUsers ?? []).map((user) => (
+                  <tr className="hover:bg-slate-50/70" key={user.id}>
+                    <th
+                      scope="row"
+                      className="whitespace-nowrap px-5 py-3.5 font-medium text-slate-900 sm:px-6"
+                    >
+                      {user.firstName} {user.lastName ?? ''}
+                    </th>
+                    <td
+                      className="max-w-48 truncate px-4 py-3.5 text-slate-600"
+                      title={user.email}
+                    >
+                      {user.email}
+                    </td>
+                    <td className="px-4 py-3.5 text-slate-600">{user.role}</td>
+                    <td className="px-4 py-3.5">
+                      <StatusBadge status={user.status} />
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-3.5 text-right text-slate-500 tabular-nums sm:px-6">
+                      {formatDate(user.createdAt)}
+                    </td>
+                  </tr>
+                ))}
+                {(dashboard?.recentUsers.length ?? 0) === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="px-5 py-12 text-center text-sm text-slate-500"
+                    >
+                      No users found.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+
+        <Card className="min-w-0 overflow-hidden">
+          <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-6">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">
+                Recent transactions
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Latest activity across all wallets.
+              </p>
+            </div>
+            <Link
+              href="/transactions"
+              className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-blue-700 hover:text-blue-800"
+            >
+              View all<span className="sr-only"> transactions</span>
+              <ArrowUpRightIcon className="size-4" />
+            </Link>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left text-[13px]">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th scope="col" className="px-5 py-3 font-semibold sm:px-6">
+                    Type
+                  </th>
+                  <th scope="col" className="px-4 py-3 font-semibold">
+                    Description
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-4 py-3 text-right font-semibold"
+                  >
+                    Amount
+                  </th>
+                  <th scope="col" className="px-4 py-3 font-semibold">
+                    Status
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-5 py-3 text-right font-semibold sm:px-6"
+                  >
+                    Date
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {(dashboard?.recentTransactions ?? []).map((transaction) => {
+                  const details =
+                    transaction.reference ??
+                    transaction.description ??
+                    transaction.walletId ??
+                    transaction.sourceWalletId ??
+                    '-';
+                  return (
+                    <tr className="hover:bg-slate-50/70" key={transaction.id}>
+                      <th
+                        scope="row"
+                        className="px-5 py-3.5 font-medium text-slate-900 sm:px-6"
                       >
-                        {isDeposit ? '+' : '-'}
-                        {transaction.currency}{' '}
-                        {formatMoney(
-                          transaction.amount,
-                        )}
-                      </p>
-
-                      <span className="mt-2 inline-block rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">
-                        {transaction.status}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-
-              {(dashboard?.recentTransactions
-                .length ?? 0) === 0 ? (
-                <p className="rounded-xl bg-slate-50 p-6 text-center text-slate-500">
-                  No transactions found.
-                </p>
-              ) : null}
-            </div>
-          </article>
-        </section>
-      </div>
-    </main>
+                        <Link
+                          href={`/transactions/${transaction.id}`}
+                          className="hover:text-blue-700"
+                        >
+                          {transaction.type}
+                        </Link>
+                      </th>
+                      <td
+                        className="max-w-56 truncate px-4 py-3.5 text-slate-600"
+                        title={details}
+                      >
+                        {details}
+                      </td>
+                      <td
+                        className="whitespace-nowrap px-4 py-3.5 text-right font-semibold text-slate-900 tabular-nums"
+                      >
+                        {formatTransactionAmount(transaction.amount, transaction.currency)}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <StatusBadge status={transaction.status} />
+                      </td>
+                      <td className="whitespace-nowrap px-5 py-3.5 text-right text-slate-500 tabular-nums sm:px-6">
+                        {formatDate(transaction.createdAt)}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {(dashboard?.recentTransactions.length ?? 0) === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="px-5 py-12 text-center text-sm text-slate-500"
+                    >
+                      No transactions found.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </section>
+    </AdminShell>
   );
 }

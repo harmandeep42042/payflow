@@ -1,682 +1,452 @@
 'use client';
 
 import {
-  FormEvent,
+  Suspense,
   useCallback,
   useEffect,
+  useMemo,
+  useRef,
   useState,
 } from 'react';
-import { useRouter } from 'next/navigation';
-
+import { useRouter, useSearchParams } from 'next/navigation';
+import { AdminShell, ErrorState, PageHeader } from '../components/admin';
 import {
-  AdminUserDetails,
-  UserDetailsModal,
-} from '../components/user-details-modal';
-
+  Button,
+  Card,
+  RefreshIcon,
+  Skeleton,
+  UsersIcon,
+} from '../components/ui';
 import {
+  activeUsersFilterCount,
+  buildUsersQuery,
+  buildUsersUrlQuery,
+  clearUsersFilters,
+  normalizeUsersPage,
+  parseUsersFilters,
+  acquireMutationLock,
+  LatestUsersRequest,
+  UserDetailsDialog,
+  UsersFilterBar,
+  UsersPagination,
+  UsersTable,
+  UserStatusConfirmDialog,
+  type AdminUserDetails,
+  type AdminUserItem,
+  type UserStatus,
+  type UsersFilters,
+  type UsersResponse,
+} from '../components/users';
+import {
+  AdminApiError,
+  type AdminUser,
   adminAuthenticatedRequest,
   clearAdminSession,
-  getStoredAdmin,
-  hasValidAdminSession,
+  logoutAdmin,
+  restoreAdminSession,
 } from '../lib/api';
 
-type UserWallet = {
-  id: string;
-  currency: string;
-  balance: string;
-  status: string;
-  createdAt: string;
-};
-
-type AdminUserItem = {
-  id: string;
-  email: string;
-  phone?: string | null;
-  firstName: string;
-  lastName?: string | null;
-  role: 'USER' | 'ADMIN';
-  status:
-    | 'ACTIVE'
-    | 'BLOCKED'
-    | 'SUSPENDED';
-  createdAt: string;
-  updatedAt: string;
-  wallets: UserWallet[];
-  walletCount: number;
-  totalWalletBalance: string;
-};
-
-type UsersResponse = {
-  users: AdminUserItem[];
-
-  pagination: {
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
-    hasNextPage: boolean;
-    hasPreviousPage: boolean;
-  };
-
-  filters: {
-    search: string;
-    status: string;
-    role: string;
-  };
-};
-
-function formatMoney(
-  amount: string,
-): string {
-  return Number(amount).toLocaleString(
-    'en-IN',
-    {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    },
-  );
+function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof AdminApiError)
+    return `${error.status ? `HTTP ${error.status}: ` : ''}${error.message}`;
+  return error instanceof Error ? error.message : fallback;
 }
 
-export default function UsersPage() {
+function UsersPageContent() {
   const router = useRouter();
-
-  const [users, setUsers] =
-    useState<AdminUserItem[]>([]);
-
-  const [searchInput, setSearchInput] =
-    useState('');
-
-  const [search, setSearch] =
-    useState('');
-
-  const [status, setStatus] =
-    useState('ALL');
-
-  const [role, setRole] =
-    useState('ALL');
-
-  const [page, setPage] =
-    useState(1);
-
-  const [limit] =
-    useState(10);
-
-  const [total, setTotal] =
-    useState(0);
-
-  const [totalPages, setTotalPages] =
-    useState(0);
-
-  const [hasNextPage, setHasNextPage] =
-    useState(false);
-
-  const [
-    hasPreviousPage,
-    setHasPreviousPage,
-  ] = useState(false);
-
-  const [isLoading, setIsLoading] =
-    useState(true);
-
-  const [error, setError] =
-    useState('');
-
-  const [
-    selectedUser,
-    setSelectedUser,
-  ] =
-    useState<AdminUserDetails | null>(
-      null,
-    );
-
-  const [
-    isDetailsLoading,
-    setIsDetailsLoading,
-  ] = useState(false);
-
-  const [
-    isStatusUpdating,
-    setIsStatusUpdating,
-  ] = useState(false);
-
-  const [
-    detailsError,
-    setDetailsError,
-  ] = useState('');
-
-  const loadUsers = useCallback(
-    async (): Promise<void> => {
-      try {
-        setIsLoading(true);
-        setError('');
-
-        const query =
-          new URLSearchParams({
-            page: String(page),
-            limit: String(limit),
-            search,
-            status,
-            role,
-          });
-
-        const response =
-          await adminAuthenticatedRequest<UsersResponse>(
-            `/admin/users?${query.toString()}`,
-          );
-
-        setUsers(response.users);
-        setTotal(
-          response.pagination.total,
-        );
-        setTotalPages(
-          response.pagination.totalPages,
-        );
-        setHasNextPage(
-          response.pagination.hasNextPage,
-        );
-        setHasPreviousPage(
-          response.pagination
-            .hasPreviousPage,
-        );
-      } catch (requestError) {
-        const message =
-          requestError instanceof Error
-            ? requestError.message
-            : 'Unable to load users';
-
-        if (
-          message
-            .toLowerCase()
-            .includes('session') ||
-          message
-            .toLowerCase()
-            .includes('unauthorized')
-        ) {
-          clearAdminSession();
-          router.replace('/login');
-          return;
-        }
-
-        setError(message);
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [
-      limit,
-      page,
-      role,
-      router,
-      search,
-      status,
-    ],
+  const searchParams = useSearchParams();
+  const [admin, setAdmin] = useState<AdminUser | null>(null);
+  const [filters, setFilters] = useState<UsersFilters>(() =>
+    parseUsersFilters(new URLSearchParams(searchParams.toString())),
   );
+  const [searchInput, setSearchInput] = useState(filters.search);
+  const [users, setUsers] = useState<AdminUserItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [hasNext, setHasNext] = useState(false);
+  const [hasPrevious, setHasPrevious] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState('');
+  const hasLoadedRef = useRef(false);
+  const latestListRequestRef = useRef(new LatestUsersRequest());
+  const latestDetailsRequestRef = useRef(new LatestUsersRequest());
+  const mutationLockRef = useRef(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsUserId, setDetailsUserId] = useState<string | null>(null);
+  const [selectedUser, setSelectedUser] = useState<AdminUserDetails | null>(
+    null,
+  );
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsError, setDetailsError] = useState('');
+  const [detailsTrigger, setDetailsTrigger] =
+    useState<HTMLButtonElement | null>(null);
+  const [pendingStatus, setPendingStatus] = useState<UserStatus | null>(null);
+  const [isStatusUpdating, setIsStatusUpdating] = useState(false);
+  const [statusError, setStatusError] = useState('');
+  const [announcement, setAnnouncement] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
-    if (!hasValidAdminSession()) {
-      router.replace('/login');
-      return;
-    }
+    void restoreAdminSession()
+      .then(setAdmin)
+      .catch(() => {
+        clearAdminSession();
+        router.replace('/login');
+      });
+  }, [router]);
 
-    const admin = getStoredAdmin();
-
-    if (!admin) {
-      clearAdminSession();
-      router.replace('/login');
-      return;
-    }
-
-    void loadUsers();
-  }, [
-    loadUsers,
-    router,
-  ]);
-
-  function handleSearch(
-    event: FormEvent<HTMLFormElement>,
-  ): void {
-    event.preventDefault();
-
-    setPage(1);
-    setSearch(
-      searchInput.trim(),
+  useEffect(() => {
+    const next = parseUsersFilters(
+      new URLSearchParams(searchParams.toString()),
     );
-  }
+    setFilters((current) =>
+      buildUsersQuery(current) === buildUsersQuery(next) ? current : next,
+    );
+    setSearchInput(next.search);
+  }, [searchParams]);
 
-  function clearFilters(): void {
-    setSearchInput('');
-    setSearch('');
-    setStatus('ALL');
-    setRole('ALL');
-    setPage(1);
-  }
+  useEffect(() => () => {
+    latestListRequestRef.current.abort();
+    latestDetailsRequestRef.current.abort();
+  }, []);
 
-  async function openUserDetails(
-    userId: string,
-  ): Promise<void> {
+  const loadUsers = useCallback(async () => {
+    if (!admin) return;
+    const { controller, requestId } = latestListRequestRef.current.begin();
+    hasLoadedRef.current ? setIsRefreshing(true) : setIsLoading(true);
+    setError('');
     try {
-      setIsDetailsLoading(true);
-      setDetailsError('');
-
-      const response =
-        await adminAuthenticatedRequest<AdminUserDetails>(
-          `/admin/users/${userId}`,
-        );
-
-      setSelectedUser(response);
+      const response = await adminAuthenticatedRequest<UsersResponse>(
+        `/admin/users?${buildUsersQuery(filters)}`,
+        { signal: controller.signal },
+      );
+      if (!latestListRequestRef.current.isLatest(requestId)) return;
+      const responseUsers = Array.isArray(response?.users)
+        ? response.users
+        : [];
+      const responseTotal = Number.isFinite(Number(response?.pagination?.total))
+        ? Math.max(0, Number(response.pagination.total))
+        : 0;
+      const responseTotalPages = Number.isFinite(
+        Number(response?.pagination?.totalPages),
+      )
+        ? Math.max(0, Math.floor(Number(response.pagination.totalPages)))
+        : 0;
+      const normalizedPage = normalizeUsersPage(
+        filters.page,
+        responseTotalPages,
+      );
+      if (normalizedPage !== filters.page) {
+        setFilters((current) => ({ ...current, page: normalizedPage }));
+        return;
+      }
+      setUsers(responseUsers);
+      setTotal(responseTotal);
+      setTotalPages(responseTotalPages);
+      setHasNext(Boolean(response?.pagination?.hasNextPage));
+      setHasPrevious(Boolean(response?.pagination?.hasPreviousPage));
+      hasLoadedRef.current = true;
+      setHasLoaded(true);
+      setAnnouncement(`${responseTotal} matching users loaded.`);
     } catch (requestError) {
+      if (!latestListRequestRef.current.isLatest(requestId)) return;
+      setError(errorMessage(requestError, 'Unable to load users'));
+    } finally {
+      if (latestListRequestRef.current.isLatest(requestId)) {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    }
+  }, [admin, filters]);
+
+  useEffect(() => {
+    if (!admin) return;
+    const query = buildUsersUrlQuery(filters);
+    router.replace(`/users?${query}`, { scroll: false });
+    void loadUsers();
+  }, [admin, filters, loadUsers, router]);
+
+  const filterCount = useMemo(() => activeUsersFilterCount(filters), [filters]);
+  const start = total ? (filters.page - 1) * filters.limit + 1 : 0;
+  const end = Math.min(filters.page * filters.limit, total);
+
+  function updateFilters(next: Partial<UsersFilters>, resetPage = true) {
+    setFilters((current) => ({
+      ...current,
+      ...next,
+      page: resetPage ? 1 : (next.page ?? current.page),
+    }));
+  }
+  function clearFilters() {
+    setSearchInput('');
+    setFilters((current) => clearUsersFilters(current));
+  }
+
+  const loadDetails = useCallback(async (userId: string) => {
+    const { controller, requestId } = latestDetailsRequestRef.current.begin();
+    setDetailsLoading(true);
+    setDetailsError('');
+    try {
+      const details = await adminAuthenticatedRequest<AdminUserDetails>(
+        `/admin/users/${userId}`,
+        { signal: controller.signal },
+      );
+      if (!latestDetailsRequestRef.current.isLatest(requestId)) return;
+      if (!details || typeof details !== 'object' || !details.id) {
+        throw new Error('User details response was empty');
+      }
+      setSelectedUser(details);
+    } catch (requestError) {
+      if (!latestDetailsRequestRef.current.isLatest(requestId)) return;
       setDetailsError(
-        requestError instanceof Error
-          ? requestError.message
-          : 'Unable to load user details',
+        errorMessage(requestError, 'Unable to load user details'),
       );
     } finally {
-      setIsDetailsLoading(false);
+      if (latestDetailsRequestRef.current.isLatest(requestId)) setDetailsLoading(false);
     }
-  }
+  }, []);
+  const openDetails = useCallback(
+    (userId: string, trigger: HTMLButtonElement) => {
+      setSuccessMessage('');
+      setDetailsTrigger(trigger);
+      setDetailsUserId(userId);
+      setSelectedUser(null);
+      setDetailsOpen(true);
+      void loadDetails(userId);
+    },
+    [loadDetails],
+  );
+  const closeDetails = useCallback(() => {
+    if (mutationLockRef.current) return;
+    latestDetailsRequestRef.current.abort();
+    setDetailsOpen(false);
+    setPendingStatus(null);
+    setDetailsError('');
+  }, []);
+  const retryDetails = useCallback(() => {
+    if (detailsUserId) void loadDetails(detailsUserId);
+  }, [detailsUserId, loadDetails]);
+  const requestStatus = useCallback((status: UserStatus) => {
+    setStatusError('');
+    setPendingStatus(status);
+  }, []);
+  const cancelStatus = useCallback(() => {
+    if (mutationLockRef.current) return;
+    setPendingStatus(null);
+    setStatusError('');
+  }, []);
 
-  async function updateSelectedUserStatus(
-    newStatus:
-      | 'ACTIVE'
-      | 'BLOCKED'
-      | 'SUSPENDED',
-  ): Promise<void> {
-    if (!selectedUser) {
+  async function updateStatus() {
+    if (
+      !selectedUser ||
+      !pendingStatus ||
+      !acquireMutationLock(mutationLockRef)
+    )
       return;
-    }
-
+    setIsStatusUpdating(true);
+    setStatusError('');
+    setSuccessMessage('');
     try {
-      setIsStatusUpdating(true);
-      setDetailsError('');
-
-      const response =
-        await adminAuthenticatedRequest<{
-          message: string;
-          user: AdminUserDetails;
-        }>(
-          `/admin/users/${selectedUser.id}/status`,
-          {
-            method: 'PATCH',
-
-            body: JSON.stringify({
-              status: newStatus,
-            }),
-          },
-        );
-
-      setSelectedUser({
-        ...selectedUser,
-        ...response.user,
-        status: response.user.status,
+      const response = await adminAuthenticatedRequest<{
+        message: string;
+        user: AdminUserDetails;
+      }>(`/admin/users/${selectedUser.id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: pendingStatus }),
       });
-
+      if (!response?.user?.status) {
+        throw new Error('User status response was incomplete');
+      }
+      setSelectedUser((current) =>
+        current
+          ? { ...current, ...response.user, status: response.user.status }
+          : response.user,
+      );
+      setPendingStatus(null);
+      setAnnouncement(response.message);
+      setSuccessMessage(response.message);
       await loadUsers();
     } catch (requestError) {
-      setDetailsError(
-        requestError instanceof Error
-          ? requestError.message
-          : 'Unable to update user status',
+      setStatusError(
+        errorMessage(requestError, 'Unable to update user status'),
       );
     } finally {
+      mutationLockRef.current = false;
       setIsStatusUpdating(false);
     }
   }
 
-  function closeUserDetails(): void {
-    setSelectedUser(null);
-    setDetailsError('');
-  }
-
-  function handleLogout(): void {
-    clearAdminSession();
+  async function handleLogout() {
+    await logoutAdmin();
     router.push('/login');
     router.refresh();
   }
+  if (!admin)
+    return (
+      <main aria-busy="true" className="min-h-screen bg-[#F6F8FA] p-6">
+        <div className="mx-auto max-w-7xl">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="mt-6 h-32" />
+          <Skeleton className="mt-5 h-96" />
+        </div>
+      </main>
+    );
 
   return (
-    <main className="min-h-screen bg-slate-100">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
-          <div>
-            <h1 className="text-2xl font-bold text-sky-600">
-              Payflow Admin
-            </h1>
-
-            <p className="text-sm text-slate-500">
-              Users Management
-            </p>
-          </div>
-
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() =>
-                router.push('/dashboard')
-              }
-              className="rounded-xl border border-slate-300 bg-white px-4 py-2 font-semibold text-slate-700 transition hover:bg-slate-100"
-            >
-              Dashboard
-            </button>
-
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="rounded-xl bg-slate-900 px-4 py-2 font-semibold text-white transition hover:bg-slate-800"
-            >
-              Logout
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <div className="mx-auto max-w-7xl px-6 py-10">
-        <section>
-          <p className="text-sm font-semibold uppercase tracking-wider text-sky-600">
-            Administration
-          </p>
-
-          <h2 className="mt-2 text-3xl font-bold text-slate-900">
-            Payflow users
-          </h2>
-
-          <p className="mt-2 text-slate-600">
-            Search and review all registered users.
-          </p>
-        </section>
-
-        <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <form
-            onSubmit={handleSearch}
-            className="grid gap-4 lg:grid-cols-[1fr_180px_180px_auto_auto]"
+    <AdminShell admin={admin} onLogout={() => void handleLogout()}>
+      <PageHeader
+        eyebrow="User management"
+        title="Users"
+        description="Search, review and manage Payflow customer accounts."
+        actions={
+          <Button
+            disabled={isLoading || isRefreshing}
+            onClick={() => void loadUsers()}
           >
-            <input
-              type="text"
-              value={searchInput}
-              onChange={(event) =>
-                setSearchInput(
-                  event.target.value,
-                )
-              }
-              placeholder="Search by name, email or phone"
-              className="rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+            <RefreshIcon
+              className={`size-4 ${isRefreshing ? 'animate-spin' : ''}`}
             />
-
-            <select
-              value={status}
-              onChange={(event) => {
-                setStatus(
-                  event.target.value,
-                );
-                setPage(1);
-              }}
-              className="rounded-xl border border-slate-300 bg-white px-4 py-3"
-            >
-              <option value="ALL">
-                All statuses
-              </option>
-              <option value="ACTIVE">
-                Active
-              </option>
-              <option value="BLOCKED">
-                Blocked
-              </option>
-              <option value="SUSPENDED">
-                Suspended
-              </option>
-            </select>
-
-            <select
-              value={role}
-              onChange={(event) => {
-                setRole(
-                  event.target.value,
-                );
-                setPage(1);
-              }}
-              className="rounded-xl border border-slate-300 bg-white px-4 py-3"
-            >
-              <option value="ALL">
-                All roles
-              </option>
-              <option value="USER">
-                Users
-              </option>
-              <option value="ADMIN">
-                Admins
-              </option>
-            </select>
-
-            <button
-              type="submit"
-              className="rounded-xl bg-sky-500 px-5 py-3 font-semibold text-white transition hover:bg-sky-600"
-            >
-              Search
-            </button>
-
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="rounded-xl border border-slate-300 bg-white px-5 py-3 font-semibold text-slate-700 transition hover:bg-slate-100"
-            >
-              Clear
-            </button>
-          </form>
-        </section>
-
-        {error ? (
-          <div className="mt-6 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-red-700">
-            {error}
-          </div>
-        ) : null}
-
-        <section className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
-            <div>
-              <h3 className="text-xl font-bold text-slate-900">
-                Users list
-              </h3>
-
-              <p className="mt-1 text-sm text-slate-500">
-                Total users: {total}
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() =>
-                void loadUsers()
-              }
-              className="rounded-xl bg-slate-900 px-4 py-2 font-semibold text-white transition hover:bg-slate-800"
-            >
-              Refresh
-            </button>
-          </div>
-
-          {isLoading ? (
-            <div className="p-12 text-center font-semibold text-slate-500">
-              Loading users...
-            </div>
-          ) : users.length === 0 ? (
-            <div className="p-12 text-center text-slate-500">
-              No users found.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-slate-200">
-                <thead className="bg-slate-50">
-                  <tr className="text-left text-xs uppercase tracking-wider text-slate-500">
-                    <th className="px-6 py-4">
-                      User
-                    </th>
-                    <th className="px-6 py-4">
-                      Contact
-                    </th>
-                    <th className="px-6 py-4">
-                      Role
-                    </th>
-                    <th className="px-6 py-4">
-                      Status
-                    </th>
-                    <th className="px-6 py-4">
-                      Wallets
-                    </th>
-                    <th className="px-6 py-4">
-                      Balance
-                    </th>
-                    <th className="px-6 py-4">
-                      Joined
-                    </th>
-
-                    <th className="px-6 py-4">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-
-                <tbody className="divide-y divide-slate-100">
-                  {users.map((user) => (
-                    <tr
-                      key={user.id}
-                      className="transition hover:bg-slate-50"
-                    >
-                      <td className="px-6 py-5">
-                        <p className="font-semibold text-slate-900">
-                          {user.firstName}{' '}
-                          {user.lastName ?? ''}
-                        </p>
-
-                        <p className="mt-1 text-xs text-slate-400">
-                          {user.id}
-                        </p>
-                      </td>
-
-                      <td className="px-6 py-5">
-                        <p className="text-sm text-slate-700">
-                          {user.email}
-                        </p>
-
-                        <p className="mt-1 text-sm text-slate-500">
-                          {user.phone ?? 'No phone'}
-                        </p>
-                      </td>
-
-                      <td className="px-6 py-5">
-                        <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-bold text-sky-700">
-                          {user.role}
-                        </span>
-                      </td>
-
-                      <td className="px-6 py-5">
-                        <span
-                          className={`rounded-full px-3 py-1 text-xs font-bold ${
-                            user.status ===
-                            'ACTIVE'
-                              ? 'bg-emerald-100 text-emerald-700'
-                              : user.status ===
-                                  'BLOCKED'
-                                ? 'bg-red-100 text-red-700'
-                                : 'bg-amber-100 text-amber-700'
-                          }`}
-                        >
-                          {user.status}
-                        </span>
-                      </td>
-
-                      <td className="px-6 py-5 font-semibold text-slate-700">
-                        {user.walletCount}
-                      </td>
-
-                      <td className="px-6 py-5 font-bold text-slate-900">
-                        INR{' '}
-                        {formatMoney(
-                          user.totalWalletBalance,
-                        )}
-                      </td>
-
-                      <td className="whitespace-nowrap px-6 py-5 text-sm text-slate-500">
-                        {new Date(
-                          user.createdAt,
-                        ).toLocaleDateString(
-                          'en-IN',
-                        )}
-                      </td>
-
-                      <td className="px-6 py-5">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void openUserDetails(
-                              user.id,
-                            )
-                          }
-                          className="rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-600"
-                        >
-                          View Details
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          <div className="flex flex-col items-center justify-between gap-4 border-t border-slate-200 px-6 py-5 sm:flex-row">
-            <p className="text-sm text-slate-500">
-              Page {page} of{' '}
-              {totalPages || 1}
-            </p>
-
-            <div className="flex gap-3">
-              <button
-                type="button"
-                disabled={
-                  !hasPreviousPage ||
-                  isLoading
-                }
-                onClick={() =>
-                  setPage((current) =>
-                    Math.max(
-                      current - 1,
-                      1,
-                    ),
-                  )
-                }
-                className="rounded-xl border border-slate-300 bg-white px-4 py-2 font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Previous
-              </button>
-
-              <button
-                type="button"
-                disabled={
-                  !hasNextPage ||
-                  isLoading
-                }
-                onClick={() =>
-                  setPage(
-                    (current) =>
-                      current + 1,
-                  )
-                }
-                className="rounded-xl bg-sky-500 px-4 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        </section>
-      </div>
-      <UserDetailsModal
-        user={selectedUser}
-        isLoading={isDetailsLoading}
-        isUpdating={isStatusUpdating}
-        error={detailsError}
-        onClose={closeUserDetails}
-        onUpdateStatus={
-          updateSelectedUserStatus
+            {isRefreshing ? 'Refreshing…' : 'Refresh'}
+          </Button>
         }
       />
-    </main>
+      <section
+        aria-label="User result summary"
+        className="mt-6 grid gap-3 sm:grid-cols-3"
+      >
+        <Card className="p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Matching users
+          </p>
+          <p className="mt-2 text-2xl font-semibold text-slate-950 tabular-nums">
+            {total}
+          </p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Current results
+          </p>
+          <p className="mt-2 text-2xl font-semibold text-slate-950 tabular-nums">
+            {total ? `${start}–${end}` : '0'}
+          </p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Active filters
+          </p>
+          <p className="mt-2 text-2xl font-semibold text-slate-950 tabular-nums">
+            {filterCount}
+          </p>
+        </Card>
+      </section>
+      <UsersFilterBar
+        searchInput={searchInput}
+        status={filters.status}
+        role={filters.role}
+        limit={filters.limit}
+        activeCount={filterCount}
+        disabled={isLoading}
+        onSearchInput={setSearchInput}
+        onStatus={(status) => updateFilters({ status })}
+        onRole={(role) => updateFilters({ role })}
+        onLimit={(limit) => updateFilters({ limit })}
+        onSearch={() => updateFilters({ search: searchInput.trim() })}
+        onClear={clearFilters}
+      />
+      {error ? (
+        <div className="mt-5">
+          <ErrorState message={error} onRetry={() => void loadUsers()} />
+        </div>
+      ) : null}
+      {successMessage ? (
+        <div
+          role="status"
+          className="mt-5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800"
+        >
+          {successMessage}
+        </div>
+      ) : null}
+      <section
+        aria-labelledby="users-list-title"
+        className="mt-6 overflow-hidden rounded-lg border border-slate-200 bg-white"
+      >
+        <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-4 py-4 sm:px-6">
+          <div className="flex items-center gap-3">
+            <span className="flex size-9 items-center justify-center rounded-md bg-slate-50 text-slate-600">
+              <UsersIcon className="size-5" />
+            </span>
+            <div>
+              <h2
+                id="users-list-title"
+                className="text-base font-semibold text-slate-900"
+              >
+                Users list
+              </h2>
+              <p className="text-sm text-slate-500">
+                {isRefreshing
+                  ? 'Refreshing current results…'
+                  : `${total} matching users`}
+              </p>
+            </div>
+          </div>
+        </div>
+        <UsersTable
+          users={users}
+          initialLoading={isLoading && !hasLoaded}
+          filtered={filterCount > 0}
+          onDetails={openDetails}
+          onClear={clearFilters}
+        />
+        <UsersPagination
+          page={filters.page}
+          totalPages={totalPages}
+          total={total}
+          start={start}
+          end={end}
+          hasPrevious={hasPrevious}
+          hasNext={hasNext}
+          disabled={isLoading || isRefreshing}
+          onPage={(page) => updateFilters({ page }, false)}
+        />
+      </section>
+      <p className="sr-only" aria-live="polite">
+        {announcement}
+      </p>
+      <UserDetailsDialog
+        open={detailsOpen}
+        user={selectedUser}
+        isLoading={detailsLoading}
+        error={detailsError}
+        onClose={closeDetails}
+        onRetry={retryDetails}
+        onStatus={requestStatus}
+        returnFocus={detailsTrigger}
+      />
+      <UserStatusConfirmDialog
+        user={selectedUser}
+        status={pendingStatus}
+        open={Boolean(pendingStatus)}
+        isUpdating={isStatusUpdating}
+        error={statusError}
+        onCancel={cancelStatus}
+        onConfirm={() => void updateStatus()}
+      />
+    </AdminShell>
+  );
+}
+
+export default function UsersPage() {
+  return (
+    <Suspense
+      fallback={
+        <main aria-busy="true" className="min-h-screen bg-[#F6F8FA] p-6">
+          <Skeleton className="h-96" />
+        </main>
+      }
+    >
+      <UsersPageContent />
+    </Suspense>
   );
 }

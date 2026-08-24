@@ -9,22 +9,16 @@ import {
 import { useRouter } from 'next/navigation';
 
 import {
-  AdminLoginResponse,
-  adminApiRequest,
   clearAdminSession,
-  saveAdminSession,
+  loginAdmin,
 } from '../lib/api';
 
 export default function AdminLoginPage() {
   const router = useRouter();
 
-  const [email, setEmail] = useState(
-    'admin@payflow.com',
-  );
+  const [email, setEmail] = useState('');
 
-  const [password, setPassword] = useState(
-    'Admin@12345',
-  );
+  const [password, setPassword] = useState('');
 
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] =
@@ -43,22 +37,10 @@ export default function AdminLoginPage() {
     setIsLoading(true);
 
     try {
-      const response =
-        await adminApiRequest<AdminLoginResponse>(
-          '/auth/login',
-          {
-            method: 'POST',
-
-            body: JSON.stringify({
-              email: email
-                .trim()
-                .toLowerCase(),
-              password,
-            }),
-          },
-        );
-
-      saveAdminSession(response);
+      await loginAdmin(
+        email.trim().toLowerCase(),
+        password,
+      );
 
       router.replace('/dashboard');
       router.refresh();

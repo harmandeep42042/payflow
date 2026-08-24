@@ -1,774 +1,234 @@
 'use client';
 
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { AdminShell, ErrorState, MetricCard, PageHeader } from '../components/admin';
+import { Button, Card, RefreshIcon, Skeleton, WalletIcon } from '../components/ui';
 import {
-  FormEvent,
-  useCallback,
-  useEffect,
-  useState,
-} from 'react';
-import { useRouter } from 'next/navigation';
-
+  acquireWalletMutationLock, activeWalletFilterCount, buildWalletsQuery,
+  buildWalletsUrlQuery, clearWalletFilters, formatWalletBalance,
+  groupWalletBalances, LatestWalletRequest, normalizeWallet, normalizeWalletPage,
+  normalizeWallets, parseWalletFilters, WalletDetailsDialog,
+  WalletStatusConfirmDialog, WalletsFilterBar, WalletsPagination, WalletsTable,
+  walletStatusCounts, type AdminWallet, type WalletFilters, type WalletsResponse,
+  type WalletStatus,
+} from '../components/wallets';
 import {
-  adminAuthenticatedRequest,
-  clearAdminSession,
-  getStoredAdmin,
-  hasValidAdminSession,
+  AdminApiError, type AdminUser, adminAuthenticatedRequest, clearAdminSession,
+  logoutAdmin, restoreAdminSession,
 } from '../lib/api';
 
-type WalletOwner = {
-  id: string;
-  email: string;
-  phone?: string | null;
-  firstName: string;
-  lastName?: string | null;
-  role: string;
-  status: string;
-};
+function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof AdminApiError)
+    return `${error.status ? `HTTP ${error.status}: ` : ''}${error.message}`;
+  return error instanceof Error ? error.message : fallback;
+}
+function safeNumber(value: unknown): number {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? Math.floor(number) : 0;
+}
 
-type LedgerAccount = {
-  id: string;
-  code: string;
-  name: string;
-  type: string;
-  status: string;
-};
+function WalletsPageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [admin, setAdmin] = useState<AdminUser | null>(null);
+  const [filters, setFilters] = useState<WalletFilters>(() =>
+    parseWalletFilters(new URLSearchParams(searchParams.toString())),
+  );
+  const [searchInput, setSearchInput] = useState(filters.search);
+  const [wallets, setWallets] = useState<AdminWallet[]>([]);
+  const [knownCurrencies, setKnownCurrencies] = useState<string[]>(() =>
+    filters.currency === 'ALL' ? [] : [filters.currency],
+  );
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [hasNext, setHasNext] = useState(false);
+  const [hasPrevious, setHasPrevious] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState('');
+  const [announcement, setAnnouncement] = useState('');
+  const [success, setSuccess] = useState('');
+  const hasLoadedRef = useRef(false);
+  const latestRequestRef = useRef(new LatestWalletRequest());
+  const mutationLockRef = useRef(false);
+  const [selectedWallet, setSelectedWallet] = useState<AdminWallet | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsTrigger, setDetailsTrigger] = useState<HTMLButtonElement | null>(null);
+  const [pendingStatus, setPendingStatus] = useState<WalletStatus | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [statusError, setStatusError] = useState('');
 
-type WalletCounts = {
-  deposits: number;
-  withdrawals: number;
-  outgoingTransfers: number;
-  incomingTransfers: number;
-};
+  useEffect(() => {
+    void restoreAdminSession().then(setAdmin).catch(() => {
+      clearAdminSession();
+      router.replace('/login');
+    });
+  }, [router]);
+  useEffect(() => {
+    const next = parseWalletFilters(new URLSearchParams(searchParams.toString()));
+    setFilters((current) =>
+      buildWalletsQuery(current) === buildWalletsQuery(next) ? current : next,
+    );
+    setSearchInput(next.search);
+    if (next.currency !== 'ALL')
+      setKnownCurrencies((current) =>
+        Array.from(new Set([...current, next.currency])).sort(),
+      );
+  }, [searchParams]);
+  useEffect(() => () => latestRequestRef.current.abort(), []);
 
-type AdminWallet = {
-  id: string;
-  userId: string;
-  currency: string;
-  balance: string;
-  version: number;
-  status:
-    | 'ACTIVE'
-    | 'FROZEN'
-    | 'CLOSED';
-  createdAt: string;
-  updatedAt: string;
-  user: WalletOwner;
-  ledgerAccount?: LedgerAccount | null;
-  _count: WalletCounts;
-  transactionCount: number;
-};
+  const loadWallets = useCallback(async () => {
+    if (!admin) return;
+    const { controller, requestId } = latestRequestRef.current.begin();
+    hasLoadedRef.current ? setIsRefreshing(true) : setIsLoading(true);
+    setError('');
+    try {
+      const response = await adminAuthenticatedRequest<WalletsResponse>(
+        `/admin/wallets?${buildWalletsQuery(filters)}`,
+        { signal: controller.signal },
+      );
+      if (!latestRequestRef.current.isLatest(requestId)) return;
+      const nextWallets = normalizeWallets(response?.wallets);
+      const nextTotal = safeNumber(response?.pagination?.total);
+      const nextTotalPages = safeNumber(response?.pagination?.totalPages);
+      const normalizedPage = normalizeWalletPage(filters.page, nextTotalPages);
+      if (normalizedPage !== filters.page) {
+        setFilters((current) => ({ ...current, page: normalizedPage }));
+        return;
+      }
+      setWallets(nextWallets);
+      setKnownCurrencies((current) =>
+        Array.from(new Set([
+          ...current,
+          ...nextWallets.map((wallet) => wallet.currency).filter((code) => code !== 'UNKNOWN'),
+          ...(filters.currency === 'ALL' ? [] : [filters.currency]),
+        ])).sort(),
+      );
+      setTotal(nextTotal);
+      setTotalPages(nextTotalPages);
+      setHasNext(Boolean(response?.pagination?.hasNextPage));
+      setHasPrevious(Boolean(response?.pagination?.hasPreviousPage));
+      hasLoadedRef.current = true;
+      setHasLoaded(true);
+      setAnnouncement(`${nextTotal} matching wallets loaded.`);
+    } catch (requestError) {
+      if (!latestRequestRef.current.isLatest(requestId)) return;
+      setError(errorMessage(requestError, 'Unable to load wallets'));
+    } finally {
+      if (latestRequestRef.current.isLatest(requestId)) {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    }
+  }, [admin, filters]);
 
-type WalletsResponse = {
-  wallets: AdminWallet[];
+  useEffect(() => {
+    if (!admin) return;
+    router.replace(`/wallets?${buildWalletsUrlQuery(filters)}`, { scroll: false });
+    void loadWallets();
+  }, [admin, filters, loadWallets, router]);
 
-  pagination: {
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
-    hasNextPage: boolean;
-    hasPreviousPage: boolean;
-  };
+  const filterCount = useMemo(() => activeWalletFilterCount(filters), [filters]);
+  const balances = useMemo(() => groupWalletBalances(wallets), [wallets]);
+  const statusCounts = useMemo(() => walletStatusCounts(wallets), [wallets]);
+  const start = total ? (filters.page - 1) * filters.limit + 1 : 0;
+  const end = Math.min(filters.page * filters.limit, total);
+  function updateFilters(next: Partial<WalletFilters>, resetPage = true) {
+    setFilters((current) => ({
+      ...current, ...next,
+      page: resetPage ? 1 : (next.page ?? current.page),
+    }));
+  }
+  function clearFilters() {
+    setSearchInput('');
+    setFilters((current) => clearWalletFilters(current));
+  }
+  const openDetails = useCallback((wallet: AdminWallet, trigger: HTMLButtonElement) => {
+    setSuccess('');
+    setDetailsTrigger(trigger);
+    setSelectedWallet(wallet);
+    setDetailsOpen(true);
+  }, []);
+  const closeDetails = useCallback(() => {
+    if (mutationLockRef.current) return;
+    setDetailsOpen(false);
+    setPendingStatus(null);
+    setStatusError('');
+  }, []);
+  const requestStatus = useCallback((status: WalletStatus) => {
+    setStatusError('');
+    setPendingStatus(status);
+  }, []);
+  const cancelStatus = useCallback(() => {
+    if (mutationLockRef.current) return;
+    setPendingStatus(null);
+    setStatusError('');
+  }, []);
+  async function updateStatus() {
+    if (!selectedWallet || !pendingStatus || selectedWallet.status === 'CLOSED' ||
+      !acquireWalletMutationLock(mutationLockRef)) return;
+    setIsUpdating(true);
+    setStatusError('');
+    setSuccess('');
+    try {
+      const response = await adminAuthenticatedRequest<{ message?: unknown; wallet?: unknown }>(
+        `/admin/wallets/${selectedWallet.id}/status`,
+        { method: 'PATCH', body: JSON.stringify({ status: pendingStatus }) },
+      );
+      const updated = normalizeWallet(response?.wallet);
+      if (!updated || updated.status !== pendingStatus)
+        throw new Error('Wallet status response was incomplete');
+      const message = typeof response.message === 'string'
+        ? response.message : `Wallet status changed to ${updated.status}`;
+      setPendingStatus(null);
+      setDetailsOpen(false);
+      setSuccess(message);
+      setAnnouncement(message);
+      await loadWallets();
+    } catch (requestError) {
+      setStatusError(errorMessage(requestError, 'Unable to update wallet status'));
+    } finally {
+      mutationLockRef.current = false;
+      setIsUpdating(false);
+    }
+  }
+  async function handleLogout() {
+    await logoutAdmin();
+    router.push('/login');
+    router.refresh();
+  }
+  if (!admin)
+    return <main aria-busy="true" className="min-h-screen bg-[#F6F8FA] p-6"><div className="mx-auto max-w-7xl"><Skeleton className="h-8 w-48" /><Skeleton className="mt-6 h-32" /><Skeleton className="mt-5 h-96" /></div></main>;
 
-  filters: {
-    search: string;
-    status: string;
-    currency: string;
-  };
-};
-
-function formatMoney(
-  amount: string,
-): string {
-  return Number(amount).toLocaleString(
-    'en-IN',
-    {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    },
+  return (
+    <AdminShell admin={admin} onLogout={() => void handleLogout()}>
+      <PageHeader eyebrow="Wallet management" title="Wallets" description="Review balances, account activity and wallet controls without combining currencies." actions={<Button disabled={isLoading || isRefreshing} onClick={() => void loadWallets()}><RefreshIcon className={`size-4 ${isRefreshing ? 'animate-spin' : ''}`} />{isRefreshing ? 'Refreshing…' : 'Refresh'}</Button>} />
+      <section aria-label="Wallet result summary" className="mt-6 grid gap-3 sm:grid-cols-3">
+        <MetricCard label="Matching wallets" value={String(total)} description="Across the current filters" />
+        <MetricCard label="Current result range" value={total ? `${start}–${end}` : '0'} description="Rows displayed from matching results" />
+        <MetricCard label="Active filters" value={String(filterCount)} description="Search, status and currency" />
+      </section>
+      <section className="mt-3 grid gap-3 lg:grid-cols-2">
+        <Card className="p-4"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current-page status breakdown</p><div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm"><span><strong className="tabular-nums text-slate-950">{statusCounts.ACTIVE}</strong> <span className="text-slate-500">Active</span></span><span><strong className="tabular-nums text-slate-950">{statusCounts.FROZEN}</strong> <span className="text-slate-500">Frozen</span></span><span><strong className="tabular-nums text-slate-950">{statusCounts.CLOSED}</strong> <span className="text-slate-500">Closed</span></span></div></Card>
+        <Card className="p-4"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current-page balances by currency</p><div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold text-slate-950 tabular-nums">{balances.length ? balances.map((item) => <span key={item.currency}>{formatWalletBalance(item.balance, item.currency)}</span>) : <span className="font-normal text-slate-500">No balances on this page</span>}</div><p className="mt-2 text-xs text-slate-500">No currency conversion is performed.</p></Card>
+      </section>
+      <WalletsFilterBar searchInput={searchInput} status={filters.status} currency={filters.currency} currencies={knownCurrencies} limit={filters.limit} activeCount={filterCount} disabled={isLoading} onSearchInput={setSearchInput} onStatus={(status) => updateFilters({ status })} onCurrency={(currency) => updateFilters({ currency })} onLimit={(limit) => updateFilters({ limit })} onSearch={() => updateFilters({ search: searchInput.trim() })} onClear={clearFilters} />
+      {error ? <div className="mt-5"><ErrorState message={error} onRetry={() => void loadWallets()} /></div> : null}
+      {success ? <div role="status" className="mt-5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">{success}</div> : null}
+      <section aria-labelledby="wallet-list-title" className="mt-6 overflow-hidden rounded-lg border border-slate-200 bg-white">
+        <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-4 py-4 sm:px-6"><div className="flex items-center gap-3"><span className="flex size-9 items-center justify-center rounded-md bg-slate-50 text-slate-600"><WalletIcon className="size-5" /></span><div><h2 id="wallet-list-title" className="text-base font-semibold text-slate-900">Wallets list</h2><p className="text-sm text-slate-500">{isRefreshing ? 'Refreshing current results…' : `${total} matching wallets`}</p></div></div></div>
+        <WalletsTable wallets={wallets} initialLoading={isLoading && !hasLoaded} filtered={filterCount > 0} onDetails={openDetails} onClear={clearFilters} />
+        <WalletsPagination page={filters.page} totalPages={totalPages} total={total} start={start} end={end} hasPrevious={hasPrevious} hasNext={hasNext} disabled={isLoading || isRefreshing} onPage={(page) => updateFilters({ page }, false)} />
+      </section>
+      <p className="sr-only" aria-live="polite">{announcement}</p>
+      <WalletDetailsDialog open={detailsOpen} wallet={selectedWallet} onClose={closeDetails} onStatus={requestStatus} returnFocus={detailsTrigger} />
+      <WalletStatusConfirmDialog wallet={selectedWallet} status={pendingStatus} open={Boolean(pendingStatus)} isUpdating={isUpdating} error={statusError} onCancel={cancelStatus} onConfirm={() => void updateStatus()} />
+    </AdminShell>
   );
 }
 
 export default function WalletsPage() {
-  const router = useRouter();
-
-  const [wallets, setWallets] =
-    useState<AdminWallet[]>([]);
-
-  const [searchInput, setSearchInput] =
-    useState('');
-
-  const [search, setSearch] =
-    useState('');
-
-  const [status, setStatus] =
-    useState('ALL');
-
-  const [currency, setCurrency] =
-    useState('ALL');
-
-  const [page, setPage] =
-    useState(1);
-
-  const [limit] =
-    useState(10);
-
-  const [total, setTotal] =
-    useState(0);
-
-  const [totalPages, setTotalPages] =
-    useState(0);
-
-  const [hasNextPage, setHasNextPage] =
-    useState(false);
-
-  const [
-    hasPreviousPage,
-    setHasPreviousPage,
-  ] = useState(false);
-
-  const [isLoading, setIsLoading] =
-    useState(true);
-
-  const [error, setError] =
-    useState('');
-
-  const [success, setSuccess] =
-    useState('');
-
-  const [
-    actionWalletId,
-    setActionWalletId,
-  ] = useState<string | null>(null);
-
-  const loadWallets = useCallback(
-    async (): Promise<void> => {
-      try {
-        setIsLoading(true);
-        setError('');
-
-        const query =
-          new URLSearchParams({
-            page: String(page),
-            limit: String(limit),
-            search,
-            status,
-            currency,
-          });
-
-        const response =
-          await adminAuthenticatedRequest<WalletsResponse>(
-            `/admin/wallets?${query.toString()}`,
-          );
-
-        setWallets(response.wallets);
-
-        setTotal(
-          response.pagination.total,
-        );
-
-        setTotalPages(
-          response.pagination.totalPages,
-        );
-
-        setHasNextPage(
-          response.pagination.hasNextPage,
-        );
-
-        setHasPreviousPage(
-          response.pagination
-            .hasPreviousPage,
-        );
-      } catch (requestError) {
-        const message =
-          requestError instanceof Error
-            ? requestError.message
-            : 'Unable to load wallets';
-
-        if (
-          message
-            .toLowerCase()
-            .includes('session') ||
-          message
-            .toLowerCase()
-            .includes('unauthorized')
-        ) {
-          clearAdminSession();
-          router.replace('/login');
-          return;
-        }
-
-        setError(message);
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [
-      currency,
-      limit,
-      page,
-      router,
-      search,
-      status,
-    ],
-  );
-
-  useEffect(() => {
-    if (!hasValidAdminSession()) {
-      router.replace('/login');
-      return;
-    }
-
-    const admin = getStoredAdmin();
-
-    if (!admin) {
-      clearAdminSession();
-      router.replace('/login');
-      return;
-    }
-
-    void loadWallets();
-  }, [
-    loadWallets,
-    router,
-  ]);
-
-  function handleSearch(
-    event: FormEvent<HTMLFormElement>,
-  ): void {
-    event.preventDefault();
-
-    setPage(1);
-    setSearch(
-      searchInput.trim(),
-    );
-  }
-
-  function clearFilters(): void {
-    setSearchInput('');
-    setSearch('');
-    setStatus('ALL');
-    setCurrency('ALL');
-    setPage(1);
-  }
-
-  async function updateWalletStatus(
-    wallet: AdminWallet,
-  ): Promise<void> {
-    const nextStatus =
-      wallet.status === 'ACTIVE'
-        ? 'FROZEN'
-        : 'ACTIVE';
-
-    const actionLabel =
-      nextStatus === 'FROZEN'
-        ? 'freeze'
-        : 'unfreeze';
-
-    const confirmed = window.confirm(
-      `Are you sure you want to ${actionLabel} this wallet?`,
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      setActionWalletId(wallet.id);
-      setError('');
-      setSuccess('');
-
-      await adminAuthenticatedRequest(
-        `/admin/wallets/${wallet.id}/status`,
-        {
-          method: 'PATCH',
-
-          body: JSON.stringify({
-            status: nextStatus,
-          }),
-        },
-      );
-
-      setSuccess(
-        `Wallet successfully changed to ${nextStatus}.`,
-      );
-
-      await loadWallets();
-    } catch (requestError) {
-      const message =
-        requestError instanceof Error
-          ? requestError.message
-          : 'Unable to update wallet status';
-
-      if (
-        message
-          .toLowerCase()
-          .includes('session') ||
-        message
-          .toLowerCase()
-          .includes('unauthorized')
-      ) {
-        clearAdminSession();
-        router.replace('/login');
-        return;
-      }
-
-      setError(message);
-    } finally {
-      setActionWalletId(null);
-    }
-  }
-
-  function handleLogout(): void {
-    clearAdminSession();
-    router.push('/login');
-    router.refresh();
-  }
-
-  return (
-    <main className="min-h-screen bg-slate-100">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
-          <div>
-            <h1 className="text-2xl font-bold text-sky-600">
-              Payflow Admin
-            </h1>
-
-            <p className="text-sm text-slate-500">
-              Wallet Management
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={() =>
-                router.push('/dashboard')
-              }
-              className="rounded-xl border border-slate-300 bg-white px-4 py-2 font-semibold text-slate-700 transition hover:bg-slate-100"
-            >
-              Dashboard
-            </button>
-
-            <button
-              type="button"
-              onClick={() =>
-                router.push('/users')
-              }
-              className="rounded-xl border border-sky-500 bg-white px-4 py-2 font-semibold text-sky-600 transition hover:bg-sky-50"
-            >
-              Users
-            </button>
-
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="rounded-xl bg-slate-900 px-4 py-2 font-semibold text-white transition hover:bg-slate-800"
-            >
-              Logout
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <div className="mx-auto max-w-7xl px-6 py-10">
-        <section>
-          <p className="text-sm font-semibold uppercase tracking-wider text-sky-600">
-            Administration
-          </p>
-
-          <h2 className="mt-2 text-3xl font-bold text-slate-900">
-            Payflow wallets
-          </h2>
-
-          <p className="mt-2 text-slate-600">
-            Review wallet owners, balances,
-            statuses and transaction activity.
-          </p>
-        </section>
-
-        <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <form
-            onSubmit={handleSearch}
-            className="grid gap-4 lg:grid-cols-[1fr_180px_180px_auto_auto]"
-          >
-            <input
-              type="text"
-              value={searchInput}
-              onChange={(event) =>
-                setSearchInput(
-                  event.target.value,
-                )
-              }
-              placeholder="Search wallet ID, user or email"
-              className="rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
-            />
-
-            <select
-              value={status}
-              onChange={(event) => {
-                setStatus(
-                  event.target.value,
-                );
-                setPage(1);
-              }}
-              className="rounded-xl border border-slate-300 bg-white px-4 py-3"
-            >
-              <option value="ALL">
-                All statuses
-              </option>
-
-              <option value="ACTIVE">
-                Active
-              </option>
-
-              <option value="FROZEN">
-                Frozen
-              </option>
-
-              <option value="CLOSED">
-                Closed
-              </option>
-            </select>
-
-            <select
-              value={currency}
-              onChange={(event) => {
-                setCurrency(
-                  event.target.value,
-                );
-                setPage(1);
-              }}
-              className="rounded-xl border border-slate-300 bg-white px-4 py-3"
-            >
-              <option value="ALL">
-                All currencies
-              </option>
-
-              <option value="INR">
-                INR
-              </option>
-            </select>
-
-            <button
-              type="submit"
-              className="rounded-xl bg-sky-500 px-5 py-3 font-semibold text-white transition hover:bg-sky-600"
-            >
-              Search
-            </button>
-
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="rounded-xl border border-slate-300 bg-white px-5 py-3 font-semibold text-slate-700 transition hover:bg-slate-100"
-            >
-              Clear
-            </button>
-          </form>
-        </section>
-
-        {error ? (
-          <div className="mt-6 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-red-700">
-            {error}
-          </div>
-        ) : null}
-
-        {success ? (
-          <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-emerald-700">
-            {success}
-          </div>
-        ) : null}
-
-        <section className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
-            <div>
-              <h3 className="text-xl font-bold text-slate-900">
-                Wallets list
-              </h3>
-
-              <p className="mt-1 text-sm text-slate-500">
-                Total wallets: {total}
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() =>
-                void loadWallets()
-              }
-              className="rounded-xl bg-slate-900 px-4 py-2 font-semibold text-white transition hover:bg-slate-800"
-            >
-              Refresh
-            </button>
-          </div>
-
-          {isLoading ? (
-            <div className="p-12 text-center font-semibold text-slate-500">
-              Loading wallets...
-            </div>
-          ) : wallets.length === 0 ? (
-            <div className="p-12 text-center text-slate-500">
-              No wallets found.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-slate-200">
-                <thead className="bg-slate-50">
-                  <tr className="text-left text-xs uppercase tracking-wider text-slate-500">
-                    <th className="px-6 py-4">
-                      Owner
-                    </th>
-
-                    <th className="px-6 py-4">
-                      Wallet
-                    </th>
-
-                    <th className="px-6 py-4">
-                      Balance
-                    </th>
-
-                    <th className="px-6 py-4">
-                      Status
-                    </th>
-
-                    <th className="px-6 py-4">
-                      Transactions
-                    </th>
-
-                    <th className="px-6 py-4">
-                      Ledger
-                    </th>
-
-                    <th className="px-6 py-4">
-                      Created
-                    </th>
-
-                    <th className="px-6 py-4">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-
-                <tbody className="divide-y divide-slate-100">
-                  {wallets.map((wallet) => (
-                    <tr
-                      key={wallet.id}
-                      className="transition hover:bg-slate-50"
-                    >
-                      <td className="px-6 py-5">
-                        <p className="font-semibold text-slate-900">
-                          {
-                            wallet.user.firstName
-                          }{' '}
-                          {wallet.user.lastName ??
-                            ''}
-                        </p>
-
-                        <p className="mt-1 text-sm text-slate-500">
-                          {wallet.user.email}
-                        </p>
-
-                        <p className="mt-1 text-xs text-slate-400">
-                          {wallet.user.role}
-                          {' • '}
-                          {wallet.user.status}
-                        </p>
-                      </td>
-
-                      <td className="px-6 py-5">
-                        <p className="font-semibold text-slate-900">
-                          {wallet.currency}
-                        </p>
-
-                        <p className="mt-1 max-w-xs break-all text-xs text-slate-400">
-                          {wallet.id}
-                        </p>
-                      </td>
-
-                      <td className="px-6 py-5">
-                        <p className="font-bold text-slate-900">
-                          {wallet.currency}{' '}
-                          {formatMoney(
-                            wallet.balance,
-                          )}
-                        </p>
-
-                        <p className="mt-1 text-xs text-slate-400">
-                          Version {wallet.version}
-                        </p>
-                      </td>
-
-                      <td className="px-6 py-5">
-                        <span
-                          className={`rounded-full px-3 py-1 text-xs font-bold ${
-                            wallet.status ===
-                            'ACTIVE'
-                              ? 'bg-emerald-100 text-emerald-700'
-                              : wallet.status ===
-                                  'FROZEN'
-                                ? 'bg-amber-100 text-amber-700'
-                                : 'bg-red-100 text-red-700'
-                          }`}
-                        >
-                          {wallet.status}
-                        </span>
-                      </td>
-
-                      <td className="px-6 py-5">
-                        <p className="font-bold text-slate-900">
-                          {
-                            wallet.transactionCount
-                          }
-                        </p>
-
-                        <p className="mt-1 text-xs text-slate-400">
-                          D:{' '}
-                          {
-                            wallet._count
-                              .deposits
-                          }
-                          {' · '}
-                          W:{' '}
-                          {
-                            wallet._count
-                              .withdrawals
-                          }
-                          {' · '}
-                          Out:{' '}
-                          {
-                            wallet._count
-                              .outgoingTransfers
-                          }
-                          {' · '}
-                          In:{' '}
-                          {
-                            wallet._count
-                              .incomingTransfers
-                          }
-                        </p>
-                      </td>
-
-                      <td className="px-6 py-5">
-                        {wallet.ledgerAccount ? (
-                          <>
-                            <p className="font-semibold text-slate-900">
-                              {
-                                wallet
-                                  .ledgerAccount
-                                  .code
-                              }
-                            </p>
-
-                            <p className="mt-1 text-xs text-slate-400">
-                              {
-                                wallet
-                                  .ledgerAccount
-                                  .status
-                              }
-                            </p>
-                          </>
-                        ) : (
-                          <span className="text-sm text-slate-400">
-                            No ledger
-                          </span>
-                        )}
-                      </td>
-
-                      <td className="whitespace-nowrap px-6 py-5 text-sm text-slate-500">
-                        {new Date(
-                          wallet.createdAt,
-                        ).toLocaleDateString(
-                          'en-IN',
-                        )}
-                      </td>
-
-                      <td className="whitespace-nowrap px-6 py-5">
-                        {wallet.status === 'CLOSED' ? (
-                          <span className="text-sm font-semibold text-slate-400">
-                            Read only
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled={
-                              actionWalletId ===
-                              wallet.id
-                            }
-                            onClick={() =>
-                              void updateWalletStatus(
-                                wallet,
-                              )
-                            }
-                            className={`rounded-xl px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                              wallet.status ===
-                              'ACTIVE'
-                                ? 'bg-amber-500 hover:bg-amber-600'
-                                : 'bg-emerald-500 hover:bg-emerald-600'
-                            }`}
-                          >
-                            {actionWalletId ===
-                            wallet.id
-                              ? 'Updating...'
-                              : wallet.status ===
-                                  'ACTIVE'
-                                ? 'Freeze'
-                                : 'Unfreeze'}
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          <div className="flex flex-col items-center justify-between gap-4 border-t border-slate-200 px-6 py-5 sm:flex-row">
-            <p className="text-sm text-slate-500">
-              Page {page} of{' '}
-              {totalPages || 1}
-            </p>
-
-            <div className="flex gap-3">
-              <button
-                type="button"
-                disabled={
-                  !hasPreviousPage ||
-                  isLoading
-                }
-                onClick={() =>
-                  setPage((current) =>
-                    Math.max(
-                      current - 1,
-                      1,
-                    ),
-                  )
-                }
-                className="rounded-xl border border-slate-300 bg-white px-4 py-2 font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Previous
-              </button>
-
-              <button
-                type="button"
-                disabled={
-                  !hasNextPage ||
-                  isLoading
-                }
-                onClick={() =>
-                  setPage(
-                    (current) =>
-                      current + 1,
-                  )
-                }
-                className="rounded-xl bg-sky-500 px-4 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        </section>
-      </div>
-    </main>
-  );
+  return <Suspense fallback={<main aria-busy="true" className="min-h-screen bg-[#F6F8FA] p-6"><Skeleton className="h-96" /></main>}><WalletsPageContent /></Suspense>;
 }

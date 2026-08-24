@@ -1,0 +1,7 @@
+import { Card } from '../ui';
+import { formatTransactionAmount, transactionAmountsByCurrency, transactionStatusCounts } from './helpers';
+import type { AdminTransaction } from './types';
+export function TransactionSummary({ transactions }: { transactions: AdminTransaction[] }) {
+  const totals = transactionAmountsByCurrency(transactions); const statuses = transactionStatusCounts(transactions);
+  return <section className="mt-3 grid gap-3 lg:grid-cols-2"><Card className="p-4"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current-page status breakdown</p><div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm">{['COMPLETED', 'PENDING', 'PROCESSING', 'FAILED', 'REVERSED'].map((status) => <span key={status}><strong className="tabular-nums text-slate-950">{statuses[status] ?? 0}</strong> <span className="text-slate-500">{status.replace('_', ' ').toLowerCase()}</span></span>)}</div></Card><Card className="p-4"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current-page amounts by currency</p><div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold text-slate-950 tabular-nums">{totals.length ? totals.map((item) => <span key={item.currency}>{formatTransactionAmount(item.amount, item.currency)}</span>) : <span className="font-normal text-slate-500">No amounts on this page</span>}</div><p className="mt-2 text-xs text-slate-500">No currency conversion is performed.</p></Card></section>;
+}
