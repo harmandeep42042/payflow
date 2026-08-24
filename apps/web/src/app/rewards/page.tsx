@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import { getStoredUser, userAuthenticatedRequest } from "../lib/api";
+import { formatMoney } from "../lib/money";
 
 type Reward = {
   id: string;
@@ -170,9 +171,7 @@ function RewardCard({
 }) {
   const claimed = reward.status === "CLAIMED";
   const available = reward.status === "AVAILABLE";
-  const amount = new Intl.NumberFormat("en-IN", {
-    maximumFractionDigits: 2,
-  }).format(Number(reward.amount));
+  const amount = formatMoney(reward.amount, reward.currency);
 
   return (
     <article className={`reward-card ${claimed ? "claimed" : ""}`}>
@@ -200,12 +199,12 @@ function RewardCard({
           {claimed ? (
             <>
               <h2>Reward Claimed</h2>
-              <p className="reward-amount">₹{amount} added to your wallet</p>
+              <p className="reward-amount">{amount} added to your wallet</p>
             </>
           ) : (
             <>
               <p className="eyebrow">Congratulations!</p>
-              <h2 className="won-amount">You won ₹{amount}</h2>
+              <h2 className="won-amount">You won {amount}</h2>
               <p className="result-copy">Your cashback is ready to claim.</p>
             </>
           )}

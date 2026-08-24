@@ -4,6 +4,7 @@ import {
   FormEvent,
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from 'react';
 
@@ -18,6 +19,8 @@ import {
   hasValidUserSession,
   userAuthenticatedRequest,
 } from '../lib/api';
+import { compareDecimalStrings, formatMoney as formatExactMoney, normalizeDecimal } from '../lib/money';
+import { acquireMutationLock, releaseMutationLock } from '../lib/mutation-lock';
 
 type UserWallet = {
   id: string;
@@ -46,27 +49,19 @@ function formatMoney(
   amount: string | number,
   currency = 'INR',
 ): string {
-  return new Intl.NumberFormat(
-    'en-IN',
-    {
-      style: 'currency',
-      currency,
-      maximumFractionDigits: 2,
-    },
-  ).format(Number(amount) || 0);
+  return formatExactMoney(String(amount), currency);
 }
 
 export default function WithdrawPage() {
   const router = useRouter();
+  const submissionLock = useRef(false);
 
   const [wallet, setWallet] =
     useState<UserWallet | null>(null);
 
-  const [amount, setAmount] =
-    useState('50.00');
+  const [amount, setAmount] = useState('');
 
-  const [reference, setReference] =
-    useState('USER-PORTAL-WITHDRAWAL');
+  const [reference, setReference] = useState('');
 
   const [isLoading, setIsLoading] =
     useState(true);
@@ -179,15 +174,10 @@ export default function WithdrawPage() {
       return;
     }
 
-    const numericAmount =
-      Number(amount);
-
-    const currentBalance =
-      Number(wallet.balance);
+    const normalizedAmount = normalizeDecimal(amount);
 
     if (
-      !Number.isFinite(numericAmount) ||
-      numericAmount <= 0
+      !normalizedAmount || compareDecimalStrings(normalizedAmount, '0.00') <= 0
     ) {
       setError(
         'Please enter a valid amount',
@@ -196,8 +186,7 @@ export default function WithdrawPage() {
     }
 
     if (
-      Number.isFinite(currentBalance) &&
-      numericAmount > currentBalance
+      normalizedAmount && compareDecimalStrings(normalizedAmount, wallet.balance) > 0
     ) {
       setError(
         'Insufficient wallet balance',
@@ -205,6 +194,7 @@ export default function WithdrawPage() {
       return;
     }
 
+    if (!acquireMutationLock(submissionLock)) return;
     try {
       setIsSubmitting(true);
       setError('');
@@ -220,8 +210,7 @@ export default function WithdrawPage() {
               walletId:
                 wallet.id,
 
-              amount:
-                numericAmount.toFixed(2),
+              amount: normalizedAmount,
 
               currency:
                 wallet.currency,
@@ -257,6 +246,7 @@ export default function WithdrawPage() {
           : 'Withdrawal failed',
       );
     } finally {
+      releaseMutationLock(submissionLock);
       setIsSubmitting(false);
     }
   }

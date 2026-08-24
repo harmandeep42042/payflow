@@ -47,12 +47,10 @@ export default function TransactionChart({
       };
     }
 
-    const amount = Number(transaction.amount);
-
     if (transaction.direction === 'CREDIT') {
-      result[date].credits += amount;
+      result[date].credits += 1;
     } else {
-      result[date].debits += amount;
+      result[date].debits += 1;
     }
 
     return result;
@@ -70,7 +68,7 @@ export default function TransactionChart({
         </h3>
 
         <p className="mt-1 text-sm text-slate-500">
-          Credits and debits from recent activity.
+          Transaction counts from the latest 100 records.
         </p>
       </div>
 
@@ -101,19 +99,7 @@ export default function TransactionChart({
                 axisLine={false}
               />
 
-              <Tooltip
-                formatter={(value) => {
-                  const amount =
-                    typeof value === 'number' ||
-                    typeof value === 'string'
-                      ? Number(value)
-                      : 0;
-
-                  return `INR ${amount.toLocaleString(
-                    'en-IN',
-                  )}`;
-                }}
-              />
+              <Tooltip />
 
               <Bar
                 dataKey="credits"

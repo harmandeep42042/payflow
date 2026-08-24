@@ -93,21 +93,14 @@ export default function TransactionChart({
       continue;
     }
 
-    const amount =
-      Number(
-        transaction.amount,
-      ) || 0;
-
     if (
       transaction.direction ===
       'CREDIT'
     ) {
-      row.moneyIn +=
-        amount;
+      row.moneyIn += 1;
     }
     else {
-      row.moneyOut +=
-        amount;
+      row.moneyOut += 1;
     }
   }
 
@@ -167,34 +160,19 @@ export default function TransactionChart({
 
           <YAxis />
 
-          <Tooltip
-            formatter={(
-              value,
-            ) => [
-              `₹${Number(
-                value,
-              ).toLocaleString(
-                'en-IN',
-                {
-                  maximumFractionDigits:
-                    2,
-                },
-              )}`,
-              '',
-            ]}
-          />
+          <Tooltip />
 
           <Legend />
 
           <Bar
             dataKey="moneyIn"
-            name="Money In"
+            name="Credit transactions"
             fill="#10b981"
           />
 
           <Bar
             dataKey="moneyOut"
-            name="Money Out"
+            name="Debit transactions"
             fill="#ef4444"
           />
         </BarChart>

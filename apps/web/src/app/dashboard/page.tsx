@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from 'react';
 
@@ -19,17 +20,17 @@ import type {
 import {
   getStoredUser,
   hasValidUserSession,
-  logoutUser,
   userAuthenticatedRequest,
 } from '../lib/api';
+import { formatMoney as formatExactMoney } from '../lib/money';
+import { beginLatestRequest, isLatestRequest } from '../lib/request-sequencing';
 
 import {
   useNotifications,
 } from '../hooks/use-notifications';
 
-import DashboardHeader from './components/DashboardHeader';
 import SummaryCards from './components/SummaryCards';
-import TransactionChart from './components/TransactionChart';
+import { EmptyState, ErrorState, PageContainer, PageHeader, StatusBadge } from '../components/customer';
 
 type UserWallet = {
   id: string;
@@ -81,25 +82,7 @@ function formatMoney(
   amount: string | number,
   currency = 'INR',
 ): string {
-  const value =
-    Number(amount);
-
-  return new Intl.NumberFormat(
-    'en-IN',
-    {
-      style:
-        'currency',
-
-      currency,
-
-      maximumFractionDigits:
-        2,
-    },
-  ).format(
-    Number.isFinite(value)
-      ? value
-      : 0,
-  );
+  return formatExactMoney(String(amount), currency);
 }
 
 function formatDateTime(
@@ -124,6 +107,7 @@ function formatDateTime(
 export default function UserDashboardPage() {
   const router =
     useRouter();
+  const requestRef = useRef<{ id: number; controller: AbortController } | null>(null);
 
   const {
     latestNotification,
@@ -143,6 +127,7 @@ export default function UserDashboardPage() {
   ] = useState<UserWallet | null>(
     null,
   );
+  const [wallets, setWallets] = useState<UserWallet[]>([]);
 
   const [
     recentTransactions,
@@ -185,6 +170,7 @@ export default function UserDashboardPage() {
       async (
         showLoader = true,
       ): Promise<void> => {
+        const request = beginLatestRequest(requestRef);
         const storedUser =
           getStoredUser();
 
@@ -223,20 +209,17 @@ export default function UserDashboardPage() {
                 }
             >(
               `/wallets/user/${storedUser.id}`,
+              { signal: request.controller.signal },
             );
 
-          let resolvedWallet:
-            | UserWallet
-            | null = null;
+          let resolvedWallets: UserWallet[] = [];
 
           if (
             Array.isArray(
               walletResponse,
             )
           ) {
-            resolvedWallet =
-              walletResponse[0] ??
-              null;
+            resolvedWallets = walletResponse;
           }
           else if (
             walletResponse &&
@@ -244,9 +227,7 @@ export default function UserDashboardPage() {
               'object' &&
             'id' in walletResponse
           ) {
-            resolvedWallet =
-              walletResponse as
-                UserWallet;
+            resolvedWallets = [walletResponse as UserWallet];
           }
           else if (
             walletResponse &&
@@ -254,9 +235,7 @@ export default function UserDashboardPage() {
               'object' &&
             'data' in walletResponse
           ) {
-            resolvedWallet =
-              walletResponse.data ??
-              null;
+            resolvedWallets = walletResponse.data ? [walletResponse.data] : [];
           }
           else if (
             walletResponse &&
@@ -265,11 +244,10 @@ export default function UserDashboardPage() {
             'wallets' in
               walletResponse
           ) {
-            resolvedWallet =
-              walletResponse
-                .wallets?.[0] ??
-              null;
+            resolvedWallets = walletResponse.wallets ?? [];
           }
+
+          const resolvedWallet = resolvedWallets[0] ?? null;
 
           if (
             !resolvedWallet?.id
@@ -279,47 +257,28 @@ export default function UserDashboardPage() {
             );
           }
 
+          if (!isLatestRequest(requestRef, request)) return;
+
           setWallet(
             resolvedWallet,
           );
+          setWallets(resolvedWallets);
 
-          const historyResponse =
-            await userAuthenticatedRequest<
+          const historyResponses = await Promise.all(resolvedWallets.map((currentWallet) =>
+            userAuthenticatedRequest<
               | DashboardTransaction[]
               | DashboardTransactionResponse
             >(
-              `/wallets/${resolvedWallet.id}/transactions?page=1&limit=100&type=ALL`,
-            );
+              `/wallets/${currentWallet.id}/transactions?page=1&limit=100&type=ALL`,
+              { signal: request.controller.signal },
+            )));
 
-          let resolvedTransactions:
-            DashboardTransaction[] = [];
+          if (!isLatestRequest(requestRef, request)) return;
 
-          if (
-            Array.isArray(
-              historyResponse,
-            )
-          ) {
-            resolvedTransactions =
-              historyResponse;
-          }
-          else if (
-            historyResponse.transactions
-          ) {
-            resolvedTransactions =
-              historyResponse.transactions;
-          }
-          else if (
-            historyResponse.items
-          ) {
-            resolvedTransactions =
-              historyResponse.items;
-          }
-          else if (
-            historyResponse.data
-          ) {
-            resolvedTransactions =
-              historyResponse.data;
-          }
+          const resolvedTransactions = historyResponses.flatMap((historyResponse) => {
+            if (Array.isArray(historyResponse)) return historyResponse;
+            return historyResponse.transactions ?? historyResponse.items ?? historyResponse.data ?? [];
+          }).sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
 
           setAnalyticsTransactions(
             resolvedTransactions,
@@ -339,6 +298,7 @@ export default function UserDashboardPage() {
         catch (
           requestError
         ) {
+          if (!isLatestRequest(requestRef, request)) return;
           setError(
             requestError instanceof
               Error
@@ -347,8 +307,10 @@ export default function UserDashboardPage() {
           );
         }
         finally {
-          setIsLoading(false);
-          setIsRefreshing(false);
+          if (requestRef.current?.id === request.id) {
+            setIsLoading(false);
+            setIsRefreshing(false);
+          }
         }
       },
       [
@@ -358,6 +320,7 @@ export default function UserDashboardPage() {
 
   useEffect(() => {
     void loadDashboard();
+    return () => requestRef.current?.controller.abort();
   }, [
     loadDashboard,
   ]);
@@ -390,54 +353,14 @@ export default function UserDashboardPage() {
     loadDashboard,
   ]);
 
-  async function handleLogout():
-    Promise<void> {
-    await logoutUser();
-
-    router.replace(
-      '/login',
-    );
-
-    router.refresh();
-  }
-
   return (
-    <main className="min-h-screen bg-slate-100">
-      <DashboardHeader
-        firstName={
-          user?.firstName
-        }
-        lastName={
-          user?.lastName
-        }
-        email={
-          user?.email
-        }
-        onLogout={
-          handleLogout
-        }
-      />
-
-      <div className="mx-auto max-w-7xl px-6 py-10">
-        <section className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
-          <div>
-            <p className="text-sm font-bold uppercase tracking-wider text-sky-600">
-              Wallet Dashboard 2.0
-            </p>
-
-            <h2 className="mt-2 text-3xl font-bold text-slate-900">
-              Welcome back,
-              {' '}
-              {user?.firstName ??
-                'Payflow User'}
-            </h2>
-
-            <p className="mt-2 text-slate-600">
-              Manage your wallet, security and transactions.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-3">
+    <main>
+      <PageContainer>
+        <PageHeader
+          eyebrow="Overview"
+          title={`Welcome back, ${user?.firstName || 'Customer'}`}
+          description="Your balances, recent activity and everyday payment actions in one place."
+          actions={<>
             <button
               type="button"
               disabled={
@@ -448,79 +371,59 @@ export default function UserDashboardPage() {
                   false,
                 )
               }
-              className="rounded-xl bg-sky-500 px-5 py-3 font-bold text-white transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-50"
+              className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-800 transition hover:bg-slate-50 disabled:opacity-50"
             >
               {isRefreshing
                 ? 'Refreshing...'
                 : 'Refresh balance'}
             </button>
 
-            <Link
-              href="/transactions"
-              className="rounded-xl bg-sky-500 px-5 py-3 font-bold text-white shadow-sm transition hover:bg-sky-600"
-            >
-              Transactions
-            </Link>
-          </div>
-        </section>
+          </>}
+        />
+
+        <nav aria-label="Quick actions" className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          {[
+            ['Send', '/send-money', 'Pay a verified recipient'],
+            ['Receive', '/receive', 'Share your payment address'],
+            ['Scan / Pay', '/scan', 'Scan a Payflow payment QR'],
+            ['Deposit', '/deposit', 'Add money to a wallet'],
+            ['Withdraw', '/withdraw', 'Move money out safely'],
+            ['Rewards', '/rewards', 'View available rewards'],
+          ].map(([label, href, description]) => <Link key={label} href={href} className="group min-h-24 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-blue-300 hover:shadow-md focus-visible:ring-2 focus-visible:ring-blue-600"><span className="font-bold text-slate-950 group-hover:text-blue-700">{label}</span><span className="mt-1 block text-xs leading-5 text-slate-500">{description}</span></Link>)}
+        </nav>
 
         {error ? (
-          <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 font-medium text-red-700">
-            {error}
-          </div>
+          <div className="mt-6"><ErrorState message={error} onRetry={() => void loadDashboard(false)} /></div>
         ) : null}
 
-        <section className="mt-8 grid gap-6 lg:grid-cols-3">
-          <article className="rounded-3xl bg-gradient-to-br from-sky-500 to-blue-700 p-7 text-white shadow-xl lg:col-span-2">
+        <section id="wallets" aria-labelledby="wallet-heading" className="mt-8">
+          <div className="mb-4 flex items-end justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">Wallets</p><h2 id="wallet-heading" className="mt-1 text-xl font-bold text-slate-950">Available balances</h2></div><span className="text-sm text-slate-500">Never combined across currencies</span></div>
+          {wallets.length === 0 && !isLoading ? <EmptyState title="No wallets available" description="Your wallets will appear here after they are created." /> : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{wallets.map((currentWallet) => <article key={currentWallet.id} className="rounded-2xl border border-slate-200 bg-slate-950 p-6 text-white shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-5">
               <div>
-                <p className="text-sm font-semibold text-sky-100">
+                <p className="text-sm font-semibold text-slate-300">
                   Available balance
                 </p>
 
-                <p className="mt-3 text-4xl font-bold">
+                <p className="mt-3 text-3xl font-bold tracking-tight">
                   {isLoading
                     ? 'Loading...'
                     : formatMoney(
-                        wallet?.balance ??
-                          0,
-                        wallet?.currency ??
-                          'INR',
+                        currentWallet.balance,
+                        currentWallet.currency,
                       )}
                 </p>
 
-                <p className="mt-4 text-sm text-sky-100">
-                  Wallet ID:
-                  {' '}
-                  {wallet?.id ??
-                    'Unavailable'}
+                <p className="mt-4 break-all text-xs text-slate-400">
+                  Wallet · {currentWallet.id}
                 </p>
               </div>
 
-              <span className="rounded-full bg-white/20 px-4 py-2 text-sm font-bold">
-                {wallet?.status ??
-                  'UNKNOWN'}
-              </span>
+              <StatusBadge status={currentWallet.status} />
             </div>
+          </article>)}</div>}
 
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link
-                href="/transactions"
-                className="rounded-xl bg-sky-600 px-5 py-3 font-bold text-white shadow-sm transition hover:bg-sky-700"
-              >
-                View activity
-              </Link>
-
-              <Link
-                href="/edit-profile"
-                className="rounded-xl border border-white/50 px-5 py-3 font-bold text-white transition hover:bg-white/10"
-              >
-                Manage profile
-              </Link>
-            </div>
-          </article>
-
-          <article className="rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
+          <article className="mt-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <p className="text-sm font-bold uppercase tracking-wider text-slate-500">
               Live status
             </p>
@@ -579,11 +482,6 @@ export default function UserDashboardPage() {
             />
           </div>
 
-          <div className="mt-6">
-            <TransactionChart
-              transactions={analyticsTransactions}
-            />
-          </div>
         </section>
 
         <section className="mt-8">
@@ -846,7 +744,7 @@ export default function UserDashboardPage() {
             </div>
           </div>
         </section>
-      </div>
+      </PageContainer>
     </main>
   );
 }

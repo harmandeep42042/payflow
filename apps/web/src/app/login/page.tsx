@@ -11,22 +11,16 @@ import {
 } from 'next/navigation';
 
 import {
-  hasValidUserSession,
-  saveUserSession,
-  userApiRequest,
-  UserLoginResponse,
+  loginUser,
+  restoreUserSession,
 } from '../lib/api';
 
 export default function UserLoginPage() {
   const router = useRouter();
 
-  const [email, setEmail] =
-    useState(
-      'harman2701@payflow.com',
-    );
+  const [email, setEmail] = useState('');
 
-  const [password, setPassword] =
-    useState('User@123');
+  const [password, setPassword] = useState('');
 
   const [error, setError] =
     useState('');
@@ -35,9 +29,7 @@ export default function UserLoginPage() {
     useState(false);
 
   useEffect(() => {
-    if (hasValidUserSession()) {
-      router.replace('/dashboard');
-    }
+    void restoreUserSession().then(() => router.replace('/dashboard')).catch(() => undefined);
   }, [router]);
 
   async function handleSubmit(
@@ -49,20 +41,7 @@ export default function UserLoginPage() {
       setIsSubmitting(true);
       setError('');
 
-      const response =
-        await userApiRequest<UserLoginResponse>(
-          '/auth/login',
-          {
-            method: 'POST',
-
-            body: JSON.stringify({
-              email,
-              password,
-            }),
-          },
-        );
-
-      saveUserSession(response);
+      await loginUser(email, password);
 
       router.push('/dashboard');
       router.refresh();

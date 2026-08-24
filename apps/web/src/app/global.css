@@ -1,12 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f6f8fc;
-  --foreground: #14213d;
-  --primary: #00baf2;
-  --primary-dark: #002970;
+  --background: #f7f8fb;
+  --foreground: #172033;
+  --primary: #2563eb;
+  --primary-dark: #1d4ed8;
   --surface: #ffffff;
-  --border: #dce3ee;
+  --border: #dde3ea;
+  --muted: #647084;
+  --success: #168a5b;
+  --warning: #a56100;
+  --danger: #c9363e;
 }
 
 * {
@@ -22,7 +26,8 @@ body {
   margin: 0;
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  text-rendering: optimizeLegibility;
 }
 
 button,
@@ -35,4 +40,28 @@ select {
 a {
   color: inherit;
   text-decoration: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: #dbeafe;
+  color: #172033;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.customer-content > main {
+  min-height: auto;
+  background: transparent;
 }

@@ -16,11 +16,11 @@ import type {
 } from '@payflow/shared-types';
 
 import {
-  logoutUser,
   getStoredUser,
   hasValidUserSession,
   userAuthenticatedRequest,
 } from '../lib/api';
+import { Avatar, ErrorState, LoadingState, PageContainer, PageHeader, StatusBadge } from '../components/customer';
 
 type ProfileApiResponse = {
   message?: string;
@@ -34,19 +34,6 @@ type ProfileApiResponse = {
 type ProfileResponse = PayflowUser & {
   createdAt?: string;
 };
-
-function getInitials(
-  user: PayflowUser,
-): string {
-  const first =
-    user.firstName?.charAt(0) ?? '';
-
-  const last =
-    user.lastName?.charAt(0) ?? '';
-
-  return `${first}${last}`
-    .toUpperCase() || 'U';
-}
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -116,83 +103,45 @@ export default function ProfilePage() {
     void loadProfile();
   }, [router]);
 
-  async function handleLogout():
-    Promise<void> {
-    await logoutUser();
-
-    router.replace('/login');
-    router.refresh();
-  }
-
   return (
-    <main className="min-h-screen bg-slate-100 px-6 py-10">
-      <section className="mx-auto max-w-4xl">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900">
-              My Profile
-            </h1>
-
-            <p className="mt-2 text-slate-500">
-              View your Payflow account information.
-            </p>
-          </div>
-
-          <div className="flex gap-3">
-            <Link
-              href="/dashboard"
-              className="rounded-xl border border-slate-300 bg-white px-4 py-2 font-semibold text-slate-700"
-            >
-              Dashboard
-            </Link>
-
+    <main>
+      <PageContainer className="max-w-4xl">
+        <PageHeader eyebrow="Account" title="Profile and settings" description="Manage your identity, preferences and account security." actions={
+          <div className="flex flex-wrap gap-2">
             <Link
               href="/edit-profile"
-              className="rounded-xl bg-sky-500 px-4 py-2 font-semibold text-white transition hover:bg-sky-600"
+              className="min-h-11 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700"
             >
               Edit Profile
             </Link>
 
             <Link
               href="/change-password"
-              className="rounded-xl bg-violet-500 px-4 py-2 font-semibold text-white transition hover:bg-violet-600"
+              className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-800"
             >
               Change Password
             </Link>
 
             <Link
               href="/notification-settings"
-              className="rounded-xl bg-emerald-500 px-4 py-2 font-semibold text-white transition hover:bg-emerald-600"
+              className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-800"
             >
               Notification Settings
             </Link>
 
-            <button
-              type="button"
-              onClick={() => void handleLogout()}
-              className="rounded-xl bg-slate-900 px-4 py-2 font-semibold text-white"
-            >
-              Logout
-            </button>
           </div>
-        </div>
+        } />
 
         {error ? (
-          <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-red-700">
-            {error}
-          </div>
+          <div className="mt-6"><ErrorState message={error} /></div>
         ) : null}
 
         {isLoading && !user ? (
-          <div className="rounded-3xl bg-white p-12 text-center font-semibold text-slate-500 shadow-sm">
-            Loading profile...
-          </div>
+          <LoadingState label="Loading profile" />
         ) : user ? (
           <div className="grid gap-6 md:grid-cols-[0.8fr_1.2fr]">
-            <aside className="rounded-3xl bg-gradient-to-br from-violet-500 to-indigo-700 p-8 text-white shadow-lg">
-              <div className="flex h-24 w-24 items-center justify-center rounded-full bg-white/20 text-3xl font-bold">
-                {getInitials(user)}
-              </div>
+            <aside className="rounded-2xl bg-slate-950 p-8 text-white shadow-sm">
+              <Avatar name={`${user.firstName} ${user.lastName ?? ''}`} />
 
               <h2 className="mt-6 text-2xl font-bold">
                 {`${user.firstName} ${
@@ -220,9 +169,7 @@ export default function ProfilePage() {
                     Status
                   </span>
 
-                  <strong>
-                    {user.status}
-                  </strong>
+                  <StatusBadge status={user.status} />
                 </div>
               </div>
             </aside>
@@ -305,7 +252,7 @@ export default function ProfilePage() {
             </section>
           </div>
         ) : null}
-      </section>
+      </PageContainer>
     </main>
   );
 }

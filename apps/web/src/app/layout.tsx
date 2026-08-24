@@ -3,6 +3,7 @@ import {
 } from './providers/notification-provider';
 import type { Metadata } from 'next';
 import './global.css';
+import { CustomerAppShell } from './components/customer';
 
 export const metadata: Metadata = {
   title: {
@@ -20,9 +21,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body><NotificationProvider>
-          {children}
-        </NotificationProvider></body>
+      <body><NotificationProvider><CustomerAppShell>{children}</CustomerAppShell></NotificationProvider></body>
     </html>
   );
 }

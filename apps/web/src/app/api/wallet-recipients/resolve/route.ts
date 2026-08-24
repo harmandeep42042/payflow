@@ -1,11 +1,14 @@
-import {
+﻿import {
   NextRequest,
   NextResponse,
 } from 'next/server';
+import { buildRecipientGatewayRequest } from './recipient-request';
 
-const walletServiceUrl =
-  process.env.WALLET_SERVICE_INTERNAL_URL ??
-  'http://localhost:4001/api/v1';
+const gatewayUrl =
+  process.env.API_GATEWAY_INTERNAL_URL ??
+  process.env.API_GATEWAY_URL ??
+  process.env.NEXT_PUBLIC_API_GATEWAY_URL ??
+  'http://localhost:4000/api/v1';
 
 export async function GET(
   request: NextRequest,
@@ -13,20 +16,59 @@ export async function GET(
   const params =
     request.nextUrl.searchParams;
 
+  const authorization = request.headers.get('authorization');
+  const protectedRequest = buildRecipientGatewayRequest(request.nextUrl, authorization);
+  if (!protectedRequest) {
+    return NextResponse.json({ message: 'Authentication is required' }, { status: 401 });
+  }
+
   const email =
-    params.get('email') ?? '';
+    params.get('email')?.trim() ?? '';
+
+  const phone =
+    params.get('phone')?.trim() ?? '';
+
+  const vpa =
+    params.get('vpa')?.trim() ?? '';
 
   const currency =
-    params.get('currency') ?? 'INR';
+    params.get('currency')?.trim().toUpperCase() ??
+    'INR';
 
   const excludeUserId =
     params.get('excludeUserId');
 
+  if (!email && !phone && !vpa) {
+    return NextResponse.json(
+      {
+        message:
+          'Recipient email, phone or VPA is required',
+      },
+      {
+        status: 400,
+      },
+    );
+  }
+
   const query =
-    new URLSearchParams({
-      email,
-      currency,
-    });
+    new URLSearchParams();
+
+  if (email) {
+    query.set('email', email);
+  }
+
+  if (phone) {
+    query.set('phone', phone);
+  }
+
+  if (vpa) {
+    query.set('vpa', vpa);
+  }
+
+  query.set(
+    'currency',
+    currency,
+  );
 
   if (excludeUserId) {
     query.set(
@@ -38,9 +80,10 @@ export async function GET(
   try {
     const response =
       await fetch(
-        `${walletServiceUrl}/wallet-recipients/resolve?${query.toString()}`,
+        `${gatewayUrl}${protectedRequest.path}`,
         {
           cache: 'no-store',
+          headers: { Authorization: protectedRequest.authorization },
         },
       );
 

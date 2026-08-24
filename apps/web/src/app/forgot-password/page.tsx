@@ -8,26 +8,15 @@ import {
 import Link from 'next/link';
 
 import {
-  useRouter,
-} from 'next/navigation';
-
-import {
   userApiRequest,
 } from '../lib/api';
 
 type ForgotPasswordResponse = {
   message: string;
-  developmentResetToken?: string;
-  expiresInSeconds?: number;
 };
 
 export default function ForgotPasswordPage() {
-  const router = useRouter();
-
-  const [email, setEmail] =
-    useState(
-      'harman2701@payflow.com',
-    );
+  const [email, setEmail] = useState('');
 
   const [isSubmitting, setIsSubmitting] =
     useState(false);
@@ -36,9 +25,6 @@ export default function ForgotPasswordPage() {
     useState('');
 
   const [success, setSuccess] =
-    useState('');
-
-  const [resetToken, setResetToken] =
     useState('');
 
   async function handleSubmit(
@@ -50,7 +36,6 @@ export default function ForgotPasswordPage() {
       setIsSubmitting(true);
       setError('');
       setSuccess('');
-      setResetToken('');
 
       const response =
         await userApiRequest<ForgotPasswordResponse>(
@@ -69,13 +54,7 @@ export default function ForgotPasswordPage() {
         response.message,
       );
 
-      if (
-        response.developmentResetToken
-      ) {
-        setResetToken(
-          response.developmentResetToken,
-        );
-      }
+      // Development reset tokens must never be exposed by the customer UI.
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -85,19 +64,6 @@ export default function ForgotPasswordPage() {
     } finally {
       setIsSubmitting(false);
     }
-  }
-
-  function continueToReset(): void {
-    const query =
-      resetToken
-        ? `?token=${encodeURIComponent(
-            resetToken,
-          )}`
-        : '';
-
-    router.push(
-      `/reset-password${query}`,
-    );
   }
 
   return (
@@ -160,25 +126,6 @@ export default function ForgotPasswordPage() {
           </button>
         </form>
 
-        {resetToken ? (
-          <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-            <p className="text-sm font-semibold text-amber-800">
-              Development reset token generated
-            </p>
-
-            <p className="mt-2 break-all font-mono text-xs text-amber-700">
-              {resetToken}
-            </p>
-
-            <button
-              type="button"
-              onClick={continueToReset}
-              className="mt-4 w-full rounded-xl bg-amber-500 px-4 py-3 font-bold text-white"
-            >
-              Continue to Reset Password
-            </button>
-          </div>
-        ) : null}
 
         <Link
           href="/login"

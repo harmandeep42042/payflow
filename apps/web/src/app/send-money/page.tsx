@@ -1,12 +1,11 @@
-'use client';
+﻿'use client';
 
 import {
   FormEvent,
   useEffect,
+  useRef,
   useState,
 } from 'react';
-
-import Link from 'next/link';
 
 import {
   useRouter,
@@ -17,6 +16,10 @@ import {
   hasValidUserSession,
   userAuthenticatedRequest,
 } from '../lib/api';
+import { compareDecimalStrings, formatMoney, normalizeDecimal } from '../lib/money';
+import { acquireMutationLock, releaseMutationLock } from '../lib/mutation-lock';
+import { beginLatestRequest, isLatestRequest, type ActiveRequest } from '../lib/request-sequencing';
+import { ConfirmationDialog, ErrorState, PageContainer, PageHeader, StatusBadge } from '../components/customer';
 
 type Recipient = {
   userId: string;
@@ -63,10 +66,12 @@ function createIdempotencyKey():
     .toString(16)
     .slice(2)}`;
 }
-
 export default function SendMoneyPage() {
   const router =
     useRouter();
+  const recipientRequestRef = useRef<ActiveRequest | null>(null);
+  const submissionLock = useRef(false);
+  const [isConfirming, setIsConfirming] = useState(false);
 
   const [
     senderWallet,
@@ -78,6 +83,11 @@ export default function SendMoneyPage() {
   const [
     email,
     setEmail,
+  ] = useState('');
+
+  const [
+    vpa,
+    setVpa,
   ] = useState('');
 
   const [
@@ -118,6 +128,21 @@ export default function SendMoneyPage() {
   ] = useState('');
 
   useEffect(() => {
+    const params =
+      new URLSearchParams(
+        window.location.search,
+      );
+
+    const qrVpa =
+      params
+        .get('vpa')
+        ?.trim()
+        .toLowerCase();
+
+    if (qrVpa) {
+      setVpa(qrVpa);
+    }
+
     async function loadWallet():
       Promise<void> {
       const user =
@@ -221,6 +246,7 @@ export default function SendMoneyPage() {
       return;
     }
 
+    const request = beginLatestRequest(recipientRequestRef);
     try {
       setIsLoading(true);
       setError('');
@@ -229,9 +255,6 @@ export default function SendMoneyPage() {
 
       const query =
         new URLSearchParams({
-          email:
-            email.trim(),
-
           currency:
             senderWallet?.currency ??
             'INR',
@@ -240,37 +263,31 @@ export default function SendMoneyPage() {
             user.id,
         });
 
-      const response =
-        await fetch(
-          `/api/wallet-recipients/resolve?${query.toString()}`,
+      if (vpa.trim()) {
+        query.set(
+          'vpa',
+          vpa.trim().toLowerCase(),
         );
-
-      const body =
-        await response.json() as
-          | RecipientResponse
-          | {
-              message?: string;
-            };
-
-      if (!response.ok) {
-        throw new Error(
-          'message' in body &&
-          body.message
-            ? body.message
-            : 'Recipient not found',
+      }
+      else {
+        query.set(
+          'email',
+          email.trim(),
         );
       }
 
-      setRecipient(
-        (
-          body as
-            RecipientResponse
-        ).recipient,
+      const body = await userAuthenticatedRequest<RecipientResponse>(
+        `/wallets/wallet-recipients/resolve?${query.toString()}`,
+        { signal: request.controller.signal },
       );
+
+      if (!isLatestRequest(recipientRequestRef, request)) return;
+      setRecipient(body.recipient);
     }
     catch (
       requestError
     ) {
+      if (!isLatestRequest(recipientRequestRef, request)) return;
       setError(
         requestError instanceof Error
           ? requestError.message
@@ -278,11 +295,13 @@ export default function SendMoneyPage() {
       );
     }
     finally {
-      setIsLoading(false);
+      if (recipientRequestRef.current?.id === request.id) setIsLoading(false);
     }
   }
 
-  async function sendMoney():
+  useEffect(() => () => recipientRequestRef.current?.controller.abort(), []);
+
+  async function sendMoney(confirmed = false):
     Promise<void> {
     if (
       !senderWallet ||
@@ -295,14 +314,10 @@ export default function SendMoneyPage() {
       return;
     }
 
-    const numericAmount =
-      Number(amount);
+    const normalizedAmount = normalizeDecimal(amount);
 
     if (
-      !Number.isFinite(
-        numericAmount,
-      ) ||
-      numericAmount <= 0
+      !normalizedAmount || compareDecimalStrings(normalizedAmount, '0.00') <= 0
     ) {
       setError(
         'Enter a valid amount',
@@ -312,10 +327,7 @@ export default function SendMoneyPage() {
     }
 
     if (
-      numericAmount >
-      Number(
-        senderWallet.balance,
-      )
+      compareDecimalStrings(normalizedAmount, senderWallet.balance) > 0
     ) {
       setError(
         'Insufficient wallet balance',
@@ -324,28 +336,14 @@ export default function SendMoneyPage() {
       return;
     }
 
-    const formattedAmount =
-      new Intl.NumberFormat(
-        'en-IN',
-        {
-          style: 'currency',
-          currency:
-            senderWallet.currency,
-          maximumFractionDigits: 2,
-        },
-      ).format(
-        numericAmount,
-      );
-
-    const confirmed =
-      window.confirm(
-        `Send ${formattedAmount} to ${recipient.displayName || recipient.email}?`,
-      );
-
     if (!confirmed) {
+      setIsConfirming(true);
       return;
     }
 
+    setIsConfirming(false);
+
+    if (!acquireMutationLock(submissionLock)) return;
     try {
       setIsSending(true);
       setError('');
@@ -368,10 +366,7 @@ export default function SendMoneyPage() {
                 destinationWalletId:
                   recipient.walletId,
 
-                amount:
-                  numericAmount.toFixed(
-                    2,
-                  ),
+                amount: normalizedAmount,
 
                 currency:
                   senderWallet.currency,
@@ -402,10 +397,7 @@ export default function SendMoneyPage() {
 
       const query =
         new URLSearchParams({
-          amount:
-            numericAmount.toFixed(
-              2,
-            ),
+          amount: normalizedAmount,
 
           recipient:
             recipient.displayName ||
@@ -439,61 +431,30 @@ export default function SendMoneyPage() {
       );
     }
     finally {
+      releaseMutationLock(submissionLock);
       setIsSending(false);
     }
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 px-6 py-10">
-      <div className="mx-auto max-w-2xl">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-bold uppercase tracking-wider text-sky-600">
-              Payflow
-            </p>
-
-            <h1 className="mt-2 text-3xl font-bold text-slate-900">
-              Send Money
-            </h1>
-          </div>
-
-          <Link
-            href="/dashboard"
-            className="rounded-xl border border-slate-300 bg-white px-4 py-2 font-semibold text-slate-700"
-          >
-            Dashboard
-          </Link>
-        </div>
+    <main>
+      <PageContainer className="max-w-2xl">
+        <PageHeader eyebrow="Payments" title="Send money" description="Verify the recipient before entering and confirming a payment." />
 
         {senderWallet ? (
-          <div className="mt-8 rounded-2xl bg-sky-600 p-6 text-white">
-            <p className="text-sm text-sky-100">
+          <div className="mt-7 rounded-2xl bg-slate-950 p-6 text-white shadow-sm">
+            <p className="text-sm text-slate-300">
               Available balance
             </p>
 
             <p className="mt-2 text-3xl font-bold">
-              {new Intl.NumberFormat(
-                'en-IN',
-                {
-                  style: 'currency',
-                  currency:
-                    senderWallet.currency,
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                },
-              ).format(
-                Number(
-                  senderWallet.balance,
-                ),
-              )}
+              {formatMoney(senderWallet.balance, senderWallet.currency)}
             </p>
           </div>
         ) : null}
 
         {error ? (
-          <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
-            {error}
-          </div>
+          <div className="mt-6"><ErrorState message={error} /></div>
         ) : null}
 
         {success ? (
@@ -502,38 +463,41 @@ export default function SendMoneyPage() {
           </div>
         ) : null}
 
-        <section className="mt-8 rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
+        <section className="mt-7 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
           <h2 className="text-xl font-bold text-slate-900">
             1. Verify recipient
           </h2>
 
           <form
             onSubmit={verifyRecipient}
-            className="mt-5 flex gap-3"
+            className="mt-5 flex flex-col gap-3 sm:flex-row"
           >
             <input
-              type="email"
+              type="text"
               required
-              value={email}
+              value={vpa || email}
               onChange={(
                 event,
               ) => {
-                setEmail(
-                  event.target.value,
-                );
+                const value =
+                  event.target.value;
+
+                setEmail('');
+                setVpa(value);
 
                 setRecipient(
                   null,
                 );
               }}
-              placeholder="receiver@payflow.com"
-              className="flex-1 rounded-xl border border-slate-300 px-4 py-3"
+              placeholder="receiver@payflow.com or vpademo@payflow"
+              aria-label="Recipient email or payment address"
+              className="min-h-12 flex-1 rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
             />
 
             <button
               type="submit"
               disabled={isLoading}
-              className="rounded-xl bg-slate-900 px-5 py-3 font-bold text-white disabled:opacity-50"
+              className="min-h-12 rounded-xl bg-slate-900 px-5 py-3 font-bold text-white disabled:opacity-50"
             >
               {isLoading
                 ? 'Checking...'
@@ -555,19 +519,21 @@ export default function SendMoneyPage() {
               <p className="text-sm text-slate-600">
                 {recipient.email}
               </p>
+              <div className="mt-3"><StatusBadge status="Verified" /></div>
             </div>
           ) : null}
         </section>
 
-        <section className="mt-6 rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
+        <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
           <h2 className="text-xl font-bold text-slate-900">
             2. Enter amount
           </h2>
 
           <input
-            type="number"
-            min="1"
-            step="0.01"
+            type="text"
+            inputMode="decimal"
+            pattern="^\d+(\.\d{1,2})?$"
+            aria-label="Amount"
             disabled={!recipient}
             value={amount}
             onChange={(
@@ -578,7 +544,7 @@ export default function SendMoneyPage() {
               )
             }
             placeholder="500.00"
-            className="mt-5 w-full rounded-xl border border-slate-300 px-4 py-3 disabled:bg-slate-100"
+            className="mt-5 min-h-14 w-full rounded-xl border border-slate-300 px-4 py-3 text-2xl font-bold outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-100"
           />
 
           <input
@@ -593,6 +559,7 @@ export default function SendMoneyPage() {
               )
             }
             placeholder="Note (optional)"
+            aria-label="Description"
             className="mt-4 w-full rounded-xl border border-slate-300 px-4 py-3 disabled:bg-slate-100"
           />
 
@@ -604,7 +571,7 @@ export default function SendMoneyPage() {
               isSending
             }
             onClick={() =>
-              void sendMoney()
+              void sendMoney(false)
             }
             className="mt-5 w-full rounded-xl bg-sky-500 px-5 py-3 font-bold text-white disabled:opacity-50"
           >
@@ -613,7 +580,16 @@ export default function SendMoneyPage() {
               : 'Review & Send Money'}
           </button>
         </section>
-      </div>
+        <ConfirmationDialog
+          open={isConfirming}
+          title="Confirm payment"
+          description={recipient && senderWallet ? `Send ${formatMoney(normalizeDecimal(amount) ?? '0.00', senderWallet.currency)} to ${recipient.displayName || recipient.email}? Verify the recipient and amount before continuing.` : 'Verify the payment details before continuing.'}
+          confirmLabel="Send money"
+          isLoading={isSending}
+          onClose={() => setIsConfirming(false)}
+          onConfirm={() => void sendMoney(true)}
+        />
+      </PageContainer>
     </main>
   );
 }

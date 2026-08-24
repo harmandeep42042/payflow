@@ -9,6 +9,12 @@ import {
 import {
   useRouter,
 } from 'next/navigation';
+import {
+  clearUserSession,
+  customerSessionRequest,
+  userAuthenticatedRequest,
+} from '../lib/api';
+import { ErrorState, PageContainer, PageHeader } from '../components/customer';
 
 type Session = {
   id: string;
@@ -24,130 +30,6 @@ type SessionsPayload = {
   sessions: Session[];
   total: number;
 };
-
-type ApiEnvelope<T> = {
-  success?: boolean;
-  data?: T;
-  message?: string;
-};
-
-const apiUrl =
-  process.env[
-    'NEXT_PUBLIC_API_URL'
-  ] ??
-  'http://localhost:4000/api/v1';
-
-function readStoredObject(
-  key: string,
-): Record<string, unknown> | null {
-  const value =
-    window.localStorage.getItem(key);
-
-  if (!value) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(
-      value,
-    ) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-}
-
-function getAccessToken():
-  string | null {
-  const directKeys = [
-    'payflow_user_access_token',
-    'payflow_user_refresh_token',
-    'accessToken',
-    'access_token',
-    'payflow_access_token',
-    'payflowAccessToken',
-  ];
-
-  for (const key of directKeys) {
-    const token =
-      window.localStorage.getItem(key);
-
-    if (token?.trim()) {
-      return token.trim();
-    }
-  }
-
-  const objectKeys = [
-    'payflow_session',
-    'auth_session',
-    'session',
-    'payflow_auth',
-    'auth',
-  ];
-
-  for (const key of objectKeys) {
-    const stored =
-      readStoredObject(key);
-
-    const token =
-      stored?.['accessToken'] ??
-      stored?.['access_token'];
-
-    if (
-      typeof token === 'string' &&
-      token.trim()
-    ) {
-      return token.trim();
-    }
-
-    const nestedData =
-      stored?.['data'];
-
-    if (
-      nestedData &&
-      typeof nestedData === 'object'
-    ) {
-      const nestedToken =
-        (
-          nestedData as
-            Record<string, unknown>
-        )['accessToken'];
-
-      if (
-        typeof nestedToken ===
-          'string' &&
-        nestedToken.trim()
-      ) {
-        return nestedToken.trim();
-      }
-    }
-  }
-
-  return null;
-}
-
-function getRefreshToken():
-  string | null {
-  const keys = [
-    'payflow_user_refresh_token',
-    'refreshToken',
-    'refresh_token',
-    'payflow_refresh_token',
-    'payflowRefreshToken',
-  ];
-
-  for (const key of keys) {
-    const token =
-      window.localStorage.getItem(
-        key,
-      );
-
-    if (token?.trim()) {
-      return token.trim();
-    }
-  }
-
-  return null;
-}
 
 function formatDate(
   value: string,
@@ -286,113 +168,23 @@ export default function SessionsPage() {
   const loadSessions =
     useCallback(
       async (): Promise<void> => {
-        const accessToken =
-          getAccessToken();
-
-        if (!accessToken) {
-          router.replace('/login');
-          return;
-        }
-
         try {
           setIsLoading(true);
           setError('');
 
-          const response =
-            await fetch(
-              `${apiUrl}/auth/sessions`,
-              {
-                headers: {
-                  Authorization:
-                    `Bearer ${accessToken}`,
-                },
-              },
-            );
-
-          const body =
-            await response.json() as
-              | SessionsPayload
-              | ApiEnvelope<
-                  SessionsPayload
-                >;
-
-          if (!response.ok) {
-            throw new Error(
-              'message' in body &&
-              typeof body.message ===
-                'string'
-                ? body.message
-                : 'Unable to load sessions',
-            );
-          }
-
-          const payload =
-            'data' in body &&
-            body.data
-              ? body.data
-              : body as
-                  SessionsPayload;
+          const payload = await userAuthenticatedRequest<SessionsPayload>('/auth/sessions');
 
           setSessions(
             payload.sessions ?? [],
           );
 
-          const refreshToken =
-            getRefreshToken();
-
-          if (refreshToken) {
-            try {
-              const currentResponse =
-                await fetch(
-                  `${apiUrl}/auth/sessions/current`,
-                  {
-                    method:
-                      'POST',
-
-                    headers: {
-                      'Content-Type':
-                        'application/json',
-
-                      Authorization:
-                        `Bearer ${accessToken}`,
-                    },
-
-                    body:
-                      JSON.stringify({
-                        refreshToken,
-                      }),
-                  },
-                );
-
-              const currentBody =
-                await currentResponse.json() as
-                  | {
-                      sessionId?: string;
-                    }
-                  | ApiEnvelope<{
-                      sessionId: string;
-                    }>;
-
-              if (currentResponse.ok) {
-                const currentPayload =
-                  'data' in currentBody &&
-                  currentBody.data
-                    ? currentBody.data
-                    : currentBody as {
-                        sessionId?: string;
-                      };
-
-                setCurrentSessionId(
-                  currentPayload
-                    .sessionId ??
-                  null,
-                );
-              }
-            } catch {
-              setCurrentSessionId(
-                null,
-              );
-            }
+          try {
+            const currentPayload = await customerSessionRequest<{ sessionId?: string }>(
+              '/sessions/current', { method: 'POST' },
+            );
+            setCurrentSessionId(currentPayload.sessionId ?? null);
+          } catch {
+            setCurrentSessionId(null);
           }
         } catch (requestError) {
           setError(
@@ -418,14 +210,6 @@ export default function SessionsPage() {
   async function revokeSession(
     sessionId: string,
   ): Promise<void> {
-    const accessToken =
-      getAccessToken();
-
-    if (!accessToken) {
-      router.replace('/login');
-      return;
-    }
-
     try {
       setProcessingId(
         sessionId,
@@ -433,31 +217,7 @@ export default function SessionsPage() {
 
       setError('');
 
-      const response =
-        await fetch(
-          `${apiUrl}/auth/sessions/${sessionId}`,
-          {
-            method:
-              'DELETE',
-
-            headers: {
-              Authorization:
-                `Bearer ${accessToken}`,
-            },
-          },
-        );
-
-      const body =
-        await response.json() as {
-          message?: string;
-        };
-
-      if (!response.ok) {
-        throw new Error(
-          body.message ??
-          'Unable to logout session',
-        );
-      }
+      await userAuthenticatedRequest(`/auth/sessions/${sessionId}`, { method: 'DELETE' });
 
       setSessions(
         (current) =>
@@ -472,17 +232,8 @@ export default function SessionsPage() {
         sessionId ===
         currentSessionId
       ) {
-        window.localStorage.removeItem(
-          'payflow_user_access_token',
-        );
-
-        window.localStorage.removeItem(
-          'payflow_user_refresh_token',
-        );
-
-        window.localStorage.removeItem(
-          'payflow_user_profile',
-        );
+        clearUserSession();
+        await fetch('/api/customer-session/logout', { method: 'POST', credentials: 'same-origin' });
 
         router.replace('/login');
         router.refresh();
@@ -500,20 +251,6 @@ export default function SessionsPage() {
 
   async function logoutOtherSessions():
     Promise<void> {
-    const accessToken =
-      getAccessToken();
-
-    const refreshToken =
-      getRefreshToken();
-
-    if (
-      !accessToken ||
-      !refreshToken
-    ) {
-      router.replace('/login');
-      return;
-    }
-
     const confirmed =
       window.confirm(
         'Logout from all other devices while keeping this device signed in?',
@@ -527,58 +264,9 @@ export default function SessionsPage() {
       setIsLoggingOutOthers(true);
       setError('');
 
-      const response =
-        await fetch(
-          `${apiUrl}/auth/sessions/logout-others`,
-          {
-            method:
-              'POST',
-
-            headers: {
-              'Content-Type':
-                'application/json',
-
-              Authorization:
-                `Bearer ${accessToken}`,
-            },
-
-            body:
-              JSON.stringify({
-                refreshToken,
-              }),
-          },
-        );
-
-      const body =
-        await response.json() as
-          | {
-              message?: string;
-              currentSessionId?: string;
-              revokedCount?: number;
-            }
-          | ApiEnvelope<{
-              message?: string;
-              currentSessionId?: string;
-              revokedCount?: number;
-            }>;
-
-      if (!response.ok) {
-        throw new Error(
-          'message' in body &&
-          typeof body.message ===
-            'string'
-            ? body.message
-            : 'Unable to logout other devices',
-        );
-      }
-
-      const payload =
-        'data' in body &&
-        body.data
-          ? body.data
-          : body as {
-              currentSessionId?: string;
-            };
+      const payload = await customerSessionRequest<{
+        currentSessionId?: string; revokedCount?: number;
+      }>('/sessions/logout-others', { method: 'POST' });
 
       const activeSessionId =
         payload.currentSessionId ??
@@ -614,14 +302,6 @@ export default function SessionsPage() {
 
   async function logoutAllSessions():
     Promise<void> {
-    const accessToken =
-      getAccessToken();
-
-    if (!accessToken) {
-      router.replace('/login');
-      return;
-    }
-
     const confirmed =
       window.confirm(
         'Logout from all active devices?',
@@ -635,33 +315,8 @@ export default function SessionsPage() {
       setIsLoggingOutAll(true);
       setError('');
 
-      const response =
-        await fetch(
-          `${apiUrl}/auth/sessions`,
-          {
-            method:
-              'DELETE',
-
-            headers: {
-              Authorization:
-                `Bearer ${accessToken}`,
-            },
-          },
-        );
-
-      const body =
-        await response.json() as {
-          message?: string;
-        };
-
-      if (!response.ok) {
-        throw new Error(
-          body.message ??
-          'Unable to logout all sessions',
-        );
-      }
-
-      window.localStorage.clear();
+      await customerSessionRequest('/sessions/logout-all', { method: 'DELETE' });
+      clearUserSession();
 
       router.replace('/login');
       router.refresh();
@@ -677,50 +332,12 @@ export default function SessionsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-5">
-          <div>
-            <h1 className="text-2xl font-bold text-sky-600">
-              Payflow
-            </h1>
-
-            <p className="text-sm text-slate-500">
-              Active devices and sessions
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() =>
-              router.push('/dashboard')
-            }
-            className="rounded-xl border border-slate-300 bg-white px-4 py-2 font-semibold text-slate-700 transition hover:bg-slate-100"
-          >
-            Dashboard
-          </button>
-        </div>
-      </header>
-
-      <div className="mx-auto max-w-5xl px-6 py-10">
-        <section>
-          <p className="text-sm font-semibold uppercase tracking-wider text-sky-600">
-            Security
-          </p>
-
-          <h2 className="mt-2 text-3xl font-bold text-slate-900">
-            Active sessions
-          </h2>
-
-          <p className="mt-2 max-w-2xl text-slate-600">
-            Review devices currently signed into your Payflow account and remove access you do not recognise.
-          </p>
-        </section>
+    <main>
+      <PageContainer className="max-w-5xl">
+        <PageHeader eyebrow="Security" title="Active sessions" description="Review devices currently signed into your Payflow account and remove access you do not recognise." />
 
         {error ? (
-          <div className="mt-6 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-red-700">
-            {error}
-          </div>
+          <div className="mt-6"><ErrorState message={error} /></div>
         ) : null}
 
         <section className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -748,6 +365,15 @@ export default function SessionsPage() {
                 className="rounded-xl border border-slate-300 bg-white px-4 py-2 font-semibold text-slate-700 disabled:opacity-50"
               >
                 Refresh
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void logoutOtherSessions()}
+                disabled={isLoggingOutOthers || sessions.length < 2}
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2 font-semibold text-slate-700 disabled:opacity-50"
+              >
+                {isLoggingOutOthers ? 'Logging out...' : 'Logout other devices'}
               </button>
 
               <button
@@ -875,7 +501,7 @@ export default function SessionsPage() {
             Logout that device immediately and change your Payflow password.
           </p>
         </section>
-      </div>
+      </PageContainer>
     </main>
   );
 }

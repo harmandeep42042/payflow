@@ -7,6 +7,7 @@
 type Transaction = {
   direction: 'CREDIT' | 'DEBIT';
   amount: string;
+  currency: string;
 };
 
 type SummaryCardsProps = {
@@ -14,89 +15,56 @@ type SummaryCardsProps = {
   transactions: Transaction[];
 };
 
-function formatMoney(
-  amount: number,
-): string {
-  return new Intl.NumberFormat(
-    'en-IN',
-    {
-      style: 'currency',
-      currency: 'INR',
-      maximumFractionDigits: 2,
-    },
-  ).format(amount);
-}
+import { formatMoney, groupCurrencyAmounts } from '../../lib/money';
 
 export default function SummaryCards({
   wallets,
   transactions,
 }: SummaryCardsProps) {
-  const totalBalance =
-    wallets.reduce(
-      (sum, wallet) =>
-        sum +
-        Number(wallet.balance),
-      0,
-    );
+  const totalBalance = groupCurrencyAmounts(wallets.map((wallet) => ({ amount: wallet.balance, currency: wallet.currency })));
 
   const totalCredits =
-    transactions
+    groupCurrencyAmounts(transactions
       .filter(
         (item) =>
           item.direction ===
           'CREDIT',
       )
-      .reduce(
-        (sum, item) =>
-          sum +
-          Number(item.amount),
-        0,
-      );
+      .map(({ amount, currency }) => ({ amount, currency })));
 
   const totalDebits =
-    transactions
+    groupCurrencyAmounts(transactions
       .filter(
         (item) =>
           item.direction ===
           'DEBIT',
       )
-      .reduce(
-        (sum, item) =>
-          sum +
-          Number(item.amount),
-        0,
-      );
+      .map(({ amount, currency }) => ({ amount, currency })));
+
+  const renderTotals = (totals: { amount: string; currency: string }[]) =>
+    totals.length ? totals.map((item) => formatMoney(item.amount, item.currency)).join(' · ') : '—';
 
   const cards = [
     {
       title:
         'Wallet Balance',
       value:
-        formatMoney(
-          totalBalance,
-        ),
-      color:
-        'bg-sky-500',
+        renderTotals(totalBalance),
+      accent: 'text-blue-700',
     },
     {
       title:
         'Money In',
       value:
-        formatMoney(
-          totalCredits,
-        ),
-      color:
-        'bg-emerald-500',
+        renderTotals(totalCredits),
+      accent: 'text-emerald-700',
     },
     {
       title:
         'Money Out',
       value:
-        formatMoney(
-          totalDebits,
-        ),
-      color:
-        'bg-rose-500',
+        renderTotals(totalDebits),
+      accent: 'text-rose-700',
     },
     {
       title:
@@ -104,8 +72,7 @@ export default function SummaryCards({
       value:
         transactions.length
           .toString(),
-      color:
-        'bg-violet-500',
+      accent: 'text-slate-950',
     },
   ];
 
@@ -115,13 +82,13 @@ export default function SummaryCards({
         (card) => (
           <div
             key={card.title}
-            className={`${card.color} rounded-2xl p-5 text-white shadow-lg`}
+            className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
           >
-            <p className="text-sm opacity-80">
+            <p className="text-sm font-medium text-slate-500">
               {card.title}
             </p>
 
-            <h2 className="mt-3 text-3xl font-bold">
+            <h2 className={`mt-3 break-words text-xl font-bold tracking-tight sm:text-2xl ${card.accent}`}>
               {card.value}
             </h2>
           </div>

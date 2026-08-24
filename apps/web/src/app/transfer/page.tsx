@@ -4,6 +4,7 @@ import {
   FormEvent,
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from 'react';
 
@@ -18,6 +19,8 @@ import {
   hasValidUserSession,
   userAuthenticatedRequest,
 } from '../lib/api';
+import { compareDecimalStrings, formatMoney as formatExactMoney, normalizeDecimal } from '../lib/money';
+import { acquireMutationLock, releaseMutationLock } from '../lib/mutation-lock';
 
 type UserWallet = {
   id: string;
@@ -48,18 +51,12 @@ function formatMoney(
   amount: string | number,
   currency = 'INR',
 ): string {
-  return new Intl.NumberFormat(
-    'en-IN',
-    {
-      style: 'currency',
-      currency,
-      maximumFractionDigits: 2,
-    },
-  ).format(Number(amount) || 0);
+  return formatExactMoney(String(amount), currency);
 }
 
 export default function TransferPage() {
   const router = useRouter();
+  const submissionLock = useRef(false);
 
   const [wallet, setWallet] =
     useState<UserWallet | null>(null);
@@ -67,19 +64,14 @@ export default function TransferPage() {
   const [
     destinationWalletId,
     setDestinationWalletId,
-  ] = useState(
-    'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
-  );
+  ] = useState('');
 
-  const [amount, setAmount] =
-    useState('10.00');
+  const [amount, setAmount] = useState('');
 
   const [
     description,
     setDescription,
-  ] = useState(
-    'Payment from User Portal',
-  );
+  ] = useState('');
 
   const [isLoading, setIsLoading] =
     useState(true);
@@ -237,12 +229,10 @@ export default function TransferPage() {
       return;
     }
 
-    const numericAmount =
-      Number(amount);
+    const normalizedAmount = normalizeDecimal(amount);
 
     if (
-      !Number.isFinite(numericAmount) ||
-      numericAmount <= 0
+      !normalizedAmount || compareDecimalStrings(normalizedAmount, '0.00') <= 0
     ) {
       setError(
         'Please enter a valid amount',
@@ -250,6 +240,7 @@ export default function TransferPage() {
       return;
     }
 
+    if (!acquireMutationLock(submissionLock)) return;
     try {
       setIsSubmitting(true);
       setError('');
@@ -268,8 +259,7 @@ export default function TransferPage() {
               destinationWalletId:
                 destinationWalletId.trim(),
 
-              amount:
-                numericAmount.toFixed(2),
+              amount: normalizedAmount,
 
               currency:
                 wallet.currency,
@@ -305,6 +295,7 @@ export default function TransferPage() {
           : 'Transfer failed',
       );
     } finally {
+      releaseMutationLock(submissionLock);
       setIsSubmitting(false);
     }
   }

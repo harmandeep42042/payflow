@@ -8,8 +8,7 @@ import {
 import Link from 'next/link';
 
 import {
-  API_GATEWAY_URL,
-  getUserAccessToken,
+  userAuthenticatedRequest,
 } from '../lib/api';
 
 type NotificationPreferences = {
@@ -38,9 +37,6 @@ type PreferenceItem = {
   title: string;
   description: string;
 };
-
-const notificationApiUrl =
-  API_GATEWAY_URL;
 
 const channelItems:
   PreferenceItem[] = [
@@ -232,41 +228,10 @@ export default function NotificationSettingsPage() {
     async function loadPreferences():
       Promise<void> {
       try {
-        const accessToken =
-          getUserAccessToken();
-
-        if (!accessToken) {
-          throw new Error(
-            'Authentication is required.',
-          );
-        }
-
-        const response =
-          await fetch(
-            notificationApiUrl +
-              '/notification-preferences',
-            {
-              method: 'GET',
-              cache:
-                'no-store',
-
-              headers: {
-                Authorization:
-                  `Bearer ${accessToken}`,
-              },
-            },
-          );
-
-        if (!response.ok) {
-          throw new Error(
-            'Unable to load notification settings.',
-          );
-        }
-
-        const body =
-          await response
-            .json() as
-              NotificationPreferences;
+        const body = await userAuthenticatedRequest<NotificationPreferences>(
+          '/notification-preferences',
+          { method: 'GET', cache: 'no-store' },
+        );
 
         if (!cancelled) {
           setPreferences(
@@ -327,47 +292,10 @@ export default function NotificationSettingsPage() {
     });
 
     try {
-      const accessToken =
-        getUserAccessToken();
-
-      if (!accessToken) {
-        throw new Error(
-          'Authentication is required.',
-        );
-      }
-
-      const response =
-        await fetch(
-          notificationApiUrl +
-            '/notification-preferences',
-          {
-            method: 'PATCH',
-
-            headers: {
-              'Content-Type':
-                'application/json',
-
-              Authorization:
-                `Bearer ${accessToken}`,
-            },
-
-            body:
-              JSON.stringify({
-                [key]: value,
-              }),
-          },
-        );
-
-      if (!response.ok) {
-        throw new Error(
-          'Unable to save notification setting.',
-        );
-      }
-
-      const updated =
-        await response
-          .json() as
-            NotificationPreferences;
+      const updated = await userAuthenticatedRequest<NotificationPreferences>(
+        '/notification-preferences',
+        { method: 'PATCH', body: JSON.stringify({ [key]: value }) },
+      );
 
       setPreferences(
         updated,

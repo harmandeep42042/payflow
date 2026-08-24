@@ -1,3 +1,5 @@
+import { formatMoney } from '../../lib/money';
+
 type Wallet = {
   id: string;
   userId: string;
@@ -54,13 +56,7 @@ export default function WalletCards({
               </p>
 
               <p className="mt-2 text-3xl font-bold">
-                {wallet.currency}{' '}
-                {Number(wallet.balance).toLocaleString(
-                  'en-IN',
-                  {
-                    minimumFractionDigits: 2,
-                  },
-                )}
+                {formatMoney(wallet.balance, wallet.currency)}
               </p>
             </div>
 

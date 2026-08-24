@@ -1,5 +1,7 @@
 'use client';
 
+import { formatMoney } from '../../lib/money';
+
 export type WalletTransaction = {
   id: string;
   type: 'DEPOSIT' | 'WITHDRAWAL' | 'TRANSFER';
@@ -142,15 +144,7 @@ export default function TransactionTable({
                         }`}
                       >
                         {isCredit ? '+' : '-'}
-                        {transaction.currency}{' '}
-                        {Number(
-                          transaction.amount,
-                        ).toLocaleString(
-                          'en-IN',
-                          {
-                            minimumFractionDigits: 2,
-                          },
-                        )}
+                        {formatMoney(transaction.amount, transaction.currency)}
                       </span>
                     </td>
 

@@ -4,6 +4,7 @@ import {
   FormEvent,
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from 'react';
 
@@ -18,6 +19,8 @@ import {
   hasValidUserSession,
   userAuthenticatedRequest,
 } from '../lib/api';
+import { compareDecimalStrings, formatMoney as formatExactMoney, normalizeDecimal, toMinorUnitNumber } from '../lib/money';
+import { acquireMutationLock, releaseMutationLock } from '../lib/mutation-lock';
 
 type UserWallet = {
   id: string;
@@ -75,21 +78,13 @@ function formatMoney(
   amount: string | number,
   currency = 'INR',
 ): string {
-  return new Intl.NumberFormat(
-    'en-IN',
-    {
-      style: 'currency',
-      currency,
-      maximumFractionDigits: 2,
-    },
-  ).format(
-    Number(amount) || 0,
-  );
+  return formatExactMoney(String(amount), currency);
 }
 
 export default function DepositPage() {
   const router =
     useRouter();
+  const submissionLock = useRef(false);
 
   const [
     wallet,
@@ -103,7 +98,7 @@ export default function DepositPage() {
     amount,
     setAmount,
   ] =
-    useState('100.00');
+    useState('');
 
   const [
     reference,
@@ -284,17 +279,8 @@ export default function DepositPage() {
       return;
     }
 
-    const numericAmount =
-      Number(
-        amount,
-      );
-
-    if (
-      !Number.isFinite(
-        numericAmount,
-      ) ||
-      numericAmount < 1
-    ) {
+    const normalizedAmount = normalizeDecimal(amount);
+    if (!normalizedAmount || compareDecimalStrings(normalizedAmount, '1.00') < 0) {
       setError(
         'Please enter an amount of at least ₹1',
       );
@@ -302,12 +288,9 @@ export default function DepositPage() {
       return;
     }
 
-    const amountInPaise =
-      Math.round(
-        numericAmount *
-          100,
-      );
+    const amountInPaise = toMinorUnitNumber(normalizedAmount);
 
+    if (!acquireMutationLock(submissionLock)) return;
     try {
       setIsSubmitting(
         true,
@@ -435,6 +418,7 @@ export default function DepositPage() {
       );
     }
     finally {
+      releaseMutationLock(submissionLock);
       setIsSubmitting(
         false,
       );

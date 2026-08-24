@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
@@ -22,6 +23,9 @@ import {
   hasValidUserSession,
   userAuthenticatedRequest,
 } from '../lib/api';
+import { formatMoney as formatExactMoney } from '../lib/money';
+import { beginLatestRequest, isLatestRequest } from '../lib/request-sequencing';
+import { EmptyState, ErrorState, LoadingState, PageContainer, StatusBadge } from '../components/customer';
 
 type UserWallet = {
   id: string;
@@ -79,14 +83,7 @@ function formatMoney(
   amount: string | number,
   currency = 'INR',
 ): string {
-  return new Intl.NumberFormat(
-    'en-IN',
-    {
-      style: 'currency',
-      currency,
-      maximumFractionDigits: 2,
-    },
-  ).format(Number(amount) || 0);
+  return formatExactMoney(String(amount), currency);
 }
 
 function getTransactionSign(
@@ -147,9 +144,18 @@ export default function TransactionsPage() {
   const [error, setError] =
     useState('');
 
+  const requestRef = useRef<{
+    id: number;
+    controller: AbortController;
+  } | null>(null);
+  const hasLoadedRef = useRef(false);
+  const detailCloseRef = useRef<HTMLButtonElement>(null);
+
   const loadTransactions =
     useCallback(
       async (): Promise<void> => {
+        const request = beginLatestRequest(requestRef);
+
         const user =
           getStoredUser();
 
@@ -162,7 +168,7 @@ export default function TransactionsPage() {
         }
 
         try {
-          setIsLoading(true);
+          if (!hasLoadedRef.current) setIsLoading(true);
           setError('');
 
           const walletResponse =
@@ -175,7 +181,10 @@ export default function TransactionsPage() {
                 }
             >(
               `/wallets/user/${user.id}`,
+              { signal: request.controller.signal },
             );
+
+          if (!isLatestRequest(requestRef, request)) return;
 
           let resolvedWallet:
             | UserWallet
@@ -219,15 +228,16 @@ export default function TransactionsPage() {
             );
           }
 
-          setWallet(resolvedWallet);
-
           const historyResponse =
             await userAuthenticatedRequest<
               | WalletTransaction[]
               | TransactionHistoryResponse
             >(
               `/wallets/${resolvedWallet.id}/transactions?page=1&limit=100&type=ALL`,
+              { signal: request.controller.signal },
             );
+
+          if (!isLatestRequest(requestRef, request)) return;
 
           let resolvedTransactions:
             WalletTransaction[] = [];
@@ -254,17 +264,18 @@ export default function TransactionsPage() {
               historyResponse.data;
           }
 
-          setTransactions(
-            resolvedTransactions,
-          );
+          setWallet(resolvedWallet);
+          setTransactions(resolvedTransactions);
+          hasLoadedRef.current = true;
         } catch (requestError) {
+          if (!isLatestRequest(requestRef, request)) return;
           setError(
             requestError instanceof Error
               ? requestError.message
               : 'Unable to load transactions',
           );
         } finally {
-          setIsLoading(false);
+          if (requestRef.current?.id === request.id) setIsLoading(false);
         }
       },
       [router],
@@ -272,6 +283,7 @@ export default function TransactionsPage() {
 
   useEffect(() => {
     void loadTransactions();
+    return () => requestRef.current?.controller.abort();
   }, [loadTransactions]);
   useEffect(() => {
     if (
@@ -424,6 +436,21 @@ useEffect(() => {
   currentPage,
   totalPages,
 ]);
+
+useEffect(() => {
+  if (!selectedTransaction) return;
+  const previousOverflow = document.body.style.overflow;
+  document.body.style.overflow = 'hidden';
+  detailCloseRef.current?.focus();
+  const handleEscape = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') setSelectedTransaction(null);
+  };
+  document.addEventListener('keydown', handleEscape);
+  return () => {
+    document.removeEventListener('keydown', handleEscape);
+    document.body.style.overflow = previousOverflow;
+  };
+}, [selectedTransaction]);
 
 const downloadReceipt = (
     transaction: WalletTransaction,
@@ -657,8 +684,8 @@ const downloadReceipt = (
     );
   };
   return (
-    <main className="min-h-screen bg-slate-100 px-6 py-10">
-      <section className="mx-auto max-w-6xl">
+    <main>
+      <PageContainer>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-slate-900">
@@ -727,9 +754,7 @@ const downloadReceipt = (
         </div>
 
         {error ? (
-          <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-red-700">
-            {error}
-          </div>
+          <div className="mt-6"><ErrorState message={error} onRetry={() => void loadTransactions()} /></div>
         ) : null}
 
         <section className="mt-7 rounded-3xl bg-white p-6 shadow-sm">
@@ -739,7 +764,7 @@ const downloadReceipt = (
             </p>
 
             <h2 className="mt-1 text-2xl font-bold text-slate-900">
-              Money In vs Money Out
+              Credit vs debit activity
             </h2>
 
             <p className="mt-2 text-sm text-slate-500">
@@ -840,14 +865,10 @@ const downloadReceipt = (
           </div>
 
           {isLoading ? (
-            <div className="p-12 text-center font-semibold text-slate-500">
-              Loading transactions...
-            </div>
+            <div className="px-6"><LoadingState label="Loading transactions" /></div>
           ) : filteredTransactions.length ===
             0 ? (
-            <div className="p-12 text-center text-slate-500">
-              No transactions found.
-            </div>
+            <div className="p-6"><EmptyState title="No transactions found" description="Try changing your filters or refresh to check for new activity." /></div>
           ) : (
             <>
 <div className="overflow-x-auto">
@@ -1039,7 +1060,7 @@ const downloadReceipt = (
           </>
           )}
         </section>
-      </section>
+      </PageContainer>
     
       {selectedTransaction && (
         <div
@@ -1047,6 +1068,9 @@ const downloadReceipt = (
           onClick={() => setSelectedTransaction(null)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="transaction-details-title"
             className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
@@ -1056,13 +1080,14 @@ const downloadReceipt = (
                   Transaction Details
                 </p>
 
-                <h2 className="mt-1 text-2xl font-bold text-slate-900">
+                <h2 id="transaction-details-title" className="mt-1 text-2xl font-bold text-slate-900">
                   {selectedTransaction.type}
                 </h2>
               </div>
 
               <div className="flex gap-2">
                 <button
+                  ref={detailCloseRef}
                   type="button"
                   onClick={() =>
                     downloadReceipt(
@@ -1101,7 +1126,7 @@ const downloadReceipt = (
                   Status
                 </p>
                 <p className="mt-1 font-semibold text-slate-800">
-                  {selectedTransaction.status}
+                  <StatusBadge status={selectedTransaction.status} />
                 </p>
               </div>
 
