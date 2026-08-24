@@ -51,9 +51,16 @@ out
 
 # Local environment / secrets
 .env
+.env.*
+!.env.example
+!.env.production.example
 .env.local
 .env.*.local
+.env*.backup*
 apps/*/.env.local
+
+# Generated TypeScript build state
+*.tsbuildinfo
 
 # Development backup files
 *.backup

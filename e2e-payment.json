@@ -1,8 +1,0 @@
-﻿{
-  "userId": "cd171486-9ea7-4b2b-a89d-ba905e106d39",
-  "walletId": "e04dd809-c9af-4f7e-930e-60773a92e115",
-  "amountInPaise": 100,
-  "currency": "INR",
-  "description": "Customer E2E payment test",
-  "idempotencyKey": "e2e-payment-20260821-001"
-}
