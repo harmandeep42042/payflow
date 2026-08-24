@@ -10,6 +10,7 @@ import {
 import {
   WalletsService,
 } from './wallets.service';
+import { RecipientLookupService } from '../recipient-lookup/recipient-lookup.service';
 
 describe('WalletsService', () => {
   let service: WalletsService;
@@ -22,6 +23,10 @@ describe('WalletsService', () => {
           {
             provide: PrismaService,
             useValue: {},
+          },
+          {
+            provide: RecipientLookupService,
+            useValue: { resolveRecipient: jest.fn() },
           },
         ],
       }).compile();
