@@ -2,7 +2,6 @@
 
 import {
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -20,12 +19,8 @@ import {
 } from '../../hooks/use-notifications';
 
 import {
-  API_GATEWAY_URL,
-  getUserAccessToken,
+  userAuthenticatedRequest,
 } from '../../lib/api';
-
-const notificationApiUrl =
-  API_GATEWAY_URL;
 
 function formatRelativeTime(
   dateValue: string,
@@ -171,6 +166,7 @@ export default function NotificationBell() {
     notificationFilter,
     setNotificationFilter,
   ] = useState<'ALL' | 'UNREAD'>('ALL');
+  const [actionError, setActionError] = useState('');
 
   const filteredNotifications =
     notificationFilter === 'UNREAD'
@@ -245,24 +241,9 @@ export default function NotificationBell() {
     );
 
     try {
-      const accessToken =
-        getUserAccessToken();
-
-      if (!accessToken) {
-        return;
-      }
-
-      await fetch(
-        `${notificationApiUrl}/notifications/${notification.id}/read`,
-        {
-          method:
-            'PATCH',
-
-          headers: {
-            Authorization:
-              `Bearer ${accessToken}`,
-          },
-        },
+      await userAuthenticatedRequest(
+        `/notifications/${notification.id}/read`,
+        { method: 'PATCH' },
       );
     } catch {
       /*
@@ -331,39 +312,15 @@ export default function NotificationBell() {
     }
 
     try {
-      const accessToken =
-        getUserAccessToken();
-
-      if (!accessToken) {
-        return;
-      }
-
-      const response =
-        await fetch(
-          notificationApiUrl +
-            '/notifications',
-          {
-            method: 'DELETE',
-
-            headers: {
-              Authorization:
-                `Bearer ${accessToken}`,
-            },
-          },
-        );
-
-      if (!response.ok) {
-        throw new Error(
-          'Unable to clear notification history',
-        );
-      }
+      setActionError('');
+      await userAuthenticatedRequest(
+        '/notifications',
+        { method: 'DELETE' },
+      );
 
       clearNotifications();
-    } catch (error) {
-      console.error(
-        'Clear notification history failed',
-        error,
-      );
+    } catch {
+      setActionError('Unable to clear notification history. Please try again.');
     }
   }
 
@@ -384,42 +341,17 @@ export default function NotificationBell() {
     }
 
     try {
-      const accessToken =
-        getUserAccessToken();
-
-      if (!accessToken) {
-        return;
-      }
-
-      const response =
-        await fetch(
-          notificationApiUrl +
-            '/notifications/' +
-            encodeURIComponent(notificationId),
-          {
-            method: 'DELETE',
-
-            headers: {
-              Authorization:
-                `Bearer ${accessToken}`,
-            },
-          },
-        );
-
-      if (!response.ok) {
-        throw new Error(
-          'Unable to delete notification',
-        );
-      }
+      setActionError('');
+      await userAuthenticatedRequest(
+        '/notifications/' + encodeURIComponent(notificationId),
+        { method: 'DELETE' },
+      );
 
       removeNotification(
         notificationId,
       );
-    } catch (error) {
-      console.error(
-        'Delete notification failed',
-        error,
-      );
+    } catch {
+      setActionError('Unable to delete that notification. Please try again.');
     }
   }
 
@@ -448,37 +380,13 @@ export default function NotificationBell() {
     );
 
     try {
-      const accessToken =
-        getUserAccessToken();
-
-      if (!accessToken) {
-        return;
-      }
-
-      const response =
-        await fetch(
-          notificationApiUrl +
-            '/notifications/read-all',
-          {
-            method: 'PATCH',
-
-            headers: {
-              Authorization:
-                `Bearer ${accessToken}`,
-            },
-          },
-        );
-
-      if (!response.ok) {
-        console.error(
-          'Failed to mark all notifications as read',
-        );
-      }
-    } catch (error) {
-      console.error(
-        'Failed to mark all notifications as read',
-        error,
+      setActionError('');
+      await userAuthenticatedRequest(
+        '/notifications/read-all',
+        { method: 'PATCH' },
       );
+    } catch {
+      setActionError('Unable to mark notifications as read. Please try again.');
     }
   }
 
@@ -491,6 +399,7 @@ export default function NotificationBell() {
         type="button"
         aria-label="Open notifications"
         aria-expanded={isOpen}
+        aria-controls="customer-notifications-panel"
         onClick={() =>
           setIsOpen(
             (current) =>
@@ -537,8 +446,8 @@ export default function NotificationBell() {
       </button>
 
       {isOpen ? (
-        <div className="absolute right-0 z-50 mt-3 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-          <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+        <div id="customer-notifications-panel" role="dialog" aria-label="Notifications" className="absolute right-0 z-50 mt-3 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-5">
             <div>
               <h2 className="font-bold text-slate-900">
                 Notifications
@@ -551,13 +460,14 @@ export default function NotificationBell() {
               </p>
             </div>
 
+            <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
             {notifications.length > 0 ? (
               <button
                 type="button"
                 onClick={() =>
                   void clearNotificationHistory()
                 }
-                className="mr-3 text-sm font-semibold text-red-600 transition hover:text-red-700"
+                className="text-sm font-semibold text-red-600 transition hover:text-red-700"
               >
                 Clear history
               </button>
@@ -574,6 +484,7 @@ export default function NotificationBell() {
                 Mark all read
               </button>
             ) : null}
+            </div>
           </div>
 
           <div className="flex gap-2 border-b border-slate-200 px-5 py-3">
@@ -606,11 +517,17 @@ export default function NotificationBell() {
             </button>
           </div>
 
+          {actionError ? (
+            <p role="alert" className="border-b border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+              {actionError}
+            </p>
+          ) : null}
+
           <div className="max-h-96 overflow-y-auto">
             {filteredNotifications.length === 0 ? (
               <div className="px-6 py-12 text-center">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-2xl">
-                  Ã°Å¸â€â€
+                <div aria-hidden="true" className="mx-auto flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-slate-100 text-[0px]">
+                  <span className="text-2xl">&#128276;</span>
                 </div>
 
                 <p className="mt-4 font-semibold text-slate-700">
@@ -624,21 +541,16 @@ export default function NotificationBell() {
             ) : (
               filteredNotifications.map(
                 (notification) => (
-                  <button
+                  <div
                     key={notification.id}
-                    type="button"
-                    onClick={() =>
-                      void handleNotificationClick(
-                        notification,
-                      )
-                    }
-                    className={`flex w-full gap-4 border-b border-slate-100 px-5 py-4 text-left transition last:border-b-0 hover:bg-slate-50 ${
+                    className={`flex w-full items-start gap-2 border-b border-slate-100 px-3 py-2 transition last:border-b-0 hover:bg-slate-50 sm:px-4 ${
                       notification.isRead
                         ? 'bg-white'
                         : 'bg-sky-50/70'
                     }`}
                   >
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-100 font-bold text-sky-700">
+                    <button type="button" onClick={() => void handleNotificationClick(notification)} className="flex min-w-0 flex-1 gap-3 rounded-xl px-2 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-600">
+                    <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-100 font-bold text-sky-700">
                       {getNotificationIcon(
                         notification.type,
                       )}
@@ -650,37 +562,8 @@ export default function NotificationBell() {
                           {notification.title}
                         </span>
 
-                        <span
-  role="button"
-  tabIndex={0}
-  title="Delete notification"
-  onClick={(event) => {
-    event.stopPropagation();
-
-    void deleteNotification(
-      notification.id,
-    );
-  }}
-  onKeyDown={(event) => {
-    if (
-      event.key === 'Enter' ||
-      event.key === ' '
-    ) {
-      event.preventDefault();
-      event.stopPropagation();
-
-      void deleteNotification(
-        notification.id,
-      );
-    }
-  }}
-  className="rounded-md px-2 py-1 text-xs font-bold text-slate-400 transition hover:bg-red-50 hover:text-red-600"
->
-  Ã—
-</span>
-
                         {!notification.isRead ? (
-                          <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-sky-500" />
+                          <span aria-label="Unread" className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-sky-500" />
                         ) : null}
                       </span>
 
@@ -694,7 +577,9 @@ export default function NotificationBell() {
                         )}
                       </span>
                     </span>
-                  </button>
+                    </button>
+                    <button type="button" aria-label={`Delete notification: ${notification.title}`} title="Delete notification" onClick={() => void deleteNotification(notification.id)} className="mt-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-lg font-bold text-slate-400 transition hover:bg-red-50 hover:text-red-600">&times;</button>
+                  </div>
                 ),
               )
             )}

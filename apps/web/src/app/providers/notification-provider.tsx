@@ -17,6 +17,7 @@ import {
 import {
   API_GATEWAY_URL,
   getUserAccessToken,
+  userAuthenticatedRequest,
 } from '../lib/api';
 
 export type RealtimeNotification = {
@@ -100,36 +101,6 @@ const notificationSocketUrl =
     '',
   ) + '/notifications';
 
-const notificationApiUrl =
-  API_GATEWAY_URL;
-
-function decodeJwtPayload(
-  token: string,
-): Record<string, unknown> | null {
-  try {
-    const payload =
-      token.split('.')[1];
-
-    if (!payload) {
-      return null;
-    }
-
-    const normalized =
-      payload
-        .replace(/-/g, '+')
-        .replace(/_/g, '/');
-
-    const decoded =
-      window.atob(normalized);
-
-    return JSON.parse(
-      decoded,
-    ) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-}
-
 function parseStoredObject(
   key: string,
 ): Record<string, unknown> | null {
@@ -204,38 +175,6 @@ function findUserId(): string | null {
       ) {
         return id.trim();
       }
-    }
-  }
-
-  const tokenKeys = [
-    'payflow_user_access_token',
-    'accessToken',
-    'access_token',
-    'payflow_access_token',
-    'payflowAccessToken',
-  ];
-
-  for (const key of tokenKeys) {
-    const token =
-      window.localStorage
-        .getItem(key);
-
-    if (!token) {
-      continue;
-    }
-
-    const payload =
-      decodeJwtPayload(token);
-
-    const id =
-      payload?.['sub'] ??
-      payload?.['userId'];
-
-    if (
-      typeof id === 'string' &&
-      id.trim()
-    ) {
-      return id.trim();
     }
   }
 
@@ -414,40 +353,16 @@ useEffect(() => {
   async function loadNotificationHistory():
     Promise<void> {
     try {
-      const accessToken =
-        getUserAccessToken();
-
-      if (!accessToken) {
-        return;
-      }
-
       const query =
         new URLSearchParams({
           page: '1',
           limit: '100',
         });
 
-      const response =
-        await fetch(
-          notificationApiUrl + '/notifications?' + query.toString(),
-          {
-            method: 'GET',
-            cache: 'no-store',
-
-            headers: {
-              Authorization:
-                `Bearer ${accessToken}`,
-            },
-          },
-        );
-
-      if (!response.ok) {
-        return;
-      }
-
-      const body =
-        await response.json() as
-          NotificationHistoryResponse;
+      const body = await userAuthenticatedRequest<NotificationHistoryResponse>(
+        '/notifications?' + query.toString(),
+        { method: 'GET', cache: 'no-store' },
+      );
 
       if (cancelled) {
         return;
@@ -572,6 +487,17 @@ const socket: Socket =
     );
 
     socket.on(
+      'connect_error',
+      (error: Error) => {
+        setIsConnected(false);
+
+        if (/unauthori[sz]ed|invalid|expired|forbidden/i.test(error.message)) {
+          socket.disconnect();
+        }
+      },
+    );
+
+    socket.on(
       'notification.created',
       (
         payload:
@@ -644,7 +570,3 @@ const socket: Socket =
     </NotificationContext.Provider>
   );
 }
-
-
-
-

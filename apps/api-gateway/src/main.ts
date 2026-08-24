@@ -15,6 +15,7 @@ import {
 } from '@nestjs/swagger';
 
 import { AppModule } from './app/app.module';
+import { attachNotificationSocketUpgrade } from './notification-socket-proxy';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
@@ -35,13 +36,6 @@ async function bootstrap(): Promise<void> {
     .getHttpAdapter()
     .getInstance()
     .use(notificationSocketProxy);
-
-  app
-    .getHttpServer()
-    .on(
-      'upgrade',
-      notificationSocketProxy.upgrade,
-    );
 
   app.use(helmet());
   app
@@ -125,6 +119,11 @@ async function bootstrap(): Promise<void> {
   );
 
   await app.listen(port);
+
+  attachNotificationSocketUpgrade(
+    app.getHttpServer(),
+    notificationSocketProxy,
+  );
 
   Logger.log(
     `🚀 API Gateway running at http://localhost:${port}/api/v1`,
