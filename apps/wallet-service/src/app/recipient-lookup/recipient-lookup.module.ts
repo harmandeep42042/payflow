@@ -26,5 +26,9 @@ import {
   providers: [
     RecipientLookupService,
   ],
+
+  exports: [
+    RecipientLookupService,
+  ],
 })
 export class RecipientLookupModule {}

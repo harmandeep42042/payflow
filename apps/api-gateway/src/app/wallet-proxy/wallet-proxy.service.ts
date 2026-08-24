@@ -1,6 +1,4 @@
-import {
-  HttpService,
-} from '@nestjs/axios';
+﻿import { HttpService } from '@nestjs/axios';
 
 import {
   HttpException,
@@ -8,17 +6,11 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 
-import {
-  payflowConfig,
-} from '@payflow/shared-config';
+import { payflowConfig } from '@payflow/shared-config';
 
-import {
-  AxiosError,
-} from 'axios';
+import { AxiosError } from 'axios';
 
-import {
-  firstValueFrom,
-} from 'rxjs';
+import { firstValueFrom } from 'rxjs';
 
 type TransactionHistoryQuery = {
   type?: string;
@@ -28,43 +20,20 @@ type TransactionHistoryQuery = {
 
 @Injectable()
 export class WalletProxyService {
-  private readonly walletServiceUrl =
-    payflowConfig.urls.walletService;
+  private readonly walletServiceUrl = payflowConfig.urls.walletService;
 
-  constructor(
-    private readonly httpService:
-      HttpService,
-  ) {}
+  constructor(private readonly httpService: HttpService) {}
 
-  createWallet(
-    body: unknown,
-  ) {
-    return this.post(
-      '/wallets',
-      body,
-    );
+  createWallet(body: unknown) {
+    return this.post('/wallets', body);
   }
 
-  getWallet(
-    walletId: string,
-    authorization?: string,
-  ) {
-    return this.get(
-      `/wallets/${walletId}`,
-      undefined,
-      authorization,
-    );
+  getWallet(walletId: string, authorization?: string) {
+    return this.get(`/wallets/${walletId}`, undefined, authorization);
   }
 
-  getUserWallets(
-    userId: string,
-    authorization?: string,
-  ) {
-    return this.get(
-      `/wallets/user/${userId}`,
-      undefined,
-      authorization,
-    );
+  getUserWallets(userId: string, authorization?: string) {
+    return this.get(`/wallets/user/${userId}`, undefined, authorization);
   }
 
   getTransactionHistory(
@@ -72,44 +41,28 @@ export class WalletProxyService {
     query: TransactionHistoryQuery,
     authorization?: string,
   ) {
-    return this.get(
-      `/wallets/${walletId}/transactions`,
-      query,
-      authorization,
-    );
+    return this.get(`/wallets/${walletId}/transactions`, query, authorization);
   }
 
-  deposit(
-    body: unknown,
-    authorization?: string,
-  ) {
-    return this.post(
-      '/wallets/deposit',
-      body,
-      authorization,
-    );
+  deposit(body: unknown, authorization?: string) {
+    return this.post('/wallets/deposit', body, authorization);
   }
 
-  withdraw(
-    body: unknown,
-    authorization?: string,
-  ) {
-    return this.post(
-      '/wallets/withdraw',
-      body,
-      authorization,
-    );
+  withdraw(body: unknown, authorization?: string) {
+    return this.post('/wallets/withdraw', body, authorization);
   }
 
-  transfer(
-    body: unknown,
-    authorization?: string,
-  ) {
-    return this.post(
-      '/wallets/transfer',
-      body,
-      authorization,
-    );
+  transfer(body: unknown, authorization?: string) {
+    return this.post('/wallets/transfer', body, authorization);
+  }
+  transferByVpa(body: unknown, authorization?: string) {
+    return this.post('/wallets/transfer-by-vpa', body, authorization);
+  }
+  generateMyQr(query: Record<string, unknown>, authorization?: string) {
+    return this.get('/wallet-qr/my', query, authorization);
+  }
+  resolveRecipient(query: Record<string, unknown>, authorization?: string) {
+    return this.get('/wallet-recipients/resolve', query, authorization);
   }
 
   private async get(
@@ -118,23 +71,18 @@ export class WalletProxyService {
     authorization?: string,
   ) {
     try {
-      const response =
-        await firstValueFrom(
-          this.httpService.get(
-            `${this.walletServiceUrl}${path}`,
-            {
-              params,
-              headers: {
-                ...(authorization
-                  ? {
-                      Authorization:
-                        authorization,
-                    }
-                  : {}),
-              },
-            },
-          ),
-        );
+      const response = await firstValueFrom(
+        this.httpService.get(`${this.walletServiceUrl}${path}`, {
+          params,
+          headers: {
+            ...(authorization
+              ? {
+                  Authorization: authorization,
+                }
+              : {}),
+          },
+        }),
+      );
 
       return response.data;
     } catch (error) {
@@ -142,32 +90,21 @@ export class WalletProxyService {
     }
   }
 
-  private async post(
-    path: string,
-    body: unknown,
-    authorization?: string,
-  ) {
+  private async post(path: string, body: unknown, authorization?: string) {
     try {
-      const response =
-        await firstValueFrom(
-          this.httpService.post(
-            `${this.walletServiceUrl}${path}`,
-            body,
-            {
-              headers: {
-                'Content-Type':
-                  'application/json',
+      const response = await firstValueFrom(
+        this.httpService.post(`${this.walletServiceUrl}${path}`, body, {
+          headers: {
+            'Content-Type': 'application/json',
 
-                ...(authorization
-                  ? {
-                      Authorization:
-                        authorization,
-                    }
-                  : {}),
-              },
-            },
-          ),
-        );
+            ...(authorization
+              ? {
+                  Authorization: authorization,
+                }
+              : {}),
+          },
+        }),
+      );
 
       return response.data;
     } catch (error) {
@@ -175,23 +112,18 @@ export class WalletProxyService {
     }
   }
 
-  private handleError(
-    error: unknown,
-  ): never {
+  private handleError(error: unknown): never {
     if (error instanceof AxiosError) {
       if (error.response) {
         throw new HttpException(
           error.response.data ?? {
-            message:
-              'Wallet service request failed',
+            message: 'Wallet service request failed',
           },
           error.response.status,
         );
       }
 
-      throw new ServiceUnavailableException(
-        'Wallet service is unavailable',
-      );
+      throw new ServiceUnavailableException('Wallet service is unavailable');
     }
 
     throw new ServiceUnavailableException(

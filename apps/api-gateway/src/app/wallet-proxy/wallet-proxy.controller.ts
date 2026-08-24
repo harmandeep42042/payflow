@@ -18,13 +18,9 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 
-import {
-  GatewayJwtAuthGuard,
-} from '../gateway-auth/guards/gateway-jwt-auth.guard';
+import { GatewayJwtAuthGuard } from '../gateway-auth/guards/gateway-jwt-auth.guard';
 
-import {
-  WalletProxyService,
-} from './wallet-proxy.service';
+import { WalletProxyService } from './wallet-proxy.service';
 
 type TransactionHistoryQuery = {
   type?: string;
@@ -43,33 +39,26 @@ type AuthenticatedWalletRequest = {
 @UseGuards(GatewayJwtAuthGuard)
 @Controller('wallets')
 export class WalletProxyController {
-  constructor(
-    private readonly walletProxyService:
-      WalletProxyService,
-  ) {}
+  constructor(private readonly walletProxyService: WalletProxyService) {}
 
   @Post()
   @ApiOperation({
-    summary:
-      'Create a wallet through the protected Gateway route',
+    summary: 'Create a wallet through the protected Gateway route',
   })
   @ApiResponse({
     status: 201,
-    description:
-      'Wallet created successfully',
+    description: 'Wallet created successfully',
   })
   createWallet(
     @Body()
     body: unknown,
   ) {
-    return this.walletProxyService
-      .createWallet(body);
+    return this.walletProxyService.createWallet(body);
   }
 
   @Get('user/:userId')
   @ApiOperation({
-    summary:
-      'Get all wallets belonging to a user',
+    summary: 'Get all wallets belonging to a user',
   })
   @ApiParam({
     name: 'userId',
@@ -82,17 +71,15 @@ export class WalletProxyController {
     @Req()
     request: AuthenticatedWalletRequest,
   ) {
-    return this.walletProxyService
-      .getUserWallets(
-        userId,
-        request.headers.authorization,
-      );
+    return this.walletProxyService.getUserWallets(
+      userId,
+      request.headers.authorization,
+    );
   }
 
   @Get(':walletId/transactions')
   @ApiOperation({
-    summary:
-      'Get protected wallet transaction history',
+    summary: 'Get protected wallet transaction history',
   })
   @ApiParam({
     name: 'walletId',
@@ -101,12 +88,7 @@ export class WalletProxyController {
   @ApiQuery({
     name: 'type',
     required: false,
-    enum: [
-      'ALL',
-      'DEPOSIT',
-      'WITHDRAWAL',
-      'TRANSFER',
-    ],
+    enum: ['ALL', 'DEPOSIT', 'WITHDRAWAL', 'TRANSFER'],
   })
   @ApiQuery({
     name: 'page',
@@ -128,18 +110,72 @@ export class WalletProxyController {
     @Req()
     request: AuthenticatedWalletRequest,
   ) {
-    return this.walletProxyService
-      .getTransactionHistory(
-        walletId,
-        query,
-        request.headers.authorization,
-      );
+    return this.walletProxyService.getTransactionHistory(
+      walletId,
+      query,
+      request.headers.authorization,
+    );
+  }
+  @Get('wallet-recipients/resolve')
+  @ApiOperation({
+    summary: 'Resolve a recipient using VPA, phone or email',
+  })
+  @ApiQuery({
+    name: 'vpa',
+    required: false,
+    example: 'p2p@payflow',
+  })
+  @ApiQuery({
+    name: 'phone',
+    required: false,
+  })
+  @ApiQuery({
+    name: 'email',
+    required: false,
+  })
+  @ApiQuery({
+    name: 'currency',
+    required: false,
+    example: 'INR',
+  })
+  @ApiQuery({
+    name: 'excludeUserId',
+    required: false,
+  })
+  resolveRecipient(
+    @Req()
+    request: AuthenticatedWalletRequest,
+
+    @Query('vpa')
+    vpa?: string,
+
+    @Query('phone')
+    phone?: string,
+
+    @Query('email')
+    email?: string,
+
+    @Query('currency')
+    currency = 'INR',
+
+    @Query('excludeUserId')
+    excludeUserId?: string,
+  ) {
+    return this.walletProxyService.resolveRecipient(
+      {
+        vpa,
+        phone,
+        email,
+        currency,
+        excludeUserId,
+      },
+      request.headers.authorization,
+    );
   }
 
   @Get(':walletId')
   @ApiOperation({
-    summary:
-      'Get protected wallet details',
+    summary: 'Get protected wallet details',
   })
   getWallet(
     @Param('walletId')
@@ -148,17 +184,15 @@ export class WalletProxyController {
     @Req()
     request: AuthenticatedWalletRequest,
   ) {
-    return this.walletProxyService
-      .getWallet(
-        walletId,
-        request.headers.authorization,
-      );
+    return this.walletProxyService.getWallet(
+      walletId,
+      request.headers.authorization,
+    );
   }
 
   @Post('deposit')
   @ApiOperation({
-    summary:
-      'Deposit through protected Gateway route',
+    summary: 'Deposit through protected Gateway route',
   })
   deposit(
     @Body()
@@ -167,17 +201,12 @@ export class WalletProxyController {
     @Req()
     request: AuthenticatedWalletRequest,
   ) {
-    return this.walletProxyService
-      .deposit(
-        body,
-        request.headers.authorization,
-      );
+    return this.walletProxyService.deposit(body, request.headers.authorization);
   }
 
   @Post('withdraw')
   @ApiOperation({
-    summary:
-      'Withdraw through protected Gateway route',
+    summary: 'Withdraw through protected Gateway route',
   })
   withdraw(
     @Body()
@@ -186,17 +215,15 @@ export class WalletProxyController {
     @Req()
     request: AuthenticatedWalletRequest,
   ) {
-    return this.walletProxyService
-      .withdraw(
-        body,
-        request.headers.authorization,
-      );
+    return this.walletProxyService.withdraw(
+      body,
+      request.headers.authorization,
+    );
   }
 
   @Post('transfer')
   @ApiOperation({
-    summary:
-      'Transfer through protected Gateway route',
+    summary: 'Transfer through protected Gateway route',
   })
   transfer(
     @Body()
@@ -205,10 +232,26 @@ export class WalletProxyController {
     @Req()
     request: AuthenticatedWalletRequest,
   ) {
-    return this.walletProxyService
-      .transfer(
-        body,
-        request.headers.authorization,
-      );
+    return this.walletProxyService.transfer(
+      body,
+      request.headers.authorization,
+    );
+  }
+
+  @Post('transfer-by-vpa')
+  @ApiOperation({
+    summary: 'Transfer through protected Gateway VPA route',
+  })
+  transferByVpa(
+    @Body()
+    body: unknown,
+
+    @Req()
+    request: AuthenticatedWalletRequest,
+  ) {
+    return this.walletProxyService.transferByVpa(
+      body,
+      request.headers.authorization,
+    );
   }
 }

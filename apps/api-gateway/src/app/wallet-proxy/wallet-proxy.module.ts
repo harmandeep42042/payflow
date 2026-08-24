@@ -1,8 +1,9 @@
-import { HttpModule } from '@nestjs/axios';
+﻿import { HttpModule } from '@nestjs/axios';
 import { Module } from '@nestjs/common';
 
 import { GatewayAuthModule } from '../gateway-auth/gateway-auth.module';
 import { WalletProxyController } from './wallet-proxy.controller';
+import { WalletQrProxyController } from './wallet-qr-proxy.controller';
 import { WalletProxyService } from './wallet-proxy.service';
 
 @Module({
@@ -17,6 +18,7 @@ import { WalletProxyService } from './wallet-proxy.service';
 
   controllers: [
     WalletProxyController,
+    WalletQrProxyController,
   ],
 
   providers: [

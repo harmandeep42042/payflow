@@ -30,6 +30,10 @@ import {
 import {
   AdminProxyService,
 } from './admin-proxy.service';
+import {
+  UpdateAdminUserStatusDto,
+  UpdateAdminWalletStatusDto,
+} from './dto/update-admin-status.dto';
 
 type AdminUsersQuery = {
   page?: string;
@@ -56,18 +60,6 @@ type AdminTransactionsQuery = {
 };
 
 
-type UpdateUserStatusBody = {
-  status:
-    | 'ACTIVE'
-    | 'BLOCKED'
-    | 'SUSPENDED';
-};
-type UpdateWalletStatusBody = {
-  status:
-    | 'ACTIVE'
-    | 'FROZEN'
-    | 'CLOSED';
-};
 
 @ApiTags('Admin')
 @ApiBearerAuth('access-token')
@@ -138,7 +130,7 @@ export class AdminProxyController {
     userId: string,
 
     @Body()
-    body: UpdateUserStatusBody,
+    body: UpdateAdminUserStatusDto,
 
     @Req()
     req: Request,
@@ -237,7 +229,7 @@ export class AdminProxyController {
     walletId: string,
 
     @Body()
-    body: UpdateWalletStatusBody,
+    body: UpdateAdminWalletStatusDto,
 
     @Req()
     req: Request,

@@ -756,7 +756,7 @@ export class AdminService {
       });
 
     if (!wallet) {
-      throw new Error(
+      throw new NotFoundException(
         'Wallet not found',
       );
     }
@@ -764,7 +764,7 @@ export class AdminService {
     if (
       wallet.status === 'CLOSED'
     ) {
-      throw new Error(
+      throw new BadRequestException(
         'Closed wallet status cannot be changed',
       );
     }
@@ -773,7 +773,7 @@ export class AdminService {
       status === 'CLOSED' &&
       Number(wallet.balance) !== 0
     ) {
-      throw new Error(
+      throw new BadRequestException(
         'Wallet balance must be zero before closing',
       );
     }

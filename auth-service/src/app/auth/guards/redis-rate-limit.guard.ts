@@ -6,6 +6,7 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { createHash } from 'node:crypto';
 
 import { RedisService } from '../../redis/redis.service';
 import {
@@ -24,6 +25,7 @@ type HttpRequest = {
   >;
   body?: {
     email?: unknown;
+    refreshToken?: unknown;
   };
 };
 
@@ -119,6 +121,19 @@ export class RedisRateLimitGuard
             .trim()
             .toLowerCase()
         : 'no-email';
+
+    const refreshToken =
+      typeof request.body?.refreshToken === 'string'
+        ? request.body.refreshToken.trim()
+        : '';
+
+    if (refreshToken) {
+      const fingerprint = createHash('sha256')
+        .update(refreshToken)
+        .digest('hex');
+
+      return `refresh-token:${fingerprint}`;
+    }
 
     return this.sanitize(`${ip}:${email}`);
   }

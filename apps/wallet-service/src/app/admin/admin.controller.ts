@@ -35,6 +35,10 @@ import {
 import {
   WalletRolesGuard,
 } from '../wallet-auth/guards/wallet-roles.guard';
+import {
+  UpdateAdminUserStatusDto,
+  UpdateAdminWalletStatusDto,
+} from './dto/update-admin-status.dto';
 
 
 
@@ -46,24 +50,12 @@ type AdminAuthenticatedRequest = {
   };
 };
 
-type UpdateUserStatusDto = {
-  status:
-    | 'ACTIVE'
-    | 'BLOCKED'
-    | 'SUSPENDED';
-};
 type AdminWalletStatus =
   | 'ALL'
   | 'ACTIVE'
   | 'FROZEN'
   | 'CLOSED';
 
-type UpdateWalletStatusDto = {
-  status:
-    | 'ACTIVE'
-    | 'FROZEN'
-    | 'CLOSED';
-};
 
 @ApiTags('Admin')
 @ApiBearerAuth('access-token')
@@ -159,7 +151,7 @@ export class AdminController {
     userId: string,
 
     @Body()
-    body: UpdateUserStatusDto,
+    body: UpdateAdminUserStatusDto,
 
     @Request()
     request: AdminAuthenticatedRequest,
@@ -247,7 +239,7 @@ export class AdminController {
     walletId: string,
 
     @Body()
-    body: UpdateWalletStatusDto,
+    body: UpdateAdminWalletStatusDto,
 
     @Request()
     request: AdminAuthenticatedRequest,

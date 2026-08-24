@@ -11,82 +11,65 @@ import {
 @Injectable()
 export class RecipientLookupService {
   constructor(
-    private readonly prisma:
-      PrismaService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async resolveRecipient(input: {
-    email: string;
+    email?: string;
+    phone?: string;
+    vpa?: string;
     currency?: string;
     excludeUserId?: string;
   }) {
-    const email =
-      input.email
-        .trim()
-        .toLowerCase();
+    const email = input.email?.trim().toLowerCase();
+    const phone = input.phone?.trim();
+    const vpa = input.vpa?.trim().toLowerCase();
 
-    const currency =
-      (
-        input.currency ??
-        'INR'
-      )
-        .trim()
-        .toUpperCase();
+    const currency = (
+      input.currency ?? 'INR'
+    )
+      .trim()
+      .toUpperCase();
 
-    if (!email) {
+    if (!email && !phone && !vpa) {
       throw new BadRequestException(
-        'Recipient email is required',
+        'Recipient email, phone or VPA is required',
       );
     }
 
-    const user =
-      await this.prisma.user.findUnique({
-        where: {
-          email,
-        },
+    const user = await this.prisma.user.findFirst({
+      where: {
+        ...(email ? { email } : {}),
+        ...(phone ? { phone } : {}),
+        ...(vpa ? { vpa } : {}),
+      },
 
-        select: {
-          id:
-            true,
+      select: {
+        id: true,
+        email: true,
+        phone: true,
+        vpa: true,
+        firstName: true,
+        lastName: true,
+        status: true,
 
-          email:
-            true,
-
-          firstName:
-            true,
-
-          lastName:
-            true,
-
-          status:
-            true,
-
-          wallets: {
-            where: {
-              currency,
-            },
-
-            select: {
-              id:
-                true,
-
-              currency:
-                true,
-
-              status:
-                true,
-            },
-
-            take:
-              1,
+        wallets: {
+          where: {
+            currency,
           },
-        },
-      });
 
-    if (
-      !user ||
-      user.status !== 'ACTIVE'
-    ) {
+          select: {
+            id: true,
+            currency: true,
+            status: true,
+          },
+
+          take: 1,
+        },
+      },
+    });
+
+    if (!user || user.status !== 'ACTIVE') {
       throw new NotFoundException(
         'Active recipient account not found',
       );
@@ -101,13 +84,9 @@ export class RecipientLookupService {
       );
     }
 
-    const wallet =
-      user.wallets[0];
+    const wallet = user.wallets[0];
 
-    if (
-      !wallet ||
-      wallet.status !== 'ACTIVE'
-    ) {
+    if (!wallet || wallet.status !== 'ACTIVE') {
       throw new NotFoundException(
         `Recipient does not have an active ${currency} wallet`,
       );
@@ -115,34 +94,23 @@ export class RecipientLookupService {
 
     return {
       recipient: {
-        userId:
-          user.id,
+        userId: user.id,
+        email: user.email,
+        phone: user.phone,
+        vpa: user.vpa,
+        firstName: user.firstName,
+        lastName: user.lastName,
 
-        email:
-          user.email,
-
-        firstName:
+        displayName: [
           user.firstName,
-
-        lastName:
           user.lastName,
+        ]
+          .filter(Boolean)
+          .join(' '),
 
-        displayName:
-          [
-            user.firstName,
-            user.lastName,
-          ]
-            .filter(Boolean)
-            .join(' '),
-
-        walletId:
-          wallet.id,
-
-        currency:
-          wallet.currency,
-
-        walletStatus:
-          wallet.status,
+        walletId: wallet.id,
+        currency: wallet.currency,
+        walletStatus: wallet.status,
       },
     };
   }
