@@ -23,6 +23,17 @@ model User {
   wallets                Wallet[]
   refreshTokens          RefreshToken[]
   notificationPreference NotificationPreference?
+  contactsOwned          Contact[]               @relation("ContactOwner")
+  contactsReceived       Contact[]               @relation("ContactRecipient")
+  offerClaims            OfferClaim[]
+  moneyRequestsCreated   MoneyRequest[]          @relation("MoneyRequester")
+  moneyRequestsToPay     MoneyRequest[]          @relation("MoneyPayer")
+  billSplitsCreated      BillSplit[]             @relation("SplitCreator")
+  splitAllocations       SplitAllocation[]
+  mandates               Mandate[]
+  supportCases           SupportCase[]
+  rechargeAttempts       RechargeAttempt[]
+  billPaymentAttempts    BillPaymentAttempt[]
 }
 
 model RefreshToken {
@@ -60,6 +71,8 @@ model Wallet {
   incomingTransfers Transfer[]     @relation("DestinationWallet")
   deposits          Deposit[]
   withdrawals       Withdrawal[]
+  moneyRequests     MoneyRequest[]
+  billSplits        BillSplit[]
 
   @@unique([userId, currency])
   @@index([userId])
@@ -99,9 +112,12 @@ model Transfer {
   updatedAt           DateTime       @updatedAt
   completedAt         DateTime?
 
-  sourceWallet      Wallet        @relation("SourceWallet", fields: [sourceWalletId], references: [id], onDelete: Restrict)
-  destinationWallet Wallet        @relation("DestinationWallet", fields: [destinationWalletId], references: [id], onDelete: Restrict)
-  ledgerEntries     LedgerEntry[]
+  sourceWallet              Wallet           @relation("SourceWallet", fields: [sourceWalletId], references: [id], onDelete: Restrict)
+  destinationWallet         Wallet           @relation("DestinationWallet", fields: [destinationWalletId], references: [id], onDelete: Restrict)
+  ledgerEntries             LedgerEntry[]
+  moneyRequestSettlement    MoneyRequest?    @relation("MoneyRequestSettlement")
+  splitAllocationSettlement SplitAllocation? @relation("SplitAllocationSettlement")
+  supportCases              SupportCase[]
 
   @@index([sourceWalletId])
   @@index([destinationWalletId])
@@ -451,4 +467,299 @@ model Reward {
   @@index([status])
   @@index([campaignId])
   @@index([expiresAt])
+}
+
+enum OfferStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+  EXPIRED
+}
+
+enum OfferClaimStatus {
+  CLAIMED
+  REDEEMED
+  EXPIRED
+  CANCELLED
+}
+
+model Offer {
+  id                 String       @id @default(uuid())
+  title              String
+  description        String
+  merchant           String
+  category           String
+  currency           String       @db.VarChar(3)
+  benefitDescription String
+  status             OfferStatus  @default(DRAFT)
+  startsAt           DateTime
+  expiresAt          DateTime
+  eligibilityRules   Json?
+  usageLimit         Int?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  claims             OfferClaim[]
+
+  @@index([status, startsAt, expiresAt])
+  @@index([category])
+}
+
+model OfferClaim {
+  id         String           @id @default(uuid())
+  offerId    String
+  userId     String
+  status     OfferClaimStatus @default(CLAIMED)
+  claimedAt  DateTime         @default(now())
+  redeemedAt DateTime?
+  expiresAt  DateTime
+  offer      Offer            @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  user       User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([offerId, userId])
+  @@index([userId, status])
+  @@index([expiresAt])
+}
+
+model Contact {
+  id              String   @id @default(uuid())
+  ownerUserId     String
+  recipientUserId String
+  nickname        String?
+  favourite       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  owner           User     @relation("ContactOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  recipient       User     @relation("ContactRecipient", fields: [recipientUserId], references: [id], onDelete: Restrict)
+
+  @@unique([ownerUserId, recipientUserId])
+  @@index([ownerUserId, favourite])
+}
+
+enum MoneyRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+  CANCELLED
+}
+
+model MoneyRequest {
+  id                   String             @id @default(uuid())
+  requesterUserId      String
+  payerUserId          String
+  walletId             String
+  currency             String             @db.VarChar(3)
+  amount               Decimal            @db.Decimal(18, 2)
+  note                 String?
+  status               MoneyRequestStatus @default(PENDING)
+  expiresAt            DateTime
+  settlementTransferId String?            @unique
+  idempotencyKey       String             @unique
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  requester            User               @relation("MoneyRequester", fields: [requesterUserId], references: [id], onDelete: Restrict)
+  payer                User               @relation("MoneyPayer", fields: [payerUserId], references: [id], onDelete: Restrict)
+  wallet               Wallet             @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  settlementTransfer   Transfer?          @relation("MoneyRequestSettlement", fields: [settlementTransferId], references: [id], onDelete: Restrict)
+
+  @@index([requesterUserId, status, createdAt])
+  @@index([payerUserId, status, createdAt])
+  @@index([expiresAt, status])
+}
+
+enum BillSplitType {
+  EQUAL
+  EXACT
+}
+
+enum BillSplitStatus {
+  OPEN
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+  EXPIRED
+}
+
+enum SplitAllocationStatus {
+  PENDING
+  PAID
+  DECLINED
+  CANCELLED
+  EXPIRED
+}
+
+model BillSplit {
+  id             String            @id @default(uuid())
+  creatorUserId  String
+  walletId       String
+  currency       String            @db.VarChar(3)
+  totalAmount    Decimal           @db.Decimal(18, 2)
+  type           BillSplitType
+  status         BillSplitStatus   @default(OPEN)
+  note           String?
+  dueAt          DateTime
+  idempotencyKey String            @unique
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  creator        User              @relation("SplitCreator", fields: [creatorUserId], references: [id], onDelete: Restrict)
+  wallet         Wallet            @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  allocations    SplitAllocation[]
+
+  @@index([creatorUserId, status, createdAt])
+  @@index([dueAt, status])
+}
+
+model SplitAllocation {
+  id                   String                @id @default(uuid())
+  splitId              String
+  participantUserId    String
+  amount               Decimal               @db.Decimal(18, 2)
+  status               SplitAllocationStatus @default(PENDING)
+  settlementTransferId String?               @unique
+  paidAt               DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  split                BillSplit             @relation(fields: [splitId], references: [id], onDelete: Cascade)
+  participant          User                  @relation(fields: [participantUserId], references: [id], onDelete: Restrict)
+  settlementTransfer   Transfer?             @relation("SplitAllocationSettlement", fields: [settlementTransferId], references: [id], onDelete: Restrict)
+
+  @@unique([splitId, participantUserId])
+  @@index([participantUserId, status])
+}
+
+enum ProviderAttemptStatus {
+  PROVIDER_NOT_CONFIGURED
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+model RechargeAttempt {
+  id             String                @id @default(uuid())
+  userId         String
+  operator       String
+  mobileNumber   String
+  planId         String?
+  amount         Decimal               @db.Decimal(18, 2)
+  currency       String                @db.VarChar(3)
+  status         ProviderAttemptStatus @default(PROVIDER_NOT_CONFIGURED)
+  providerRef    String?
+  idempotencyKey String                @unique
+  failureCode    String?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  user           User                  @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt])
+  @@index([status])
+}
+
+model BillPaymentAttempt {
+  id             String                @id @default(uuid())
+  userId         String
+  category       String
+  billerId       String?
+  customerRef    String
+  amount         Decimal               @db.Decimal(18, 2)
+  currency       String                @db.VarChar(3)
+  status         ProviderAttemptStatus @default(PROVIDER_NOT_CONFIGURED)
+  providerRef    String?
+  idempotencyKey String                @unique
+  failureCode    String?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  user           User                  @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt])
+  @@index([status])
+}
+
+enum MandateStatus {
+  PENDING
+  ACTIVE
+  PAUSED
+  CANCELLED
+  EXPIRED
+  FAILED
+}
+
+enum MandateFrequency {
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+model Mandate {
+  id                String           @id @default(uuid())
+  userId            String
+  merchant          String
+  amount            Decimal?         @db.Decimal(18, 2)
+  maxAmount         Decimal          @db.Decimal(18, 2)
+  currency          String           @db.VarChar(3)
+  frequency         MandateFrequency
+  startAt           DateTime
+  endAt             DateTime?
+  status            MandateStatus    @default(PENDING)
+  providerMandateId String?          @unique
+  consentAt         DateTime
+  idempotencyKey    String           @unique
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  user              User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, status])
+  @@index([status, startAt])
+}
+
+enum SupportCaseStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  REJECTED
+  CLOSED
+}
+
+enum SupportCasePriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+model SupportCase {
+  id            String              @id @default(uuid())
+  userId        String
+  transactionId String?
+  category      String
+  description   String
+  status        SupportCaseStatus   @default(OPEN)
+  priority      SupportCasePriority @default(NORMAL)
+  resolution    String?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  closedAt      DateTime?
+  user          User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  transaction   Transfer?           @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  events        SupportCaseEvent[]
+
+  @@index([userId, status, createdAt])
+  @@index([status, priority, createdAt])
+  @@index([transactionId])
+}
+
+model SupportCaseEvent {
+  id          String             @id @default(uuid())
+  caseId      String
+  actorUserId String
+  fromStatus  SupportCaseStatus?
+  toStatus    SupportCaseStatus
+  note        String?
+  createdAt   DateTime           @default(now())
+  supportCase SupportCase        @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, createdAt])
+  @@index([actorUserId])
 }

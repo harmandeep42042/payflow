@@ -1,4 +1,4 @@
-﻿-- AlterTable
+-- AlterTable
 ALTER TABLE "RefreshToken"
 ADD COLUMN "deviceName" TEXT,
 ADD COLUMN "userAgent" TEXT,

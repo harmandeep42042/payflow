@@ -1,4 +1,4 @@
-﻿-- CreateTable
+-- CreateTable
 CREATE TABLE "AuditLog" (
     "id" TEXT NOT NULL,
     "actorUserId" TEXT,
