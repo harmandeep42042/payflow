@@ -392,6 +392,17 @@ export default function UserDashboardPage() {
           ].map(([label, href, description]) => <Link key={label} href={href} className="group min-h-24 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-blue-300 hover:shadow-md focus-visible:ring-2 focus-visible:ring-blue-600"><span className="font-bold text-slate-950 group-hover:text-blue-700">{label}</span><span className="mt-1 block text-xs leading-5 text-slate-500">{description}</span></Link>)}
         </nav>
 
+        <section aria-labelledby="everyday-payflow" className="mt-8">
+          <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">Everyday Payflow</p><h2 id="everyday-payflow" className="mt-1 text-xl font-bold text-slate-950">Payments, people and services</h2><p className="mt-2 text-sm text-slate-600">Open a supported flow directly. Provider-dependent services are clearly labelled before you submit.</p></div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {[
+              ['Request money', '/request-money', 'Create, accept or decline requests'], ['Contacts', '/contacts', 'Manage trusted recipients'], ['Split bill', '/split-bill', 'Track exact participant shares'], ['Recharge', '/recharge', 'Provider-backed mobile recharge'],
+              ['Bills', '/bills', 'Validate and track bill attempts'], ['AutoPay', '/autopay', 'Manage mandate consent and status'], ['Offers', '/offers', 'Browse and claim eligible offers'], ['Rewards', '/rewards', 'Review earned rewards'],
+              ['Insights', '/insights', 'Currency-separated activity summaries'], ['Notifications', '/notifications', 'Unread and real-time account updates'], ['Help & disputes', '/help', 'Open and track support cases'], ['All services', '/services', 'See the complete capability catalogue'],
+            ].map(([label, href, description]) => <Link key={href} href={href} className="min-h-28 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-blue-300 hover:shadow-md focus-visible:ring-2 focus-visible:ring-blue-600"><span className="font-bold text-slate-950">{label}</span><span className="mt-1 block text-sm leading-5 text-slate-500">{description}</span></Link>)}
+          </div>
+        </section>
+
         {error ? (
           <div className="mt-6"><ErrorState message={error} onRetry={() => void loadDashboard(false)} /></div>
         ) : null}

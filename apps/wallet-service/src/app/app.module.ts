@@ -11,6 +11,7 @@ import { OutboxModule } from './outbox/outbox.module';
 import { RabbitMqModule } from './rabbitmq/rabbitmq.module';
 import { WalletsModule } from './wallets/wallets.module';
 import { WalletQrModule } from './wallet-qr/wallet-qr.module';
+import { CustomerFeaturesModule } from './customer-features/customer-features.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { WalletQrModule } from './wallet-qr/wallet-qr.module';
     AdminModule,
     RecipientLookupModule,
     WalletQrModule,
+    CustomerFeaturesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

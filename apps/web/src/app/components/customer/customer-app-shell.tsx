@@ -15,6 +15,7 @@ const desktopNavigation = [
   { label: 'Send', href: '/send-money', match: '/send-money' },
   { label: 'Receive', href: '/receive', match: '/receive' },
   { label: 'Transactions', href: '/transactions', match: '/transactions' },
+  { label: 'Notifications', href: '/notifications', match: '/notifications' },
   { label: 'Profile', href: '/profile', match: '/profile' },
 ];
 
