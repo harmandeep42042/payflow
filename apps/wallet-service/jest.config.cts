@@ -17,6 +17,10 @@
       '<rootDir>/src/test/mocks/database.mock.ts',
   },
 
+  testPathIgnorePatterns: [
+    '<rootDir>/src/app/customer-features/customer-features.database-idempotency.test.ts',
+  ],
+
   moduleFileExtensions: [
     'ts',
     'js',

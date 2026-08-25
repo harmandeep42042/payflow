@@ -80,5 +80,8 @@ current-transaction-history-route.txt
 .env.production.local
 .pnpm-store/
 *.sql
+!prisma/migrations/20260820140000_add_rewards/migration.sql
+!prisma/migrations/20260824180000_add_customer_feature_domains/migration.sql
+!prisma/migrations/20260824190000_add_user_vpa/migration.sql
 !prisma/migrations/20260821120000_add_outbox_event_producer/migration.sql
 *.dump

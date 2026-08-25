@@ -66,4 +66,20 @@ describe('NotificationsController RabbitMQ reliability', () => {
     expect(harness.channel.ack).not.toHaveBeenCalled();
     expect(harness.channel.nack).toHaveBeenCalledWith(harness.message, false, true);
   });
+
+  it.each([
+    ['handleMoneyRequestCreated', 'money.request.created'], ['handleMoneyRequestAccepted', 'money.request.accepted'],
+    ['handleMoneyRequestDeclined', 'money.request.declined'], ['handleMoneyRequestCancelled', 'money.request.cancelled'],
+    ['handleSplitCreated', 'split.created'], ['handleSplitPaid', 'split.allocation.paid'], ['handleOfferClaimed', 'offer.claimed'],
+    ['handleRechargeStatus', 'recharge.status'], ['handleBillPaymentStatus', 'bill.payment.status'],
+    ['handleMandateCreated', 'mandate.created'], ['handleMandatePaused', 'mandate.pause'],
+    ['handleMandateResumed', 'mandate.resume'], ['handleMandateCancelled', 'mandate.cancel'], ['handleCaseUpdated', 'support.case.updated'],
+  ] as const)('fans out %s once per unique intended recipient', async (handler, eventName) => {
+    const harness = createHarness();
+    await harness.controller[handler]({ eventId: 'event-1', userIds: ['user-1', 'user-2', 'user-1'] }, harness.context as never);
+    expect(harness.notificationsService.process).toHaveBeenCalledTimes(2);
+    expect(harness.notificationsService.process).toHaveBeenNthCalledWith(1, eventName, expect.objectContaining({ userId: 'user-1' }));
+    expect(harness.notificationsService.process).toHaveBeenNthCalledWith(2, eventName, expect.objectContaining({ userId: 'user-2' }));
+    expect(harness.channel.ack).toHaveBeenCalledWith(harness.message);
+  });
 });
