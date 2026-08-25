@@ -1,0 +1,1 @@
+import { AdminFeatureList } from '../components/admin/admin-feature-list'; export default function Page(){return <AdminFeatureList title="Bill splits" description="Read-only split, participant, allocation, paid/unpaid and cancellation visibility." endpoint="/splits"/>;}

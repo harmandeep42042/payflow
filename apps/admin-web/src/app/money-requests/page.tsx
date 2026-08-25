@@ -1,0 +1,1 @@
+import { AdminFeatureList } from '../components/admin/admin-feature-list'; export default function Page(){return <AdminFeatureList title="Money requests" description="Read-only operational visibility into requester, payer, amount, currency, status and expiry." endpoint="/money-requests"/>;}

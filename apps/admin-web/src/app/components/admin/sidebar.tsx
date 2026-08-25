@@ -26,6 +26,12 @@ export const navigationGroups = [
       { href: '/users', label: 'Users', icon: UsersIcon },
       { href: '/wallets', label: 'Wallets', icon: WalletIcon },
       { href: '/transactions', label: 'Transactions', icon: TransactionsIcon },
+      { href: '/offers', label: 'Offers', icon: AuditIcon },
+      { href: '/support-cases', label: 'Support Cases', icon: AuditIcon },
+      { href: '/money-requests', label: 'Money Requests', icon: TransactionsIcon },
+      { href: '/splits', label: 'Bill Splits', icon: TransactionsIcon },
+      { href: '/mandates', label: 'AutoPay', icon: WalletIcon },
+      { href: '/provider-status', label: 'Provider Status', icon: AuditIcon },
     ],
   },
   {

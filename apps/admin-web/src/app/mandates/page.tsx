@@ -1,0 +1,1 @@
+import { AdminFeatureList } from '../components/admin/admin-feature-list'; export default function Page(){return <AdminFeatureList title="AutoPay mandates" description="Read-only mandate and provider-state visibility. Provider credentials are never returned." endpoint="/mandates"/>;}
