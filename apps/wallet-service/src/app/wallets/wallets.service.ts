@@ -17,6 +17,7 @@ import { WithdrawWalletDto } from './dto/withdraw-wallet.dto';
 import { TransactionHistoryQueryDto } from './dto/transaction-history-query.dto';
 import { RecipientLookupService } from '../recipient-lookup/recipient-lookup.service';
 import { TransferByVpaDto } from './dto/transfer-by-vpa.dto';
+import { Decimal } from '@prisma/client/runtime/client';
 
 @Injectable()
 export class WalletsService {
@@ -33,9 +34,10 @@ export class WalletsService {
     };
   }
 
-  async createWallet(dto: CreateWalletDto) {
+  async createWallet(dto: CreateWalletDto, authenticatedUserId?: string) {
     const userId = dto.userId.trim();
     const currency = dto.currency.trim().toUpperCase();
+    this.assertWalletOwnership(userId, authenticatedUserId);
 
     const user = await this.prisma.user.findUnique({
       where: {
@@ -403,16 +405,16 @@ export class WalletsService {
       );
     }
 
-    const requestedAmount = Number(amount);
-    const currentBalance = Number(wallet.balance.toString());
+    let requestedAmount: Decimal;
+    try { requestedAmount = new Decimal(amount); } catch { throw new BadRequestException('Withdrawal amount must be greater than zero'); }
 
-    if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
+    if (!requestedAmount.isFinite() || !requestedAmount.gt(0)) {
       throw new BadRequestException(
         'Withdrawal amount must be greater than zero',
       );
     }
 
-    if (currentBalance < requestedAmount) {
+    if (wallet.balance.lt(requestedAmount)) {
       throw new BadRequestException('Insufficient wallet balance');
     }
 
@@ -646,9 +648,10 @@ export class WalletsService {
       );
     }
 
-    const requestedAmount = Number(amount);
+    let requestedAmount: Decimal;
+    try { requestedAmount = new Decimal(amount); } catch { throw new BadRequestException('Transfer amount must be greater than zero'); }
 
-    if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
+    if (!requestedAmount.isFinite() || !requestedAmount.gt(0)) {
       throw new BadRequestException(
         'Transfer amount must be greater than zero',
       );
@@ -665,6 +668,8 @@ export class WalletsService {
     });
 
     if (existingTransfer) {
+      if (!authenticatedUserId || existingTransfer.sourceWallet.userId !== authenticatedUserId) throw new ForbiddenException('You do not own the source wallet');
+      if (existingTransfer.sourceWalletId !== sourceWalletId || existingTransfer.destinationWalletId !== destinationWalletId || !existingTransfer.amount.eq(requestedAmount) || existingTransfer.currency !== currency || existingTransfer.description !== (description ?? null)) throw new ConflictException('Idempotency key was used for a different transfer request');
       return {
         id: existingTransfer.id,
         idempotencyKey: existingTransfer.idempotencyKey,
@@ -753,14 +758,14 @@ export class WalletsService {
       );
     }
 
-    if (Number(sourceWallet.balance.toString()) < requestedAmount) {
+    if (sourceWallet.balance.lt(requestedAmount)) {
       throw new BadRequestException('Insufficient source wallet balance');
     }
 
     const sourceLedgerAccountId = sourceWallet.ledgerAccount.id;
     const destinationLedgerAccountId = destinationWallet.ledgerAccount.id;
 
-    const result = await this.prisma.$transaction(async (tx) => {
+    const execute = () => this.prisma.$transaction(async (tx) => {
       const transfer = await tx.transfer.create({
         data: {
           idempotencyKey,
@@ -901,6 +906,12 @@ export class WalletsService {
         outboxEvent,
       };
     });
+    let result: Awaited<ReturnType<typeof execute>>;
+    try { result = await execute(); }
+    catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') return this.transferWallet(dto, authenticatedUserId);
+      throw error;
+    }
 
     return {
       id: result.transfer.id,

@@ -55,6 +55,7 @@ export class WalletsController {
   }
 
   @Post()
+  @UseGuards(WalletJwtAuthGuard)
   @ApiOperation({
     summary: 'Create a new wallet for a user',
   })
@@ -70,8 +71,8 @@ export class WalletsController {
     status: 409,
     description: 'Wallet already exists for the selected currency',
   })
-  createWallet(@Body() dto: CreateWalletDto) {
-    return this.walletsService.createWallet(dto);
+  createWallet(@Body() dto: CreateWalletDto, @Req() request: AuthenticatedWalletRequest) {
+    return this.walletsService.createWallet(dto, request.user?.id);
   }
 
   @Post('deposit')
