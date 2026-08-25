@@ -24,8 +24,8 @@ export class WalletProxyService {
 
   constructor(private readonly httpService: HttpService) {}
 
-  createWallet(body: unknown) {
-    return this.post('/wallets', body);
+  createWallet(body: unknown, authorization?: string) {
+    return this.post('/wallets', body, authorization);
   }
 
   getWallet(walletId: string, authorization?: string) {

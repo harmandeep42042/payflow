@@ -52,8 +52,11 @@ export class WalletProxyController {
   createWallet(
     @Body()
     body: unknown,
+
+    @Req()
+    request: AuthenticatedWalletRequest,
   ) {
-    return this.walletProxyService.createWallet(body);
+    return this.walletProxyService.createWallet(body, request.headers.authorization);
   }
 
   @Get('user/:userId')

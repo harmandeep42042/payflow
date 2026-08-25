@@ -39,6 +39,7 @@ import {
 import {
   WalletProxyModule,
 } from './wallet-proxy/wallet-proxy.module';
+import { CustomerFeaturesProxyModule } from './customer-features-proxy/customer-features-proxy.module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import {
     RewardProxyModule,
     NotificationProxyModule,
     AdminProxyModule,
+    CustomerFeaturesProxyModule,
   ],
 
   controllers: [

@@ -17,6 +17,8 @@ type JwtPayload = {
   type?: string;
 };
 
+export const WALLET_JWT_IGNORE_EXPIRATION = false;
+
 @Injectable()
 export class WalletJwtStrategy
   extends PassportStrategy(
@@ -29,7 +31,7 @@ export class WalletJwtStrategy
       jwtFromRequest:
         ExtractJwt.fromAuthHeaderAsBearerToken(),
 
-      ignoreExpiration: false,
+      ignoreExpiration: WALLET_JWT_IGNORE_EXPIRATION,
 
       secretOrKey:
         process.env.JWT_SECRET ||
