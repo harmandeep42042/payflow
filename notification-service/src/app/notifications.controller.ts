@@ -232,10 +232,32 @@ export class NotificationsController {
     );
   }
 
+  @EventPattern('money.request.created') handleMoneyRequestCreated(@Payload() event: NotificationEvent, @Ctx() context: RmqContext) { return this.handleFanout('money.request.created', event, context); }
+  @EventPattern('money.request.accepted') handleMoneyRequestAccepted(@Payload() event: NotificationEvent, @Ctx() context: RmqContext) { return this.handleFanout('money.request.accepted', event, context); }
+  @EventPattern('money.request.declined') handleMoneyRequestDeclined(@Payload() event: NotificationEvent, @Ctx() context: RmqContext) { return this.handleFanout('money.request.declined', event, context); }
+  @EventPattern('money.request.cancelled') handleMoneyRequestCancelled(@Payload() event: NotificationEvent, @Ctx() context: RmqContext) { return this.handleFanout('money.request.cancelled', event, context); }
+  @EventPattern('split.created') handleSplitCreated(@Payload() event: NotificationEvent, @Ctx() context: RmqContext) { return this.handleFanout('split.created', event, context); }
+  @EventPattern('split.allocation.paid') handleSplitPaid(@Payload() event: NotificationEvent, @Ctx() context: RmqContext) { return this.handleFanout('split.allocation.paid', event, context); }
+  @EventPattern('offer.claimed') handleOfferClaimed(@Payload() event: NotificationEvent, @Ctx() context: RmqContext) { return this.handleFanout('offer.claimed', event, context); }
+  @EventPattern('recharge.status') handleRechargeStatus(@Payload() event: NotificationEvent, @Ctx() context: RmqContext) { return this.handleFanout('recharge.status', event, context); }
+  @EventPattern('bill.payment.status') handleBillPaymentStatus(@Payload() event: NotificationEvent, @Ctx() context: RmqContext) { return this.handleFanout('bill.payment.status', event, context); }
+  @EventPattern('mandate.created') handleMandateCreated(@Payload() event: NotificationEvent, @Ctx() context: RmqContext) { return this.handleFanout('mandate.created', event, context); }
+  @EventPattern('mandate.pause') handleMandatePaused(@Payload() event: NotificationEvent, @Ctx() context: RmqContext) { return this.handleFanout('mandate.pause', event, context); }
+  @EventPattern('mandate.resume') handleMandateResumed(@Payload() event: NotificationEvent, @Ctx() context: RmqContext) { return this.handleFanout('mandate.resume', event, context); }
+  @EventPattern('mandate.cancel') handleMandateCancelled(@Payload() event: NotificationEvent, @Ctx() context: RmqContext) { return this.handleFanout('mandate.cancel', event, context); }
+  @EventPattern('support.case.created') handleCaseCreated(@Payload() event: NotificationEvent, @Ctx() context: RmqContext) { return this.handleFanout('support.case.created', event, context); }
+  @EventPattern('support.case.updated') handleCaseUpdated(@Payload() event: NotificationEvent, @Ctx() context: RmqContext) { return this.handleFanout('support.case.updated', event, context); }
+
+  private handleFanout(eventName: string, event: NotificationEvent, context: RmqContext): Promise<void> {
+    const userIds = Array.isArray(event['userIds']) ? event['userIds'].filter((value): value is string => typeof value === 'string' && Boolean(value.trim())) : [];
+    return this.handleEvent(eventName, { ...event, userIds: undefined, fanoutUserIds: userIds }, context, userIds);
+  }
+
   private async handleEvent(
     eventName: string,
     event: NotificationEvent,
     context: RmqContext,
+    userIds?: string[],
   ): Promise<void> {
     const channel =
       context.getChannelRef() as DeadLetterChannel;
@@ -250,11 +272,8 @@ export class NotificationsController {
         )}`,
       );
 
-      await this.notificationsService
-        .process(
-          eventName,
-          event,
-        );
+      if (userIds) await Promise.all([...new Set(userIds)].map((userId) => this.notificationsService.process(eventName, { ...event, userId })));
+      else await this.notificationsService.process(eventName, event);
 
       channel.ack(message);
 
