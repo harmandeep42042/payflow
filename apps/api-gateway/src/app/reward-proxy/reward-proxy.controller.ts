@@ -10,6 +10,8 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { GatewayJwtAuthGuard } from '../gateway-auth/guards/gateway-jwt-auth.guard';
+import { FeatureFlagGuard } from '../feature-flags/feature-flag.guard';
+import { RequireFeatureFlag } from '../feature-flags/require-feature-flag.decorator';
 import { RewardProxyService } from './reward-proxy.service';
 
 type RewardRequest = {
@@ -19,7 +21,8 @@ type RewardRequest = {
 
 @ApiTags('Rewards')
 @ApiBearerAuth('access-token')
-@UseGuards(GatewayJwtAuthGuard)
+@RequireFeatureFlag('offers-rewards')
+@UseGuards(GatewayJwtAuthGuard, FeatureFlagGuard)
 @Controller('rewards')
 export class RewardProxyController {
   constructor(

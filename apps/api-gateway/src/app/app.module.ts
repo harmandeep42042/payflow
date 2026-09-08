@@ -1,5 +1,6 @@
 import { MetricsModule } from './observability/metrics.module';
 import { RewardProxyModule } from './reward-proxy/reward-proxy.module';
+import { FeatureFlagsModule } from './feature-flags/feature-flags.module';
 
 import {
   Module,
@@ -45,6 +46,7 @@ import { CustomerFeaturesProxyModule } from './customer-features-proxy/customer-
 @Module({
   imports: [
     MetricsModule,
+    FeatureFlagsModule,
     ConfigModule.forRoot({
       isGlobal: true,
     }),

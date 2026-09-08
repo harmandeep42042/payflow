@@ -1,5 +1,6 @@
 ﻿import { All, Controller, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { GatewayJwtAuthGuard } from '../gateway-auth/guards/gateway-jwt-auth.guard';
+import { FeatureFlagGuard } from '../feature-flags/feature-flag.guard';
 import { CustomerFeaturesProxyService } from './customer-features-proxy.service';
 
 type ProxyRequest = {
@@ -11,7 +12,7 @@ type ProxyRequest = {
   user?: { id?: string };
 };
 
-@UseGuards(GatewayJwtAuthGuard)
+@UseGuards(GatewayJwtAuthGuard, FeatureFlagGuard)
 @Controller('customer-features')
 export class CustomerFeaturesProxyController {
   constructor(

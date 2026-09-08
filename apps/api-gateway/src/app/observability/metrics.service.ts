@@ -42,6 +42,14 @@ export class MetricsService {
       registers: [this.registry],
     });
 
+  private readonly featureFlagEvaluations =
+    new Counter({
+      name: 'payflow_gateway_feature_flag_evaluations_total',
+      help: 'Feature flag evaluations performed by the API Gateway',
+      labelNames: ['flag', 'result', 'source'],
+      registers: [this.registry],
+    });
+
   getMetrics(): Promise<string> {
     return this.registry.metrics();
   }
@@ -76,6 +84,18 @@ export class MetricsService {
           durationSeconds,
         );
       }
+    } catch {
+      // Telemetry must never break Gateway traffic.
+    }
+  }
+
+  recordFeatureFlagEvaluation(
+    flag: string,
+    result: 'enabled' | 'disabled',
+    source: 'redis' | 'default',
+  ): void {
+    try {
+      this.featureFlagEvaluations.inc({ flag, result, source });
     } catch {
       // Telemetry must never break Gateway traffic.
     }
