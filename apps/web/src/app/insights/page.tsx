@@ -1,17 +1,35 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import {
-  Card,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import {
+  Button,
   EmptyState,
   ErrorState,
   LoadingState,
   PageContainer,
   PageHeader,
 } from '../components/customer';
-import { userAuthenticatedRequest } from '../lib/api';
-import { formatMoney } from '../lib/money';
-import { beginLatestRequest, isLatestRequest } from '../lib/request-sequencing';
+import {
+  userAuthenticatedRequest,
+} from '../lib/api';
+import {
+  buildCategoryBreakdown,
+  buildSpendingTrend,
+  comparePeriods,
+  formatMoneyString,
+  humanizeCategory,
+  type CategoryTotal,
+  type CurrencyTrendPoint,
+} from './spending-insights';
+
+type RangeDays = 1 | 7 | 30 | 90;
 
 type CurrencyInsight = {
   currency: string;
@@ -21,9 +39,10 @@ type CurrencyInsight = {
   failedOrCancelledCount: number;
   averageAmount: string;
   largestAmount: string;
-  trend: Array<{ date: string; incoming: string; outgoing: string }>;
+  trend: CurrencyTrendPoint[];
 };
-type Activity = {
+
+type RecentActivity = {
   id: string;
   type: string;
   direction: 'CREDIT' | 'DEBIT';
@@ -32,299 +51,1004 @@ type Activity = {
   status: string;
   createdAt: string;
 };
-type Insights = {
-  range: { from: string; to: string };
+
+type TypeBreakdown = {
+  type: string;
+  count: number;
+};
+
+type MonthlyTrend = {
+  month: string;
+  count: number;
+};
+
+type InsightsResponse = {
+  range: {
+    from: string;
+    to: string;
+  };
   transactionCount: number;
   currencies: CurrencyInsight[];
-  recent: Activity[];
+  recent: RecentActivity[];
   categoriesAvailable: boolean;
-  categoryTotals: Array<{
-    category: string;
-    currencies: Array<{ currency: string; amount: string }>;
-  }>;
-  typeBreakdown: Array<{ type: string; count: number }>;
-  monthlyTrend: Array<{ month: string; count: number }>;
+  categoryTotals: CategoryTotal[];
+  typeBreakdown: TypeBreakdown[];
+  monthlyTrend: MonthlyTrend[];
 };
-type Range =
-  | { kind: 'preset'; days: 1 | 7 | 30 | 90 }
-  | { kind: 'custom'; from: string; to: string };
+
+const RANGE_OPTIONS: Array<{
+  days: RangeDays;
+  label: string;
+}> = [
+  { days: 1, label: 'Today' },
+  { days: 7, label: '7 days' },
+  { days: 30, label: '30 days' },
+  { days: 90, label: '90 days' },
+];
+
+function shiftUtcDay(
+  day: string,
+  offset: number,
+): string {
+  const value =
+    new Date(
+      `${day}T00:00:00.000Z`,
+    );
+
+  value.setUTCDate(
+    value.getUTCDate() + offset,
+  );
+
+  return value
+    .toISOString()
+    .slice(0, 10);
+}
+
+function createPeriods(
+  days: RangeDays,
+) {
+  const to =
+    new Date()
+      .toISOString()
+      .slice(0, 10);
+
+  const from =
+    shiftUtcDay(
+      to,
+      -(days - 1),
+    );
+
+  const previousTo =
+    shiftUtcDay(
+      from,
+      -1,
+    );
+
+  const previousFrom =
+    shiftUtcDay(
+      previousTo,
+      -(days - 1),
+    );
+
+  return {
+    current: {
+      from,
+      to,
+    },
+    previous: {
+      from: previousFrom,
+      to: previousTo,
+    },
+  };
+}
+
+function insightsUrl(
+  from: string,
+  to: string,
+): string {
+  const query =
+    new URLSearchParams({
+      from,
+      to,
+    });
+
+  return `/customer-features/insights?${query.toString()}`;
+}
+
+function displayDate(
+  value: string,
+): string {
+  return new Date(
+    value,
+  ).toLocaleDateString(
+    'en-IN',
+    {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    },
+  );
+}
+
+function displayActivityDate(
+  value: string,
+): string {
+  return new Date(
+    value,
+  ).toLocaleString(
+    'en-IN',
+    {
+      day: 'numeric',
+      month: 'short',
+      hour: 'numeric',
+      minute: '2-digit',
+    },
+  );
+}
+
+function activityLabel(
+  value: string,
+): string {
+  return value
+    .toLowerCase()
+    .replace(
+      /\b\w/g,
+      (letter) =>
+        letter.toUpperCase(),
+    );
+}
 
 export default function InsightsPage() {
-  const requestRef = useRef<{ id: number; controller: AbortController } | null>(
-    null,
-  );
-  const [range, setRange] = useState<Range>({ kind: 'preset', days: 30 });
-  const [customFrom, setCustomFrom] = useState('');
-  const [customTo, setCustomTo] = useState('');
-  const [category, setCategory] = useState('');
-  const [summary, setSummary] = useState<Insights | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const load = useCallback(async () => {
-    const request = beginLatestRequest(requestRef);
-    setLoading(true);
-    setError('');
-    const query = `${range.kind === 'preset' ? `days=${range.days}` : `from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`}${category ? `&category=${category}` : ''}`;
-    try {
-      const value = await userAuthenticatedRequest<Insights>(
-        `/customer-features/insights?${query}`,
-        { signal: request.controller.signal },
-      );
-      if (isLatestRequest(requestRef, request)) setSummary(value);
-    } catch (reason) {
-      if (isLatestRequest(requestRef, request))
-        setError(
-          reason instanceof Error ? reason.message : 'Unable to load insights',
+  const requestSequence =
+    useRef(0);
+
+  const [days, setDays] =
+    useState<RangeDays>(30);
+
+  const [data, setData] =
+    useState<InsightsResponse | null>(
+      null,
+    );
+
+  const [
+    previousData,
+    setPreviousData,
+  ] =
+    useState<InsightsResponse | null>(
+      null,
+    );
+
+  const [
+    selectedCurrency,
+    setSelectedCurrency,
+  ] = useState('');
+
+  const [error, setError] =
+    useState('');
+
+  const [isLoading, setIsLoading] =
+    useState(true);
+
+  const load =
+    useCallback(async () => {
+      const sequence =
+        ++requestSequence.current;
+
+      const periods =
+        createPeriods(days);
+
+      setError('');
+      setIsLoading(true);
+
+      try {
+        const [current, previous] =
+          await Promise.all([
+            userAuthenticatedRequest<InsightsResponse>(
+              insightsUrl(
+                periods.current.from,
+                periods.current.to,
+              ),
+            ),
+            userAuthenticatedRequest<InsightsResponse>(
+              insightsUrl(
+                periods.previous.from,
+                periods.previous.to,
+              ),
+            ),
+          ]);
+
+        if (
+          sequence !==
+          requestSequence.current
+        ) {
+          return;
+        }
+
+        setData(current);
+        setPreviousData(previous);
+
+        setSelectedCurrency(
+          (existing) => {
+            if (
+              current.currencies.some(
+                (item) =>
+                  item.currency ===
+                  existing,
+              )
+            ) {
+              return existing;
+            }
+
+            return (
+              current.currencies[0]
+                ?.currency ?? ''
+            );
+          },
         );
-    } finally {
-      if (requestRef.current?.id === request.id) setLoading(false);
-    }
-  }, [range, category]);
+      }
+      catch (reason) {
+        if (
+          sequence !==
+          requestSequence.current
+        ) {
+          return;
+        }
+
+        setError(
+          reason instanceof Error
+            ? reason.message
+            : 'Unable to load spending insights.',
+        );
+      }
+      finally {
+        if (
+          sequence ===
+          requestSequence.current
+        ) {
+          setIsLoading(false);
+        }
+      }
+    }, [days]);
+
   useEffect(() => {
     void load();
-    return () => requestRef.current?.controller.abort();
   }, [load]);
-  function applyCustom() {
-    if (!customFrom || !customTo) {
-      setError('Choose both custom range dates.');
-      return;
-    }
-    setRange({ kind: 'custom', from: customFrom, to: customTo });
-  }
+
+  const currency =
+    selectedCurrency ||
+    data?.currencies[0]
+      ?.currency ||
+    '';
+
+  const currentBucket =
+    useMemo(
+      () =>
+        data?.currencies.find(
+          (item) =>
+            item.currency ===
+            currency,
+        ) ?? null,
+      [currency, data],
+    );
+
+  const previousBucket =
+    useMemo(
+      () =>
+        previousData?.currencies.find(
+          (item) =>
+            item.currency ===
+            currency,
+        ) ?? null,
+      [
+        currency,
+        previousData,
+      ],
+    );
+
+  const categories =
+    useMemo(
+      () =>
+        data
+          ? buildCategoryBreakdown(
+              data.categoryTotals,
+              currency,
+            )
+          : [],
+      [currency, data],
+    );
+
+  const spendingTrend =
+    useMemo(
+      () =>
+        currentBucket
+          ? buildSpendingTrend(
+              currentBucket.trend,
+              days >= 30 ? 21 : 14,
+            )
+          : [],
+      [currentBucket, days],
+    );
+
+  const comparison =
+    comparePeriods(
+      currentBucket?.outgoing ??
+        '0',
+      previousBucket?.outgoing ??
+        '0',
+    );
+
+  const topCategory =
+    categories[0] ?? null;
+
+  const comparisonClass =
+    comparison.direction ===
+      'UP'
+      ? 'text-amber-700'
+      : comparison.direction ===
+          'DOWN'
+        ? 'text-emerald-700'
+        : 'text-slate-600';
+
   return (
     <main>
       <PageContainer>
         <PageHeader
-          eyebrow="Activity"
-          title="Insights"
-          description="Exact, currency-separated insights from your wallet activity. Payflow never combines currencies or invents conversion rates."
+          eyebrow="Insights"
+          title="Smart spending insights"
+          description="Understand your Payflow activity using authoritative transaction history. Amounts remain separated by currency."
           actions={
-            <button
-              type="button"
-              onClick={() => void load()}
-              className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-            >
-              Refresh
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href="/transactions"
+                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-sky-300 hover:text-sky-700"
+              >
+                Transactions
+              </Link>
+
+              <Button
+                variant="secondary"
+                disabled={isLoading}
+                onClick={() =>
+                  void load()
+                }
+              >
+                {isLoading
+                  ? 'Refreshing…'
+                  : 'Refresh'}
+              </Button>
+            </div>
           }
         />
-        <Card className="mt-6 p-5">
-          <fieldset>
-            <legend className="text-sm font-bold text-slate-800">
-              Date range and category
-            </legend>
-            <label className="mt-3 block max-w-xs text-sm font-semibold">
-              Category
-              <select value={category} onChange={(event) => setCategory(event.target.value)} className="mt-2 min-h-11 w-full rounded-xl border px-3">
-                <option value="">All activity</option>
-                {['FOOD','SHOPPING','TRAVEL','BILLS','RECHARGE','TRANSFER','RENT','ENTERTAINMENT','OTHER'].map((value) => <option key={value}>{value}</option>)}
-              </select>
-            </label>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {([1, 7, 30, 90] as const).map((days) => (
+
+        <section
+          aria-label="Insight range"
+          className="mt-6 flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div>
+            <p className="text-sm font-semibold text-slate-900">
+              Analysis period
+            </p>
+            <p className="mt-1 text-sm text-slate-500">
+              Compare current activity with the immediately preceding period.
+            </p>
+          </div>
+
+          <div
+            role="group"
+            aria-label="Select insight period"
+            className="grid grid-cols-2 gap-2 sm:flex"
+          >
+            {RANGE_OPTIONS.map(
+              (option) => (
                 <button
-                  key={days}
+                  key={option.days}
                   type="button"
-                  aria-pressed={range.kind === 'preset' && range.days === days}
-                  onClick={() => setRange({ kind: 'preset', days })}
-                  className="min-h-11 rounded-xl border px-4 text-sm font-bold aria-pressed:border-blue-700 aria-pressed:bg-blue-50"
+                  aria-pressed={
+                    days ===
+                    option.days
+                  }
+                  disabled={isLoading}
+                  onClick={() =>
+                    setDays(
+                      option.days,
+                    )
+                  }
+                  className={
+                    days === option.days
+                      ? 'min-h-11 rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white shadow-sm'
+                      : 'min-h-11 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:border-sky-300 hover:text-sky-700'
+                  }
                 >
-                  {days === 1 ? 'Today' : `${days} days`}
+                  {option.label}
                 </button>
-              ))}
-            </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
-              <label className="text-sm font-semibold">
-                From
-                <input
-                  type="date"
-                  value={customFrom}
-                  max={customTo || undefined}
-                  onChange={(event) => setCustomFrom(event.target.value)}
-                  className="mt-2 min-h-11 w-full rounded-xl border px-3"
-                />
-              </label>
-              <label className="text-sm font-semibold">
-                To
-                <input
-                  type="date"
-                  value={customTo}
-                  min={customFrom || undefined}
-                  onChange={(event) => setCustomTo(event.target.value)}
-                  className="mt-2 min-h-11 w-full rounded-xl border px-3"
-                />
-              </label>
-              <button
-                type="button"
-                onClick={applyCustom}
-                className="min-h-11 self-end rounded-xl bg-slate-950 px-5 font-bold text-white"
+              ),
+            )}
+          </div>
+        </section>
+
+        {error ? (
+          <div className="mt-6">
+            <ErrorState
+              message={error}
+              onRetry={() =>
+                void load()
+              }
+            />
+          </div>
+        ) : null}
+
+        {isLoading && !data ? (
+          <div className="mt-8">
+            <LoadingState label="Loading spending insights" />
+          </div>
+        ) : null}
+
+        {!isLoading &&
+        data &&
+        data.transactionCount === 0 ? (
+          <div className="mt-8">
+            <EmptyState
+              title="No activity in this period"
+              description="When deposits, withdrawals or transfers appear in this range, Payflow will summarize them here."
+            />
+          </div>
+        ) : null}
+
+        {data &&
+        data.transactionCount > 0 &&
+        currentBucket ? (
+          <>
+            <section className="mt-7">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-wide text-sky-600">
+                    Spending overview
+                  </p>
+
+                  <h2 className="mt-1 text-2xl font-bold text-slate-950">
+                    Your money movement
+                  </h2>
+
+                  <p className="mt-2 text-sm text-slate-500">
+                    {displayDate(
+                      data.range.from,
+                    )}{' '}
+                    –{' '}
+                    {displayDate(
+                      data.range.to,
+                    )}
+                  </p>
+                </div>
+
+                {data.currencies.length >
+                1 ? (
+                  <label className="text-sm font-semibold text-slate-700">
+                    Currency
+                    <select
+                      value={
+                        currency
+                      }
+                      onChange={(
+                        event,
+                      ) =>
+                        setSelectedCurrency(
+                          event
+                            .target
+                            .value,
+                        )
+                      }
+                      className="ml-3 min-h-11 rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900"
+                    >
+                      {data.currencies.map(
+                        (item) => (
+                          <option
+                            key={
+                              item.currency
+                            }
+                            value={
+                              item.currency
+                            }
+                          >
+                            {
+                              item.currency
+                            }
+                          </option>
+                        ),
+                      )}
+                    </select>
+                  </label>
+                ) : null}
+              </div>
+
+              <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <article
+                  data-amount
+                  className="rounded-3xl border border-rose-100 bg-gradient-to-br from-white to-rose-50 p-5 shadow-sm"
+                >
+                  <p className="text-sm font-semibold text-slate-500">
+                    Money out
+                  </p>
+                  <p className="mt-2 text-3xl font-bold tracking-tight text-slate-950">
+                    {formatMoneyString(
+                      currentBucket.outgoing,
+                      currency,
+                    )}
+                  </p>
+                  <p
+                    className={`mt-3 text-sm font-semibold ${comparisonClass}`}
+                  >
+                    {comparison.label}{' '}
+                    vs previous period
+                  </p>
+                </article>
+
+                <article
+                  data-amount
+                  className="rounded-3xl border border-emerald-100 bg-gradient-to-br from-white to-emerald-50 p-5 shadow-sm"
+                >
+                  <p className="text-sm font-semibold text-slate-500">
+                    Money in
+                  </p>
+                  <p className="mt-2 text-3xl font-bold tracking-tight text-slate-950">
+                    {formatMoneyString(
+                      currentBucket.incoming,
+                      currency,
+                    )}
+                  </p>
+                  <p className="mt-3 text-sm text-slate-500">
+                    Completed incoming activity
+                  </p>
+                </article>
+
+                <article
+                  data-amount
+                  className="rounded-3xl border border-sky-100 bg-gradient-to-br from-white to-sky-50 p-5 shadow-sm"
+                >
+                  <p className="text-sm font-semibold text-slate-500">
+                    Average activity
+                  </p>
+                  <p className="mt-2 text-3xl font-bold tracking-tight text-slate-950">
+                    {formatMoneyString(
+                      currentBucket.averageAmount,
+                      currency,
+                    )}
+                  </p>
+                  <p className="mt-3 text-sm text-slate-500">
+                    Across successful transactions
+                  </p>
+                </article>
+
+                <article
+                  data-amount
+                  className="rounded-3xl border border-violet-100 bg-gradient-to-br from-white to-violet-50 p-5 shadow-sm"
+                >
+                  <p className="text-sm font-semibold text-slate-500">
+                    Largest activity
+                  </p>
+                  <p className="mt-2 text-3xl font-bold tracking-tight text-slate-950">
+                    {formatMoneyString(
+                      currentBucket.largestAmount,
+                      currency,
+                    )}
+                  </p>
+                  <p className="mt-3 text-sm text-slate-500">
+                    Largest completed movement
+                  </p>
+                </article>
+              </div>
+
+              <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <p className="text-sm text-slate-500">
+                    Successful
+                  </p>
+                  <p className="mt-1 text-2xl font-bold text-slate-950">
+                    {
+                      currentBucket.successfulCount
+                    }
+                  </p>
+                </article>
+
+                <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <p className="text-sm text-slate-500">
+                    Failed / reversed
+                  </p>
+                  <p className="mt-1 text-2xl font-bold text-slate-950">
+                    {
+                      currentBucket.failedOrCancelledCount
+                    }
+                  </p>
+                </article>
+
+                <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <p className="text-sm text-slate-500">
+                    Total activity
+                  </p>
+                  <p className="mt-1 text-2xl font-bold text-slate-950">
+                    {
+                      data.transactionCount
+                    }
+                  </p>
+                </article>
+              </div>
+            </section>
+
+            <div className="mt-7 grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
+              <section
+                aria-labelledby="spending-trend-title"
+                className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
               >
-                Apply custom
-              </button>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold uppercase tracking-wide text-sky-600">
+                      Spending trend
+                    </p>
+                    <h2
+                      id="spending-trend-title"
+                      className="mt-1 text-xl font-bold text-slate-950"
+                    >
+                      Recent outgoing activity
+                    </h2>
+                    <p className="mt-2 text-sm text-slate-500">
+                      Completed outgoing activity. Bar height is relative within this chart only.
+                    </p>
+                  </div>
+
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                    {currency}
+                  </span>
+                </div>
+
+                {spendingTrend.length ? (
+                  <div className="mt-7">
+                    <div className="flex h-52 min-w-0 items-end gap-2 overflow-x-auto border-b border-slate-200 pb-3">
+                      {spendingTrend.map(
+                        (point) => (
+                          <div
+                            key={
+                              point.date
+                            }
+                            className="group flex h-full min-w-6 flex-1 flex-col justify-end"
+                            title={`${displayDate(
+                              point.date,
+                            )}: ${formatMoneyString(
+                              point.amount,
+                              currency,
+                            )}`}
+                          >
+                            <div
+                              aria-hidden="true"
+                              className="min-h-1 rounded-t-lg bg-gradient-to-t from-sky-600 to-cyan-400 transition group-hover:brightness-95"
+                              style={{
+                                height: `${Math.max(
+                                  point.percentage,
+                                  point.percentage >
+                                    0
+                                    ? 4
+                                    : 1,
+                                )}%`,
+                              }}
+                            />
+                          </div>
+                        ),
+                      )}
+                    </div>
+
+                    <div className="mt-3 flex justify-between text-xs text-slate-400">
+                      <span>
+                        {spendingTrend[0]
+                          ? displayDate(
+                              spendingTrend[0]
+                                .date,
+                            )
+                          : ''}
+                      </span>
+                      <span>
+                        {spendingTrend[
+                          spendingTrend.length -
+                            1
+                        ]
+                          ? displayDate(
+                              spendingTrend[
+                                spendingTrend.length -
+                                  1
+                              ].date,
+                            )
+                          : ''}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="mt-6 rounded-2xl border border-dashed border-slate-300 p-5 text-sm text-slate-500">
+                    No outgoing activity is available for this currency and range.
+                  </p>
+                )}
+              </section>
+
+              <section
+                aria-labelledby="top-category-title"
+                className="rounded-3xl border border-slate-200 bg-slate-950 p-6 text-white shadow-sm"
+              >
+                <p className="text-sm font-semibold uppercase tracking-wide text-sky-300">
+                  Top category
+                </p>
+                <h2
+                  id="top-category-title"
+                  className="mt-2 text-2xl font-bold"
+                >
+                  {topCategory
+                    ? humanizeCategory(
+                        topCategory.category,
+                      )
+                    : 'Not enough categorized data'}
+                </h2>
+
+                {topCategory ? (
+                  <>
+                    <p
+                      data-amount
+                      className="mt-5 text-4xl font-bold tracking-tight"
+                    >
+                      {formatMoneyString(
+                        topCategory.amount,
+                        currency,
+                      )}
+                    </p>
+
+                    <p className="mt-2 text-sm text-slate-300">
+                      {topCategory.percentage.toFixed(
+                        1,
+                      )}
+                      % of categorized outgoing transfers
+                    </p>
+                  </>
+                ) : (
+                  <p className="mt-5 text-sm leading-6 text-slate-300">
+                    Categories appear when Payflow has authoritative classifications for outgoing transfers.
+                  </p>
+                )}
+              </section>
             </div>
-          </fieldset>
-        </Card>
-        <div aria-live="polite">
-          {loading && !summary ? (
-            <LoadingState label="Loading insights" />
-          ) : error ? (
-            <div className="mt-8">
-              <ErrorState message={error} onRetry={() => void load()} />
+
+            <section
+              aria-labelledby="category-breakdown-title"
+              className="mt-7 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+            >
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-wide text-sky-600">
+                  Categories
+                </p>
+                <h2
+                  id="category-breakdown-title"
+                  className="mt-1 text-xl font-bold text-slate-950"
+                >
+                  Where categorized transfers went
+                </h2>
+                <p className="mt-2 text-sm text-slate-500">
+                  Category totals represent completed outgoing transfers that have an authoritative classification.
+                </p>
+              </div>
+
+              {categories.length ? (
+                <div className="mt-6 space-y-5">
+                  {categories.map(
+                    (item) => (
+                      <div
+                        key={
+                          item.category
+                        }
+                      >
+                        <div className="flex items-center justify-between gap-4">
+                          <span className="font-semibold text-slate-800">
+                            {humanizeCategory(
+                              item.category,
+                            )}
+                          </span>
+
+                          <span
+                            data-amount
+                            className="text-sm font-bold text-slate-950"
+                          >
+                            {formatMoneyString(
+                              item.amount,
+                              currency,
+                            )}
+                          </span>
+                        </div>
+
+                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+                          <div
+                            className="h-full rounded-full bg-sky-500"
+                            style={{
+                              width: `${Math.max(
+                                item.percentage,
+                                item.percentage >
+                                  0
+                                  ? 2
+                                  : 0,
+                              )}%`,
+                            }}
+                          />
+                        </div>
+
+                        <p className="mt-1 text-right text-xs text-slate-400">
+                          {item.percentage.toFixed(
+                            1,
+                          )}
+                          %
+                        </p>
+                      </div>
+                    ),
+                  )}
+                </div>
+              ) : (
+                <p className="mt-6 rounded-2xl border border-dashed border-slate-300 p-5 text-sm text-slate-500">
+                  {data.categoriesAvailable
+                    ? 'No categorized outgoing spending is available for this currency and period.'
+                    : 'Transaction categorization is not available for this activity yet.'}
+                </p>
+              )}
+            </section>
+
+            <div className="mt-7 grid gap-6 lg:grid-cols-2">
+              <section
+                aria-labelledby="activity-mix-title"
+                className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+              >
+                <p className="text-sm font-semibold uppercase tracking-wide text-sky-600">
+                  Activity mix
+                </p>
+                <h2
+                  id="activity-mix-title"
+                  className="mt-1 text-xl font-bold text-slate-950"
+                >
+                  Transaction types
+                </h2>
+
+                <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                  {data.typeBreakdown.map(
+                    (item) => (
+                      <article
+                        key={
+                          item.type
+                        }
+                        className="rounded-2xl bg-slate-50 p-4"
+                      >
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          {activityLabel(
+                            item.type,
+                          )}
+                        </p>
+                        <p className="mt-2 text-2xl font-bold text-slate-950">
+                          {item.count}
+                        </p>
+                      </article>
+                    ),
+                  )}
+                </div>
+
+                {data.monthlyTrend.length >
+                0 ? (
+                  <div className="mt-6 border-t border-slate-100 pt-5">
+                    <p className="text-sm font-semibold text-slate-800">
+                      Monthly activity count
+                    </p>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {data.monthlyTrend.map(
+                        (item) => (
+                          <span
+                            key={
+                              item.month
+                            }
+                            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600"
+                          >
+                            {item.month}:{' '}
+                            {item.count}
+                          </span>
+                        ),
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+              </section>
+
+              <section
+                aria-labelledby="recent-insight-title"
+                className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold uppercase tracking-wide text-sky-600">
+                      Recent activity
+                    </p>
+                    <h2
+                      id="recent-insight-title"
+                      className="mt-1 text-xl font-bold text-slate-950"
+                    >
+                      Latest movements
+                    </h2>
+                  </div>
+
+                  <Link
+                    href="/transactions"
+                    className="text-sm font-semibold text-sky-700 hover:text-sky-800"
+                  >
+                    View all
+                  </Link>
+                </div>
+
+                <div className="mt-5 space-y-3">
+                  {data.recent
+                    .slice(0, 6)
+                    .map(
+                      (item) => (
+                        <article
+                          key={
+                            item.id
+                          }
+                          className="flex items-center justify-between gap-4 rounded-2xl border border-slate-100 p-4"
+                        >
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-semibold text-slate-900">
+                                {activityLabel(
+                                  item.type,
+                                )}
+                              </span>
+
+                              <span
+                                className={
+                                  item.status ===
+                                  'COMPLETED'
+                                    ? 'rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700'
+                                    : 'rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600'
+                                }
+                              >
+                                {
+                                  item.status
+                                }
+                              </span>
+                            </div>
+
+                            <p className="mt-1 text-xs text-slate-500">
+                              {displayActivityDate(
+                                item.createdAt,
+                              )}
+                            </p>
+                          </div>
+
+                          <p
+                            data-amount
+                            className={
+                              item.direction ===
+                              'DEBIT'
+                                ? 'shrink-0 font-bold text-rose-600'
+                                : 'shrink-0 font-bold text-emerald-600'
+                            }
+                          >
+                            {item.direction ===
+                            'DEBIT'
+                              ? '-'
+                              : '+'}
+                            {formatMoneyString(
+                              item.amount,
+                              item.currency,
+                            )}
+                          </p>
+                        </article>
+                      ),
+                    )}
+                </div>
+              </section>
             </div>
-          ) : summary ? (
-            <InsightsContent value={summary} refreshing={loading} />
-          ) : null}
-        </div>
+
+            <p className="mt-6 text-center text-xs leading-5 text-slate-400">
+              Insights summarize recorded Payflow activity. They are informational and are not financial advice.
+            </p>
+          </>
+        ) : null}
       </PageContainer>
     </main>
-  );
-}
-
-function InsightsContent({
-  value,
-  refreshing,
-}: {
-  value: Insights;
-  refreshing: boolean;
-}) {
-  if (!value.transactionCount)
-    return (
-      <div className="mt-8">
-        <EmptyState
-          title="No activity in this range"
-          description="Try another date range or refresh after completing a transaction."
-        />
-      </div>
-    );
-  return (
-    <div className="mt-8 space-y-6">
-      {refreshing ? (
-        <p className="text-sm font-semibold text-slate-600">
-          Refreshing insights…
-        </p>
-      ) : null}
-      <Card className="p-6">
-        <p className="text-sm font-semibold text-slate-500">
-          All transaction attempts
-        </p>
-        <p className="mt-2 text-3xl font-bold">
-          {value.transactionCount.toLocaleString('en-IN')}
-        </p>
-        <p className="mt-2 text-sm text-slate-600">
-          {new Date(value.range.from).toLocaleDateString()} –{' '}
-          {new Date(value.range.to).toLocaleDateString()}
-        </p>
-      </Card>
-      <div className="grid gap-5 lg:grid-cols-2">
-        {value.currencies.map((item) => (
-          <Card key={item.currency} className="overflow-hidden p-6">
-            <h2 className="text-xl font-bold">{item.currency}</h2>
-            <dl className="mt-4 grid grid-cols-2 gap-4">
-              <Metric
-                label="Incoming"
-                value={formatMoney(item.incoming, item.currency)}
-              />
-              <Metric
-                label="Outgoing"
-                value={formatMoney(item.outgoing, item.currency)}
-              />
-              <Metric label="Successful" value={String(item.successfulCount)} />
-              <Metric
-                label="Failed/reversed"
-                value={String(item.failedOrCancelledCount)}
-              />
-              <Metric
-                label="Average successful amount"
-                value={formatMoney(item.averageAmount, item.currency)}
-              />
-              <Metric
-                label="Largest successful amount"
-                value={formatMoney(item.largestAmount, item.currency)}
-              />
-            </dl>
-            <h3 className="mt-6 font-bold">Daily trend</h3>
-            {item.trend.length ? (
-              <div className="mt-3 overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead>
-                    <tr>
-                      <th className="p-2">Date</th>
-                      <th className="p-2">Incoming</th>
-                      <th className="p-2">Outgoing</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {item.trend.map((point) => (
-                      <tr key={point.date} className="border-t">
-                        <td className="p-2">{point.date}</td>
-                        <td className="p-2 tabular-nums">
-                          {formatMoney(point.incoming, item.currency)}
-                        </td>
-                        <td className="p-2 tabular-nums">
-                          {formatMoney(point.outgoing, item.currency)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <p className="mt-2 text-sm text-slate-600">
-                No successful activity to chart.
-              </p>
-            )}
-          </Card>
-        ))}
-      </div>
-      {value.categoriesAvailable ? <Card className="p-6"><h2 className="text-lg font-bold">Category totals</h2><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{value.categoryTotals.map(item=><div key={item.category} className="rounded-xl bg-slate-50 p-4"><h3 className="font-bold">{item.category}</h3>{item.currencies.map(total=><p key={total.currency} className="mt-1 text-sm tabular-nums">{formatMoney(total.amount,total.currency)}</p>)}</div>)}</div></Card> : null}
-      <Card className="p-6"><h2 className="text-lg font-bold">Activity breakdown</h2><div className="mt-4 flex flex-wrap gap-3">{value.typeBreakdown.map(item=><p key={item.type} className="rounded-xl bg-slate-50 p-3"><strong>{item.type}</strong>: {item.count}</p>)}</div></Card>
-      <Card className="p-6">
-        <h2 className="text-lg font-bold">Recent activity</h2>
-        <div className="mt-4 overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead>
-              <tr>
-                <th className="p-3">When</th>
-                <th className="p-3">Type</th>
-                <th className="p-3">Direction</th>
-                <th className="p-3">Amount</th>
-                <th className="p-3">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {value.recent.map((item) => (
-                <tr key={`${item.type}:${item.id}`} className="border-t">
-                  <td className="whitespace-nowrap p-3">
-                    {new Date(item.createdAt).toLocaleString()}
-                  </td>
-                  <td className="p-3">{item.type}</td>
-                  <td className="p-3">{item.direction}</td>
-                  <td className="whitespace-nowrap p-3 font-semibold tabular-nums">
-                    {formatMoney(item.amount, item.currency)}
-                  </td>
-                  <td className="p-3">{item.status}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-      {!value.categoriesAvailable ? (
-        <p
-          role="status"
-          className="rounded-xl border border-slate-200 bg-slate-50 p-4 font-semibold text-slate-700"
-        >
-          Category insights unavailable for this transaction data.
-        </p>
-      ) : null}
-    </div>
-  );
-}
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-sm text-slate-500">{label}</dt>
-      <dd className="mt-1 font-bold tabular-nums text-slate-950">{value}</dd>
-    </div>
   );
 }
