@@ -97,3 +97,222 @@ a {
     animation-iteration-count: 1 !important;
   }
 }
+
+
+/* ==========================================================
+   PAYFLOW_PHASE20_PREMIUM_POLISH_START
+   Premium fintech interaction and accessibility layer.
+   Presentation only. No product or financial behavior.
+   ========================================================== */
+
+:root {
+  --pf-motion-fast: 140ms;
+  --pf-motion-base: 220ms;
+  --pf-motion-slow: 320ms;
+  --pf-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  --pf-focus-color: rgba(37, 99, 235, 0.78);
+  --pf-focus-halo: rgba(37, 99, 235, 0.14);
+
+  --pf-shadow-soft:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 8px 24px rgba(15, 23, 42, 0.05);
+
+  --pf-shadow-raised:
+    0 2px 6px rgba(15, 23, 42, 0.06),
+    0 16px 38px rgba(15, 23, 42, 0.08);
+}
+
+/* Crisp, trustworthy typography for dense financial screens. */
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  font-variant-numeric: proportional-nums;
+}
+
+/* Financial figures should not visually jump as values change. */
+table,
+[data-amount],
+[data-balance],
+[data-reference],
+[data-transaction-id] {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Controlled brand selection treatment. */
+::selection {
+  background: rgba(37, 99, 235, 0.16);
+}
+
+/* Remove distracting mobile tap flash. */
+:where(
+  button,
+  a,
+  input,
+  select,
+  textarea,
+  [role="button"],
+  [role="tab"]
+) {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Consistent premium interaction timing. */
+:where(
+  button,
+  a,
+  input,
+  select,
+  textarea,
+  [role="button"],
+  [role="tab"]
+) {
+  transition:
+    color var(--pf-motion-fast) var(--pf-ease-standard),
+    background-color var(--pf-motion-fast) var(--pf-ease-standard),
+    border-color var(--pf-motion-fast) var(--pf-ease-standard),
+    box-shadow var(--pf-motion-fast) var(--pf-ease-standard),
+    opacity var(--pf-motion-fast) var(--pf-ease-standard),
+    filter var(--pf-motion-fast) var(--pf-ease-standard);
+}
+
+/* Clear keyboard focus for payment-critical controls. */
+:where(
+  button,
+  a,
+  input,
+  select,
+  textarea,
+  [role="button"],
+  [role="tab"],
+  [tabindex]
+):focus-visible {
+  outline: 2px solid var(--pf-focus-color);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 5px var(--pf-focus-halo);
+}
+
+/* Mouse interaction should not leave a fake keyboard ring. */
+:where(
+  button,
+  a,
+  input,
+  select,
+  textarea,
+  [role="button"],
+  [role="tab"]
+):focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Very small tactile acknowledgement. */
+:where(
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"])
+):active {
+  translate: 0 1px;
+}
+
+/* Disabled financial actions should feel intentional. */
+:where(
+  button:disabled,
+  input:disabled,
+  select:disabled,
+  textarea:disabled,
+  [aria-disabled="true"]
+) {
+  cursor: not-allowed;
+}
+
+/* Processing state feedback. */
+[aria-busy="true"] {
+  cursor: progress;
+}
+
+[role="button"][aria-disabled="true"] {
+  pointer-events: none;
+}
+
+/* Small page entrance — premium rather than flashy. */
+main {
+  animation: pf-page-enter var(--pf-motion-base) var(--pf-ease-standard) both;
+}
+
+@keyframes pf-page-enter {
+  from {
+    opacity: 0.985;
+    translate: 0 3px;
+  }
+
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+/* Cleaner modal backdrop for confirmations/reviews. */
+dialog::backdrop {
+  background: rgba(15, 23, 42, 0.48);
+  backdrop-filter: blur(3px);
+}
+
+/* Better horizontal scrolling behavior for dense tables/actions. */
+:where(
+  [role="tablist"],
+  .overflow-x-auto
+) {
+  overscroll-behavior-inline: contain;
+}
+
+/* Smooth scroll only when user allows motion. */
+@media (prefers-reduced-motion: no-preference) {
+  html:focus-within {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Mobile fintech controls need reliable touch size. */
+@media (max-width: 640px) {
+  :where(
+    button,
+    select,
+    input:not([type="checkbox"]):not([type="radio"]),
+    textarea
+  ) {
+    min-height: 44px;
+  }
+}
+
+/* Desktop hover polish stays deliberately subtle. */
+@media (hover: hover) and (pointer: fine) {
+  :where(
+    button:not(:disabled),
+    [role="button"]:not([aria-disabled="true"])
+  ):hover {
+    filter: brightness(0.985);
+  }
+}
+
+/* Accessibility wins over animation. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  main {
+    animation: none !important;
+  }
+}
+
+/* ==========================================================
+   PAYFLOW_PHASE20_PREMIUM_POLISH_END
+   ========================================================== */
