@@ -1,4 +1,4 @@
-﻿import {
+import {
   Test,
   TestingModule,
 } from '@nestjs/testing';
@@ -12,41 +12,103 @@ import {
 } from './app.service';
 
 describe('AppController', () => {
-  let app: TestingModule;
+  let controller: AppController;
 
-  beforeAll(async () => {
-    app =
+  const appServiceMock = {
+    getHealth: jest.fn(),
+    getLiveness: jest.fn(),
+    getReadiness: jest.fn(),
+  };
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+
+    appServiceMock.getHealth.mockReturnValue({
+      status: 'ok',
+      service: 'api-gateway',
+      timestamp:
+        '2026-08-30T00:00:00.000Z',
+    });
+
+    appServiceMock.getLiveness.mockReturnValue({
+      status: 'ok',
+      service: 'api-gateway',
+      check: 'liveness',
+      timestamp:
+        '2026-08-30T00:00:00.000Z',
+    });
+
+    appServiceMock.getReadiness.mockReturnValue({
+      status: 'ready',
+      service: 'api-gateway',
+      check: 'readiness',
+      timestamp:
+        '2026-08-30T00:00:00.000Z',
+    });
+
+    const module: TestingModule =
       await Test.createTestingModule({
         controllers: [
           AppController,
         ],
         providers: [
-          AppService,
+          {
+            provide: AppService,
+            useValue: appServiceMock,
+          },
         ],
       }).compile();
+
+    controller =
+      module.get<AppController>(
+        AppController,
+      );
   });
 
-  describe('getHealth', () => {
-    it('should return gateway health', () => {
-      const controller =
-        app.get<AppController>(
-          AppController,
-        );
-
-      const result =
-        controller.getHealth();
-
-      expect(result.status).toBe(
-        'ok',
-      );
-
-      expect(result.service).toBe(
-        'api-gateway',
-      );
-
-      expect(
-        typeof result.timestamp,
-      ).toBe('string');
+  it('should preserve gateway health', () => {
+    expect(
+      controller.getHealth(),
+    ).toEqual({
+      status: 'ok',
+      service: 'api-gateway',
+      timestamp:
+        '2026-08-30T00:00:00.000Z',
     });
+
+    expect(
+      appServiceMock.getHealth,
+    ).toHaveBeenCalledTimes(1);
+  });
+
+  it('should return gateway liveness', () => {
+    expect(
+      controller.getLiveness(),
+    ).toEqual({
+      status: 'ok',
+      service: 'api-gateway',
+      check: 'liveness',
+      timestamp:
+        '2026-08-30T00:00:00.000Z',
+    });
+
+    expect(
+      appServiceMock.getLiveness,
+    ).toHaveBeenCalledTimes(1);
+  });
+
+  it('should return gateway readiness', () => {
+    expect(
+      controller.getReadiness(),
+    ).toEqual({
+      status: 'ready',
+      service: 'api-gateway',
+      check: 'readiness',
+      timestamp:
+        '2026-08-30T00:00:00.000Z',
+    });
+
+    expect(
+      appServiceMock.getReadiness,
+    ).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,0 +1,555 @@
+{
+    "schemaVersion":  41,
+    "id":  null,
+    "templating":  {
+                       "list":  [
+
+                                ]
+                   },
+    "annotations":  {
+                        "list":  [
+
+                                 ]
+                    },
+    "version":  1,
+    "panels":  [
+                   {
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "mappings":  [
+                                                                             {
+                                                                                 "options":  {
+                                                                                                 "1":  {
+                                                                                                           "text":  "UP"
+                                                                                                       },
+                                                                                                 "0":  {
+                                                                                                           "text":  "DOWN"
+                                                                                                       }
+                                                                                             },
+                                                                                 "type":  "value"
+                                                                             }
+                                                                         ]
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "id":  1,
+                       "gridPos":  {
+                                       "y":  0,
+                                       "w":  4,
+                                       "x":  0,
+                                       "h":  5
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "payflow-prometheus"
+                                      },
+                       "title":  "Gateway UP",
+                       "targets":  [
+                                       {
+                                           "instant":  true,
+                                           "expr":  "up{job=\"payflow-gateway\"}",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "type":  "stat",
+                       "options":  {
+                                       "textMode":  "auto",
+                                       "colorMode":  "value",
+                                       "graphMode":  "none",
+                                       "reduceOptions":  {
+                                                             "values":  false,
+                                                             "calcs":  [
+                                                                           "lastNotNull"
+                                                                       ],
+                                                             "fields":  ""
+                                                         },
+                                       "justifyMode":  "auto",
+                                       "orientation":  "auto"
+                                   }
+                   },
+                   {
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "mappings":  [
+                                                                             {
+                                                                                 "options":  {
+                                                                                                 "1":  {
+                                                                                                           "text":  "UP"
+                                                                                                       },
+                                                                                                 "0":  {
+                                                                                                           "text":  "DOWN"
+                                                                                                       }
+                                                                                             },
+                                                                                 "type":  "value"
+                                                                             }
+                                                                         ]
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "id":  2,
+                       "gridPos":  {
+                                       "y":  0,
+                                       "w":  4,
+                                       "x":  4,
+                                       "h":  5
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "payflow-prometheus"
+                                      },
+                       "title":  "Auth UP",
+                       "targets":  [
+                                       {
+                                           "instant":  true,
+                                           "expr":  "up{job=\"payflow-auth\"}",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "type":  "stat",
+                       "options":  {
+                                       "textMode":  "auto",
+                                       "colorMode":  "value",
+                                       "graphMode":  "none",
+                                       "reduceOptions":  {
+                                                             "values":  false,
+                                                             "calcs":  [
+                                                                           "lastNotNull"
+                                                                       ],
+                                                             "fields":  ""
+                                                         },
+                                       "justifyMode":  "auto",
+                                       "orientation":  "auto"
+                                   }
+                   },
+                   {
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "mappings":  [
+                                                                             {
+                                                                                 "options":  {
+                                                                                                 "1":  {
+                                                                                                           "text":  "UP"
+                                                                                                       },
+                                                                                                 "0":  {
+                                                                                                           "text":  "DOWN"
+                                                                                                       }
+                                                                                             },
+                                                                                 "type":  "value"
+                                                                             }
+                                                                         ]
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "id":  3,
+                       "gridPos":  {
+                                       "y":  0,
+                                       "w":  4,
+                                       "x":  8,
+                                       "h":  5
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "payflow-prometheus"
+                                      },
+                       "title":  "Wallet UP",
+                       "targets":  [
+                                       {
+                                           "instant":  true,
+                                           "expr":  "up{job=\"payflow-wallet\"}",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "type":  "stat",
+                       "options":  {
+                                       "textMode":  "auto",
+                                       "colorMode":  "value",
+                                       "graphMode":  "none",
+                                       "reduceOptions":  {
+                                                             "values":  false,
+                                                             "calcs":  [
+                                                                           "lastNotNull"
+                                                                       ],
+                                                             "fields":  ""
+                                                         },
+                                       "justifyMode":  "auto",
+                                       "orientation":  "auto"
+                                   }
+                   },
+                   {
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "mappings":  [
+                                                                             {
+                                                                                 "options":  {
+                                                                                                 "1":  {
+                                                                                                           "text":  "UP"
+                                                                                                       },
+                                                                                                 "0":  {
+                                                                                                           "text":  "DOWN"
+                                                                                                       }
+                                                                                             },
+                                                                                 "type":  "value"
+                                                                             }
+                                                                         ]
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "id":  4,
+                       "gridPos":  {
+                                       "y":  0,
+                                       "w":  4,
+                                       "x":  12,
+                                       "h":  5
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "payflow-prometheus"
+                                      },
+                       "title":  "Payment UP",
+                       "targets":  [
+                                       {
+                                           "instant":  true,
+                                           "expr":  "up{job=\"payflow-payment\"}",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "type":  "stat",
+                       "options":  {
+                                       "textMode":  "auto",
+                                       "colorMode":  "value",
+                                       "graphMode":  "none",
+                                       "reduceOptions":  {
+                                                             "values":  false,
+                                                             "calcs":  [
+                                                                           "lastNotNull"
+                                                                       ],
+                                                             "fields":  ""
+                                                         },
+                                       "justifyMode":  "auto",
+                                       "orientation":  "auto"
+                                   }
+                   },
+                   {
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "mappings":  [
+                                                                             {
+                                                                                 "options":  {
+                                                                                                 "1":  {
+                                                                                                           "text":  "UP"
+                                                                                                       },
+                                                                                                 "0":  {
+                                                                                                           "text":  "DOWN"
+                                                                                                       }
+                                                                                             },
+                                                                                 "type":  "value"
+                                                                             }
+                                                                         ]
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "id":  5,
+                       "gridPos":  {
+                                       "y":  0,
+                                       "w":  4,
+                                       "x":  16,
+                                       "h":  5
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "payflow-prometheus"
+                                      },
+                       "title":  "Notification UP",
+                       "targets":  [
+                                       {
+                                           "instant":  true,
+                                           "expr":  "up{job=\"payflow-notification\"}",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "type":  "stat",
+                       "options":  {
+                                       "textMode":  "auto",
+                                       "colorMode":  "value",
+                                       "graphMode":  "none",
+                                       "reduceOptions":  {
+                                                             "values":  false,
+                                                             "calcs":  [
+                                                                           "lastNotNull"
+                                                                       ],
+                                                             "fields":  ""
+                                                         },
+                                       "justifyMode":  "auto",
+                                       "orientation":  "auto"
+                                   }
+                   },
+                   {
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "reqps"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "id":  6,
+                       "gridPos":  {
+                                       "y":  5,
+                                       "w":  12,
+                                       "x":  0,
+                                       "h":  8
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "payflow-prometheus"
+                                      },
+                       "title":  "Gateway Request Rate",
+                       "targets":  [
+                                       {
+                                           "legendFormat":  "{{status_class}}",
+                                           "expr":  "sum by (status_class) (rate(payflow_gateway_http_requests_total[5m]))",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "type":  "timeseries",
+                       "options":  {
+                                       "legend":  {
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true,
+                                                      "displayMode":  "list"
+                                                  },
+                                       "tooltip":  {
+                                                       "sort":  "desc",
+                                                       "mode":  "multi"
+                                                   }
+                                   }
+                   },
+                   {
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "reqps"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "id":  7,
+                       "gridPos":  {
+                                       "y":  5,
+                                       "w":  12,
+                                       "x":  12,
+                                       "h":  8
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "payflow-prometheus"
+                                      },
+                       "title":  "Gateway Error Rate",
+                       "targets":  [
+                                       {
+                                           "legendFormat":  "4xx + 5xx",
+                                           "expr":  "sum(rate(payflow_gateway_http_requests_total{status_class=~\"4xx|5xx\"}[5m]))",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "type":  "timeseries",
+                       "options":  {
+                                       "legend":  {
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true,
+                                                      "displayMode":  "list"
+                                                  },
+                                       "tooltip":  {
+                                                       "sort":  "desc",
+                                                       "mode":  "multi"
+                                                   }
+                                   }
+                   },
+                   {
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "s"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "id":  8,
+                       "gridPos":  {
+                                       "y":  13,
+                                       "w":  12,
+                                       "x":  0,
+                                       "h":  8
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "payflow-prometheus"
+                                      },
+                       "title":  "Gateway P95 Latency",
+                       "targets":  [
+                                       {
+                                           "legendFormat":  "p95",
+                                           "expr":  "histogram_quantile(0.95, sum by (le) (rate(payflow_gateway_http_request_duration_seconds_bucket[5m])))",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "type":  "timeseries",
+                       "options":  {
+                                       "legend":  {
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true,
+                                                      "displayMode":  "list"
+                                                  },
+                                       "tooltip":  {
+                                                       "sort":  "desc",
+                                                       "mode":  "multi"
+                                                   }
+                                   }
+                   },
+                   {
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "cores"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "id":  9,
+                       "gridPos":  {
+                                       "y":  13,
+                                       "w":  12,
+                                       "x":  12,
+                                       "h":  8
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "payflow-prometheus"
+                                      },
+                       "title":  "Process CPU Usage",
+                       "targets":  [
+                                       {
+                                           "legendFormat":  "Gateway",
+                                           "expr":  "rate(payflow_gateway_runtime_process_cpu_seconds_total[5m])",
+                                           "refId":  "A"
+                                       },
+                                       {
+                                           "legendFormat":  "Auth",
+                                           "expr":  "rate(payflow_auth_runtime_process_cpu_seconds_total[5m])",
+                                           "refId":  "B"
+                                       },
+                                       {
+                                           "legendFormat":  "Wallet",
+                                           "expr":  "rate(payflow_wallet_runtime_process_cpu_seconds_total[5m])",
+                                           "refId":  "C"
+                                       },
+                                       {
+                                           "legendFormat":  "Payment",
+                                           "expr":  "rate(payflow_payment_runtime_process_cpu_seconds_total[5m])",
+                                           "refId":  "D"
+                                       },
+                                       {
+                                           "legendFormat":  "Notification",
+                                           "expr":  "rate(payflow_notification_runtime_process_cpu_seconds_total[5m])",
+                                           "refId":  "E"
+                                       }
+                                   ],
+                       "type":  "timeseries",
+                       "options":  {
+                                       "legend":  {
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true,
+                                                      "displayMode":  "table"
+                                                  },
+                                       "tooltip":  {
+                                                       "sort":  "desc",
+                                                       "mode":  "multi"
+                                                   }
+                                   }
+                   },
+                   {
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "bytes"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "id":  10,
+                       "gridPos":  {
+                                       "y":  21,
+                                       "w":  24,
+                                       "x":  0,
+                                       "h":  8
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "payflow-prometheus"
+                                      },
+                       "title":  "Resident Memory",
+                       "targets":  [
+                                       {
+                                           "legendFormat":  "Gateway",
+                                           "expr":  "payflow_gateway_runtime_process_resident_memory_bytes",
+                                           "refId":  "A"
+                                       },
+                                       {
+                                           "legendFormat":  "Auth",
+                                           "expr":  "payflow_auth_runtime_process_resident_memory_bytes",
+                                           "refId":  "B"
+                                       },
+                                       {
+                                           "legendFormat":  "Wallet",
+                                           "expr":  "payflow_wallet_runtime_process_resident_memory_bytes",
+                                           "refId":  "C"
+                                       },
+                                       {
+                                           "legendFormat":  "Payment",
+                                           "expr":  "payflow_payment_runtime_process_resident_memory_bytes",
+                                           "refId":  "D"
+                                       },
+                                       {
+                                           "legendFormat":  "Notification",
+                                           "expr":  "payflow_notification_runtime_process_resident_memory_bytes",
+                                           "refId":  "E"
+                                       }
+                                   ],
+                       "type":  "timeseries",
+                       "options":  {
+                                       "legend":  {
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true,
+                                                      "displayMode":  "table"
+                                                  },
+                                       "tooltip":  {
+                                                       "sort":  "desc",
+                                                       "mode":  "multi"
+                                                   }
+                                   }
+                   }
+               ],
+    "tags":  [
+                 "payflow",
+                 "production",
+                 "overview"
+             ],
+    "time":  {
+                 "to":  "now",
+                 "from":  "now-6h"
+             },
+    "timezone":  "browser",
+    "refresh":  "30s",
+    "title":  "Payflow - Production Overview",
+    "uid":  "payflow-overview"
+}

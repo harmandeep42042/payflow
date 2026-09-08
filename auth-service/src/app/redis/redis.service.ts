@@ -138,6 +138,33 @@ export class RedisService
     };
   }
 
+  async getAndDelete(key: string): Promise<string | null> {
+    const value = await this.client.getDel(key);
+
+    if (value === null) {
+      return null;
+    }
+
+    return String(value);
+  }
+
+  async checkReadiness(): Promise<boolean> {
+    try {
+      if (
+        !this.client.isOpen ||
+        !this.client.isReady
+      ) {
+        return false;
+      }
+
+      const response =
+        await this.client.ping();
+
+      return response === 'PONG';
+    } catch {
+      return false;
+    }
+  }
   async onApplicationShutdown(): Promise<void> {
     if (this.client.isOpen) {
       await this.client.quit();

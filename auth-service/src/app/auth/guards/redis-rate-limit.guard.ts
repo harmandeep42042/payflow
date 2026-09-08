@@ -9,6 +9,7 @@ import { Reflector } from '@nestjs/core';
 import { createHash } from 'node:crypto';
 
 import { RedisService } from '../../redis/redis.service';
+import { MetricsService } from '../../observability/metrics.service';
 import {
   RATE_LIMIT_KEY,
   RateLimitOptions,
@@ -36,6 +37,7 @@ export class RedisRateLimitGuard
   constructor(
     private readonly reflector: Reflector,
     private readonly redisService: RedisService,
+    private readonly metrics?: MetricsService,
   ) {}
 
   async canActivate(
@@ -51,7 +53,7 @@ export class RedisRateLimitGuard
       );
 
     if (!options) {
-      return true;
+    return true;
     }
 
     const request = context
@@ -79,6 +81,11 @@ export class RedisRateLimitGuard
       );
 
     if (!result.allowed) {
+      this.metrics?.recordRateLimit(
+        options.prefix,
+        'blocked',
+      );
+
       throw new HttpException(
         {
           statusCode:
@@ -92,6 +99,11 @@ export class RedisRateLimitGuard
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
+
+    this.metrics?.recordRateLimit(
+      options.prefix,
+      'allowed',
+    );
 
     return true;
   }

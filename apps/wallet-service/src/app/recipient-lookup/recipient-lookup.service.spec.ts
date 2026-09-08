@@ -41,4 +41,39 @@ describe('RecipientLookupService privacy', () => {
       recipient: { userId: 'recipient-1', walletId: 'wallet-2', currency: 'USD' },
     });
   });
+
+  it('does not disclose the recipient phone number', async () => {
+    findFirst.mockResolvedValue({
+      id: 'recipient-privacy',
+      email: 'privacy@example.test',
+      phone: '+919876543210',
+      vpa: 'privacy@payflow',
+      firstName: 'Privacy',
+      lastName: 'Recipient',
+      status: 'ACTIVE',
+      wallets: [
+        {
+          id: 'wallet-privacy',
+          currency: 'INR',
+          status: 'ACTIVE',
+        },
+      ],
+    });
+
+    const result = await service.resolveRecipient({
+      phone: '+919876543210',
+      currency: 'INR',
+      excludeUserId: 'caller-1',
+    });
+
+    expect(result.recipient).toMatchObject({
+      userId: 'recipient-privacy',
+      email: 'privacy@example.test',
+      vpa: 'privacy@payflow',
+      walletId: 'wallet-privacy',
+      currency: 'INR',
+    });
+
+    expect(result.recipient).not.toHaveProperty('phone');
+  });
 });

@@ -1,3 +1,4 @@
+import { withCorrelationHeaders } from '../observability/correlation-id.middleware';
 import { payflowConfig } from '@payflow/shared-config';
 import { HttpService } from '@nestjs/axios';
 import {
@@ -10,51 +11,35 @@ import { firstValueFrom } from 'rxjs';
 
 @Injectable()
 export class AuthProxyService {
-  private readonly authServiceUrl =
-    payflowConfig.urls.authService;
+  private readonly authServiceUrl = payflowConfig.urls.authService;
 
-  constructor(
-    private readonly httpService: HttpService,
-  ) {}
+  constructor(private readonly httpService: HttpService) {}
 
   register(body: unknown) {
     return this.post('/auth/register', body);
   }
 
-
-  async login(
-    body: unknown,
-    userAgent?: string,
-    ipAddress?: string,
-  ) {
+  async login(body: unknown, userAgent?: string, ipAddress?: string) {
     try {
-      const response =
-        await firstValueFrom(
-          this.httpService.post(
-            `${this.authServiceUrl}/auth/login`,
-            body,
-            {
-              headers: {
-                'Content-Type':
-                  'application/json',
+      const response = await firstValueFrom(
+        this.httpService.post(`${this.authServiceUrl}/auth/login`, body, {
+          headers: withCorrelationHeaders({
+            'Content-Type': 'application/json',
 
-                ...(userAgent
-                  ? {
-                      'User-Agent':
-                        userAgent,
-                    }
-                  : {}),
+            ...(userAgent
+              ? {
+                  'User-Agent': userAgent,
+                }
+              : {}),
 
-                ...(ipAddress
-                  ? {
-                      'X-Forwarded-For':
-                        ipAddress,
-                    }
-                  : {}),
-              },
-            },
-          ),
-        );
+            ...(ipAddress
+              ? {
+                  'X-Forwarded-For': ipAddress,
+                }
+              : {}),
+          }),
+        }),
+      );
 
       return response.data;
     } catch (error) {
@@ -66,63 +51,56 @@ export class AuthProxyService {
     return this.post('/auth/refresh', body);
   }
   requestOtp(body: unknown) {
-    return this.post(
-      '/auth/otp/request',
-      body,
-    );
+    return this.post('/auth/otp/request', body);
   }
 
   verifyOtp(body: unknown) {
-    return this.post(
-      '/auth/otp/verify',
-      body,
-    );
+    return this.post('/auth/otp/verify', body);
+  }
+
+  requestMobileOtp(body: unknown) {
+    return this.post('/auth/otp/mobile/request', body);
+  }
+
+  verifyMobileOtp(body: unknown) {
+    return this.post('/auth/otp/mobile/verify', body);
+  }
+
+  registerMobileOtp(body: unknown) {
+    return this.post('/auth/otp/mobile/register', body);
   }
 
   logout(body: unknown) {
     return this.post('/auth/logout', body);
   }
 
-
   forgotPassword(body: unknown) {
-    return this.post(
-      "/auth/password/forgot",
-      body,
-    );
+    return this.post('/auth/password/forgot', body);
   }
 
   resetPassword(body: unknown) {
-    return this.post(
-      "/auth/password/reset",
-      body,
-    );
+    return this.post('/auth/password/reset', body);
   }
 
-  async changePassword(
-    authorization: string | undefined,
-    body: unknown,
-  ) {
+  async changePassword(authorization: string | undefined, body: unknown) {
     try {
-      const response =
-        await firstValueFrom(
-          this.httpService.post(
-            `${this.authServiceUrl}/auth/change-password`,
-            body,
-            {
-              headers: {
-                'Content-Type':
-                  'application/json',
+      const response = await firstValueFrom(
+        this.httpService.post(
+          `${this.authServiceUrl}/auth/change-password`,
+          body,
+          {
+            headers: withCorrelationHeaders({
+              'Content-Type': 'application/json',
 
-                ...(authorization
-                  ? {
-                      Authorization:
-                        authorization,
-                    }
-                  : {}),
-              },
-            },
-          ),
-        );
+              ...(authorization
+                ? {
+                    Authorization: authorization,
+                  }
+                : {}),
+            }),
+          },
+        ),
+      );
 
       return response.data;
     } catch (error) {
@@ -130,31 +108,25 @@ export class AuthProxyService {
     }
   }
 
-  async updateProfile(
-    authorization: string | undefined,
-    body: unknown,
-  ) {
+  async updateProfile(authorization: string | undefined, body: unknown) {
     try {
-      const response =
-        await firstValueFrom(
-          this.httpService.post(
-            `${this.authServiceUrl}/auth/profile/update`,
-            body,
-            {
-              headers: {
-                'Content-Type':
-                  'application/json',
+      const response = await firstValueFrom(
+        this.httpService.post(
+          `${this.authServiceUrl}/auth/profile/update`,
+          body,
+          {
+            headers: withCorrelationHeaders({
+              'Content-Type': 'application/json',
 
-                ...(authorization
-                  ? {
-                      Authorization:
-                        authorization,
-                    }
-                  : {}),
-              },
-            },
-          ),
-        );
+              ...(authorization
+                ? {
+                    Authorization: authorization,
+                  }
+                : {}),
+            }),
+          },
+        ),
+      );
 
       return response.data;
     } catch (error) {
@@ -162,55 +134,44 @@ export class AuthProxyService {
     }
   }
 
-
-  async getCurrentSession(
-    refreshToken: string,
-    authorization?: string,
-  ) {
+  async getCurrentSession(refreshToken: string, authorization?: string) {
     try {
-      const response =
-        await firstValueFrom(
-          this.httpService.post(
-            `${this.authServiceUrl}/auth/sessions/current`,
-            {
-              refreshToken,
-            },
-            {
-              headers:
-                authorization
-                  ? {
-                      Authorization:
-                        authorization,
-                    }
-                  : {},
-            },
-          ),
-        );
+      const response = await firstValueFrom(
+        this.httpService.post(
+          `${this.authServiceUrl}/auth/sessions/current`,
+          {
+            refreshToken,
+          },
+          {
+            headers: withCorrelationHeaders(
+              authorization
+                ? {
+                    Authorization: authorization,
+                  }
+                : {},
+            ),
+          },
+        ),
+      );
 
       return response.data;
     } catch (error) {
       this.handleHttpError(error);
     }
   }
-  async getSessions(
-    authorization?: string,
-  ) {
+  async getSessions(authorization?: string) {
     try {
-      const response =
-        await firstValueFrom(
-          this.httpService.get(
-            `${this.authServiceUrl}/auth/sessions`,
-            {
-              headers:
-                authorization
-                  ? {
-                      Authorization:
-                        authorization,
-                    }
-                  : {},
-            },
+      const response = await firstValueFrom(
+        this.httpService.get(`${this.authServiceUrl}/auth/sessions`, {
+          headers: withCorrelationHeaders(
+            authorization
+              ? {
+                  Authorization: authorization,
+                }
+              : {},
           ),
-        );
+        }),
+      );
 
       return response.data;
     } catch (error) {
@@ -218,26 +179,22 @@ export class AuthProxyService {
     }
   }
 
-  async revokeSession(
-    sessionId: string,
-    authorization?: string,
-  ) {
+  async revokeSession(sessionId: string, authorization?: string) {
     try {
-      const response =
-        await firstValueFrom(
-          this.httpService.delete(
-            `${this.authServiceUrl}/auth/sessions/${sessionId}`,
-            {
-              headers:
-                authorization
-                  ? {
-                      Authorization:
-                        authorization,
-                    }
-                  : {},
-            },
-          ),
-        );
+      const response = await firstValueFrom(
+        this.httpService.delete(
+          `${this.authServiceUrl}/auth/sessions/${sessionId}`,
+          {
+            headers: withCorrelationHeaders(
+              authorization
+                ? {
+                    Authorization: authorization,
+                  }
+                : {},
+            ),
+          },
+        ),
+      );
 
       return response.data;
     } catch (error) {
@@ -245,55 +202,44 @@ export class AuthProxyService {
     }
   }
 
-
-  async logoutOtherSessions(
-    refreshToken: string,
-    authorization?: string,
-  ) {
+  async logoutOtherSessions(refreshToken: string, authorization?: string) {
     try {
-      const response =
-        await firstValueFrom(
-          this.httpService.post(
-            `${this.authServiceUrl}/auth/sessions/logout-others`,
-            {
-              refreshToken,
-            },
-            {
-              headers:
-                authorization
-                  ? {
-                      Authorization:
-                        authorization,
-                    }
-                  : {},
-            },
-          ),
-        );
+      const response = await firstValueFrom(
+        this.httpService.post(
+          `${this.authServiceUrl}/auth/sessions/logout-others`,
+          {
+            refreshToken,
+          },
+          {
+            headers: withCorrelationHeaders(
+              authorization
+                ? {
+                    Authorization: authorization,
+                  }
+                : {},
+            ),
+          },
+        ),
+      );
 
       return response.data;
     } catch (error) {
       this.handleHttpError(error);
     }
   }
-  async logoutAllSessions(
-    authorization?: string,
-  ) {
+  async logoutAllSessions(authorization?: string) {
     try {
-      const response =
-        await firstValueFrom(
-          this.httpService.delete(
-            `${this.authServiceUrl}/auth/sessions`,
-            {
-              headers:
-                authorization
-                  ? {
-                      Authorization:
-                        authorization,
-                    }
-                  : {},
-            },
+      const response = await firstValueFrom(
+        this.httpService.delete(`${this.authServiceUrl}/auth/sessions`, {
+          headers: withCorrelationHeaders(
+            authorization
+              ? {
+                  Authorization: authorization,
+                }
+              : {},
           ),
-        );
+        }),
+      );
 
       return response.data;
     } catch (error) {
@@ -303,14 +249,11 @@ export class AuthProxyService {
   async profile(authorization?: string) {
     try {
       const response = await firstValueFrom(
-        this.httpService.get(
-          `${this.authServiceUrl}/auth/profile`,
-          {
-            headers: authorization
-              ? { Authorization: authorization }
-              : {},
-          },
-        ),
+        this.httpService.get(`${this.authServiceUrl}/auth/profile`, {
+          headers: withCorrelationHeaders(
+            authorization ? { Authorization: authorization } : {},
+          ),
+        }),
       );
 
       return response.data;
@@ -322,15 +265,11 @@ export class AuthProxyService {
   private async post(path: string, body: unknown) {
     try {
       const response = await firstValueFrom(
-        this.httpService.post(
-          `${this.authServiceUrl}${path}`,
-          body,
-          {
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          },
-        ),
+        this.httpService.post(`${this.authServiceUrl}${path}`, body, {
+          headers: withCorrelationHeaders({
+            'Content-Type': 'application/json',
+          }),
+        }),
       );
 
       return response.data;

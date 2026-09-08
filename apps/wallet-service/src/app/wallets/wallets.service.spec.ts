@@ -1,4 +1,4 @@
-﻿import {
+import {
   Test,
   TestingModule,
 } from '@nestjs/testing';
@@ -11,6 +11,7 @@ import {
   WalletsService,
 } from './wallets.service';
 import { RecipientLookupService } from '../recipient-lookup/recipient-lookup.service';
+import { WalletTransferRiskService } from './security/wallet-transfer-risk.service';
 import { Decimal } from '@prisma/client/runtime/client';
 import { ForbiddenException } from '@nestjs/common';
 
@@ -29,6 +30,10 @@ describe('WalletsService', () => {
           {
             provide: RecipientLookupService,
             useValue: { resolveRecipient: jest.fn() },
+          },
+          {
+            provide: WalletTransferRiskService,
+            useValue: { evaluateTransfer: jest.fn() },
           },
         ],
       }).compile();
@@ -63,7 +68,7 @@ describe('WalletsService', () => {
       withdrawal: { findUnique: jest.fn().mockResolvedValue(null) },
       wallet: { findUnique: jest.fn().mockResolvedValue({ id: 'wallet', userId: 'user', status: 'ACTIVE', currency: 'INR', balance: new Decimal('9007199254740992.00'), ledgerAccount: { id: 'ledger' } }) },
     };
-    const preciseService = new WalletsService(prisma as never, { resolveRecipient: jest.fn() } as never);
+    const preciseService = new WalletsService(prisma as never, { resolveRecipient: jest.fn() } as never, { evaluateTransfer: jest.fn() } as never);
     await expect(preciseService.withdrawWallet({ walletId: 'wallet', currency: 'INR', amount: '9007199254740992.01', idempotencyKey: 'precise-withdrawal', reference: 'precision-check' }, 'user')).rejects.toThrow('Insufficient wallet balance');
   });
 });

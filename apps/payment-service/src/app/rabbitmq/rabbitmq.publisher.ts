@@ -1,25 +1,21 @@
-﻿import {
+import { serializeOperationalLog } from '../observability/operational-log';
+import {
   Inject,
   Injectable,
   Logger,
   OnApplicationBootstrap,
   OnApplicationShutdown,
 } from '@nestjs/common';
-import {
-  ClientProxy,
-} from '@nestjs/microservices';
-import {
-  firstValueFrom,
-} from 'rxjs';
+import { ClientProxy } from '@nestjs/microservices';
+import { firstValueFrom } from 'rxjs';
 
 @Injectable()
 export class RabbitMqPublisher
-  implements
-    OnApplicationBootstrap,
-    OnApplicationShutdown
+  implements OnApplicationBootstrap, OnApplicationShutdown
 {
-  private readonly logger =
-    new Logger(RabbitMqPublisher.name);
+  private readonly logger = new Logger(RabbitMqPublisher.name);
+
+  private ready = false;
 
   constructor(
     @Inject('RABBITMQ_CLIENT')
@@ -29,43 +25,34 @@ export class RabbitMqPublisher
   async onApplicationBootstrap(): Promise<void> {
     try {
       await this.client.connect();
+      this.ready = true;
 
-      this.logger.log(
-        'RabbitMQ connected successfully',
-      );
+      this.logger.log(serializeOperationalLog('rabbitmq.connection.opened'));
     } catch (error) {
       this.logger.error(
-        'RabbitMQ connection failed',
-        error instanceof Error
-          ? error.stack
-          : String(error),
+        serializeOperationalLog('rabbitmq.connection.failed'),
+        error instanceof Error ? error.stack : String(error),
       );
 
       throw error;
     }
   }
 
-  async publish(
-    eventType: string,
-    payload: unknown,
-  ): Promise<void> {
-    await firstValueFrom(
-      this.client.emit(
-        eventType,
-        payload,
-      ),
-    );
+  isReady(): boolean {
+    return this.ready;
+  }
+  async publish(eventType: string, payload: unknown): Promise<void> {
+    await firstValueFrom(this.client.emit(eventType, payload));
 
     this.logger.log(
-      `Event published: ${eventType}`,
+      serializeOperationalLog(`rabbitmq.publish.completed:${eventType}`),
     );
   }
 
   async onApplicationShutdown(): Promise<void> {
+    this.ready = false;
     await this.client.close();
 
-    this.logger.log(
-      'RabbitMQ connection closed',
-    );
+    this.logger.log(serializeOperationalLog('rabbitmq.connection.closed'));
   }
 }

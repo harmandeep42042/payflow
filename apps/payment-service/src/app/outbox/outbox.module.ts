@@ -1,4 +1,4 @@
-﻿import {
+import {
   Module,
 } from '@nestjs/common';
 
@@ -21,6 +21,9 @@ import {
   providers: [
     OutboxService,
     OutboxProcessor,
+  ],
+  exports: [
+    RabbitMqModule,
   ],
 })
 export class OutboxModule {}

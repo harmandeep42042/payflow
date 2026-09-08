@@ -145,8 +145,29 @@ export class AuthController {
   @ApiOperation({
     summary: 'Rotate refresh token',
   })
-  refresh(@Body() dto: RefreshTokenDto) {
-    return this.authService.refresh(dto);
+  refresh(
+    @Body() dto: RefreshTokenDto,
+    @Req() req: Request,
+  ) {
+    const forwardedFor =
+      req.headers['x-forwarded-for'];
+
+    const forwardedIp =
+      Array.isArray(forwardedFor)
+        ? forwardedFor[0]
+        : forwardedFor?.split(',')[0]?.trim();
+
+    return this.authService.refresh(
+      dto,
+      {
+        userAgent:
+          req.headers['user-agent'] ?? null,
+        ipAddress:
+          forwardedIp ||
+          req.ip ||
+          null,
+      },
+    );
   }
 
   @Post('logout')

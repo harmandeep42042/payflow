@@ -3,7 +3,7 @@ import { WalletRoles } from '../wallet-auth/decorators/wallet-roles.decorator';
 import { WalletJwtAuthGuard } from '../wallet-auth/guards/wallet-jwt-auth.guard';
 import { WalletRolesGuard } from '../wallet-auth/guards/wallet-roles.guard';
 import {
-  AcceptMoneyRequestDto, CreateBillPaymentDto, CreateBillSplitDto, CreateContactDto, CreateMandateDto,
+  AcceptMoneyRequestDto, CreateBillPaymentDto, CreateSavedBillerDto, CreateBillReminderDto, CreateBillSplitDto, CreateContactDto, CreateMandateDto,
   CreateMoneyRequestDto, CreateOfferDto, CreateRechargeDto, CreateSupportCaseDto, PaySplitAllocationDto,
   UpdateContactDto, UpdateOfferDto, UpdateSupportCaseDto,
 } from './customer-features.dto';
@@ -38,7 +38,7 @@ export class CustomerFeaturesController {
   @Post('offers/:id/claim') claimOffer(@Req() req: AuthRequest, @Param('id') id: string) { return this.service.claimOffer(req.user.id, id); }
 
   @Get('providers/status') providerStatus() { return this.service.providerStatus(); }
-  @Get('insights') insights(@Req() req: AuthRequest, @Query('from') from?: string, @Query('to') to?: string, @Query('days') days?: string) { return this.service.insights(req.user.id, from, to, days); }
+  @Get('insights') insights(@Req() req: AuthRequest, @Query('from') from?: string, @Query('to') to?: string, @Query('days') days?: string, @Query('category') category?: string) { return this.service.insights(req.user.id, from, to, days, category); }
   @Get('recharges') recharges(@Req() req: AuthRequest) { return this.service.rechargeHistory(req.user.id); }
   @Get('recharges/plans') rechargePlans() { return this.service.rechargePlans(); }
   @Post('recharges') recharge(@Req() req: AuthRequest, @Body() dto: CreateRechargeDto) { return this.service.createRecharge(req.user.id, dto); }
@@ -46,7 +46,55 @@ export class CustomerFeaturesController {
   @Get('billers') billers() { return this.service.billers(); }
   @Post('bills/validate') validateBill() { return this.service.validateBill(); }
   @Post('bill-payments') billPayment(@Req() req: AuthRequest, @Body() dto: CreateBillPaymentDto) { return this.service.createBillPayment(req.user.id, dto); }
-  @Get('mandates') mandates(@Req() req: AuthRequest) { return this.service.mandates(req.user.id); }
+  @Get('saved-billers')
+savedBillers(@Req() req: AuthRequest) {
+  return this.service.listSavedBillers(req.user.id);
+}
+
+@Post('saved-billers')
+createSavedBiller(
+  @Req() req: AuthRequest,
+  @Body() dto: CreateSavedBillerDto,
+) {
+  return this.service.createSavedBiller(req.user.id, dto);
+}
+
+@Delete('saved-billers/:id')
+deleteSavedBiller(
+  @Req() req: AuthRequest,
+  @Param('id') id: string,
+) {
+  return this.service.deleteSavedBiller(req.user.id, id);
+}
+@Get('bill-reminders')
+billReminders(@Req() req: AuthRequest) {
+  return this.service.listBillReminders(
+    req.user.id,
+  );
+}
+
+@Post('bill-reminders')
+createBillReminder(
+  @Req() req: AuthRequest,
+  @Body() dto: CreateBillReminderDto,
+) {
+  return this.service.createBillReminder(
+    req.user.id,
+    dto,
+  );
+}
+
+@Delete('bill-reminders/:id')
+deleteBillReminder(
+  @Req() req: AuthRequest,
+  @Param('id') id: string,
+) {
+  return this.service.deleteBillReminder(
+    req.user.id,
+    id,
+  );
+}
+@Get('mandates') mandates(@Req() req: AuthRequest) { return this.service.mandates(req.user.id); }
   @Get('mandates/:id') mandateDetails(@Req() req: AuthRequest, @Param('id') id: string) { return this.service.mandate(req.user.id, id); }
   @Post('mandates') mandate(@Req() req: AuthRequest, @Body() dto: CreateMandateDto) { return this.service.createMandate(req.user.id, dto); }
   @Post('mandates/:id/authorize') authorizeMandate(@Req() req: AuthRequest, @Param('id') id: string) { return this.service.mandateAction(req.user.id, id, 'authorize'); }

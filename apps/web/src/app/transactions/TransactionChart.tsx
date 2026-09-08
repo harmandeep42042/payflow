@@ -93,14 +93,21 @@ export default function TransactionChart({
       continue;
     }
 
+    const amount =
+      Number(transaction.amount);
+
+    if (!Number.isFinite(amount)) {
+      continue;
+    }
+
     if (
       transaction.direction ===
       'CREDIT'
     ) {
-      row.moneyIn += 1;
+      row.moneyIn += amount;
     }
     else {
-      row.moneyOut += 1;
+      row.moneyOut += amount;
     }
   }
 
@@ -166,13 +173,13 @@ export default function TransactionChart({
 
           <Bar
             dataKey="moneyIn"
-            name="Credit transactions"
+            name="Money In"
             fill="#10b981"
           />
 
           <Bar
             dataKey="moneyOut"
-            name="Debit transactions"
+            name="Money Out"
             fill="#ef4444"
           />
         </BarChart>
@@ -180,3 +187,5 @@ export default function TransactionChart({
     </div>
   );
 }
+
+

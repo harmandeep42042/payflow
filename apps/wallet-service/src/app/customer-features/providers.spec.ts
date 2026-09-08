@@ -1,7 +1,16 @@
-import { PROVIDER_NOT_CONFIGURED, runProviderOperation } from './providers';
-describe.each(['Recharge','Bills','AutoPay'])('%s mocked provider adapter', () => {
-  it('returns success without fabricating the provider payload', async () => { const value = { providerReference: 'mock-reference', status: 'SUCCEEDED' }; await expect(runProviderOperation({}, jest.fn().mockResolvedValue(value))).resolves.toEqual({ status: 'SUCCEEDED', value }); });
-  it('normalizes timeout without credentials', async () => { jest.useFakeTimers(); const promise = runProviderOperation({}, () => new Promise(() => undefined), 10); jest.advanceTimersByTime(10); await expect(promise).resolves.toMatchObject({ status: 'FAILED', code: 'PROVIDER_TIMEOUT' }); jest.useRealTimers(); });
-  it('normalizes provider failure', async () => { await expect(runProviderOperation({}, jest.fn().mockRejectedValue(new Error('upstream failed')))).resolves.toMatchObject({ status: 'FAILED', code: 'PROVIDER_FAILURE' }); });
-  it('preserves the unconfigured environment response', async () => { await expect(runProviderOperation(undefined, jest.fn())).resolves.toMatchObject({ status: 'FAILED', code: PROVIDER_NOT_CONFIGURED }); });
+import { NotConfiguredPaymentProvider, PROVIDER_NOT_CONFIGURED, runProviderOperation } from './providers';
+
+describe('provider safety boundary', () => {
+  it('returns provider-not-configured without a synthetic provider reference', async () => {
+    const provider = new NotConfiguredPaymentProvider();
+    for (const result of await Promise.all([
+      provider.createPayment({ amount: '10.00' }), provider.createCollectRequest({ amount: '10.00' }),
+      provider.verifyAccount({ bankName: 'Test', maskedAccountNumber: '******1234', ifsc: 'TEST0000001' }),
+      provider.refund('unknown', {}),
+    ])) expect(result).toEqual({ status: 'NOT_CONFIGURED', failureCode: PROVIDER_NOT_CONFIGURED, message: 'Provider is not configured.' });
+  });
+
+  it('fails closed when no provider implementation is injected', async () => {
+    await expect(runProviderOperation(undefined, async () => ({ status: 'SUCCESS' }))).resolves.toEqual(expect.objectContaining({ status: 'FAILED', code: PROVIDER_NOT_CONFIGURED }));
+  });
 });

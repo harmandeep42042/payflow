@@ -1,6 +1,5 @@
-import {
-  HttpService,
-} from '@nestjs/axios';
+import { withCorrelationHeaders } from '../observability/correlation-id.middleware';
+import { HttpService } from '@nestjs/axios';
 
 import {
   HttpException,
@@ -8,13 +7,9 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 
-import {
-  AxiosError,
-} from 'axios';
+import { AxiosError } from 'axios';
 
-import {
-  firstValueFrom,
-} from 'rxjs';
+import { firstValueFrom } from 'rxjs';
 
 type NotificationQuery = {
   page?: string;
@@ -25,26 +20,14 @@ type NotificationQuery = {
 
 @Injectable()
 export class NotificationProxyService {
-  private readonly notificationServiceUrl =
-    (
-      process.env[
-        'NOTIFICATION_SERVICE_URL'
-      ] ??
-      'http://notification-service:4006'
-    ).replace(
-      /\/$/,
-      '',
-    );
+  private readonly notificationServiceUrl = (
+    process.env['NOTIFICATION_SERVICE_URL'] ??
+    'http://notification-service:4006'
+  ).replace(/\/$/, '');
 
-  constructor(
-    private readonly httpService:
-      HttpService,
-  ) {}
+  constructor(private readonly httpService: HttpService) {}
 
-  getNotifications(
-    query: NotificationQuery,
-    authorization?: string,
-  ) {
+  getNotifications(query: NotificationQuery, authorization?: string) {
     const supportedQuery: NotificationQuery = {
       page: query.page,
       limit: query.limit,
@@ -61,10 +44,7 @@ export class NotificationProxyService {
     );
   }
 
-  getNotification(
-    notificationId: string,
-    authorization?: string,
-  ) {
+  getNotification(notificationId: string, authorization?: string) {
     return this.request(
       'GET',
       `/api/v1/notifications/${notificationId}`,
@@ -72,10 +52,7 @@ export class NotificationProxyService {
     );
   }
 
-  markAllAsRead(
-    body: unknown,
-    authorization?: string,
-  ) {
+  markAllAsRead(body: unknown, authorization?: string) {
     return this.request(
       'PATCH',
       '/api/v1/notifications/read-all',
@@ -84,11 +61,7 @@ export class NotificationProxyService {
     );
   }
 
-  markAsRead(
-    notificationId: string,
-    body: unknown,
-    authorization?: string,
-  ) {
+  markAsRead(notificationId: string, body: unknown, authorization?: string) {
     return this.request(
       'PATCH',
       `/api/v1/notifications/${notificationId}/read`,
@@ -97,20 +70,11 @@ export class NotificationProxyService {
     );
   }
 
-  clearNotifications(
-    authorization?: string,
-  ) {
-    return this.request(
-      'DELETE',
-      '/api/v1/notifications',
-      authorization,
-    );
+  clearNotifications(authorization?: string) {
+    return this.request('DELETE', '/api/v1/notifications', authorization);
   }
 
-  deleteNotification(
-    notificationId: string,
-    authorization?: string,
-  ) {
+  deleteNotification(notificationId: string, authorization?: string) {
     return this.request(
       'DELETE',
       `/api/v1/notifications/${notificationId}`,
@@ -118,9 +82,7 @@ export class NotificationProxyService {
     );
   }
 
-  getPreferences(
-    authorization?: string,
-  ) {
+  getPreferences(authorization?: string) {
     return this.request(
       'GET',
       '/api/v1/notification-preferences',
@@ -128,10 +90,7 @@ export class NotificationProxyService {
     );
   }
 
-  updatePreferences(
-    body: unknown,
-    authorization?: string,
-  ) {
+  updatePreferences(body: unknown, authorization?: string) {
     return this.request(
       'PATCH',
       '/api/v1/notification-preferences',
@@ -148,31 +107,27 @@ export class NotificationProxyService {
     params?: NotificationQuery,
   ) {
     try {
-      const response =
-        await firstValueFrom(
-          this.httpService.request({
-            method,
-            url:
-              `${this.notificationServiceUrl}${path}`,
-            data,
-            params,
-            headers: {
-              ...(data !== undefined
-                ? {
-                    'Content-Type':
-                      'application/json',
-                  }
-                : {}),
+      const response = await firstValueFrom(
+        this.httpService.request({
+          method,
+          url: `${this.notificationServiceUrl}${path}`,
+          data,
+          params,
+          headers: withCorrelationHeaders({
+            ...(data !== undefined
+              ? {
+                  'Content-Type': 'application/json',
+                }
+              : {}),
 
-              ...(authorization
-                ? {
-                    Authorization:
-                      authorization,
-                  }
-                : {}),
-            },
+            ...(authorization
+              ? {
+                  Authorization: authorization,
+                }
+              : {}),
           }),
-        );
+        }),
+      );
 
       return response.data;
     } catch (error) {
@@ -180,18 +135,12 @@ export class NotificationProxyService {
     }
   }
 
-  private handleError(
-    error: unknown,
-  ): never {
-    if (
-      error instanceof
-      AxiosError
-    ) {
+  private handleError(error: unknown): never {
+    if (error instanceof AxiosError) {
       if (error.response) {
         throw new HttpException(
           error.response.data ?? {
-            message:
-              'Notification service request failed',
+            message: 'Notification service request failed',
           },
           error.response.status,
         );

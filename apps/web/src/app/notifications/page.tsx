@@ -1,5 +1,13 @@
 'use client';
 
+import {
+  getSplitBillNotificationHref,
+} from '../split-bill/split-bill-deeplink';
+
+import {
+  getRequestMoneyNotificationHref,
+} from '../request-money/request-money-deeplink';
+
 import { useMemo, useState } from 'react';
 import { Button, Card, ConfirmationDialog, EmptyState, ErrorState, PageContainer, PageHeader, StatusBadge } from '../components/customer';
 import { useNotifications } from '../hooks/use-notifications';
@@ -47,7 +55,7 @@ export default function NotificationsPage() {
     <div aria-live="polite" className="mt-4 space-y-3">{message ? <p className="rounded-xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">{message}</p> : null}{error ? <ErrorState message={error} /> : null}</div>
     <section aria-label="Notification history" className="mt-6 space-y-3">
       {visible.length === 0 ? <EmptyState title={filter === 'UNREAD' ? 'You are all caught up' : 'No notifications yet'} description="Payment, request, split, offer, AutoPay and support updates will appear here." /> : visible.map((item) => <Card key={item.id} className={`p-5 ${item.isRead ? '' : 'border-blue-200 bg-blue-50/40'}`}>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="font-bold text-slate-950">{item.title}</h2><StatusBadge status={item.isRead ? 'READ' : 'UNREAD'} /></div><p className="mt-2 text-sm leading-6 text-slate-600">{item.message}</p><p className="mt-3 text-xs font-semibold text-slate-500">{new Date(item.createdAt).toLocaleString('en-IN')}</p></div><div className="flex shrink-0 flex-wrap gap-2">{!item.isRead ? <Button variant="secondary" onClick={() => void markRead(item.id)}>Mark read</Button> : null}<Button variant="danger" onClick={() => setPending({ kind: 'delete', id: item.id, title: item.title })}>Delete</Button></div></div>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="font-bold text-slate-950">{item.title}</h2><StatusBadge status={item.isRead ? 'READ' : 'UNREAD'} /></div><p className="mt-2 text-sm leading-6 text-slate-600">{item.message}</p><p className="mt-3 text-xs font-semibold text-slate-500">{new Date(item.createdAt).toLocaleString('en-IN')}</p></div><div className="flex shrink-0 flex-wrap gap-2">{getSplitBillNotificationHref(item) ? <a href={getSplitBillNotificationHref(item) ?? undefined} className="inline-flex min-h-11 w-full touch-manipulation items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-4 text-sm font-semibold text-blue-800 transition hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 sm:w-auto">View split</a> : null}{getRequestMoneyNotificationHref(item.metadata) ? <a href={getRequestMoneyNotificationHref(item.metadata) ?? '/request-money'} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900">View request</a> : null}{!item.isRead ? <Button variant="secondary" onClick={() => void markRead(item.id)}>Mark read</Button> : null}<Button variant="danger" onClick={() => setPending({ kind: 'delete', id: item.id, title: item.title })}>Delete</Button></div></div>
       </Card>)}
     </section>
     <ConfirmationDialog open={pending !== null} title={pending?.kind === 'clear' ? 'Clear notification history?' : 'Delete notification?'} description={pending?.kind === 'delete' ? `Delete “${pending.title}”? This cannot be undone.` : 'This removes all persistent notification history from your account.'} confirmLabel={pending?.kind === 'clear' ? 'Clear history' : 'Delete'} isLoading={saving} onConfirm={() => void confirmAction()} onClose={() => setPending(null)} />

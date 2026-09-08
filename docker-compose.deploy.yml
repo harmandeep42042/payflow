@@ -1,19 +1,27 @@
-﻿services:
-
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+services:
   caddy:
+    logging: *default-logging
     image: caddy:2-alpine
     container_name: payflow_deploy_caddy
     restart: unless-stopped
 
     depends_on:
-      - web
-      - admin-web
-      - api-gateway
+      web:
+        condition: service_healthy
+      admin-web:
+        condition: service_healthy
+      api-gateway:
+        condition: service_healthy
 
     environment:
-      CUSTOMER_DOMAIN: ${CUSTOMER_DOMAIN}
-      ADMIN_DOMAIN: ${ADMIN_DOMAIN}
-      API_DOMAIN: ${API_DOMAIN}
+      CUSTOMER_DOMAIN: ${CUSTOMER_DOMAIN:?CUSTOMER_DOMAIN must be set}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN:?ADMIN_DOMAIN must be set}
+      API_DOMAIN: ${API_DOMAIN:?API_DOMAIN must be set}
 
     ports:
       - "8080:80"
@@ -27,26 +35,48 @@
     networks:
       - payflow_default
 
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
   web:
-    image: payflow-web:deploy
+    logging: *default-logging
+    image: payflow-web:${RELEASE_TAG:?RELEASE_TAG must be set}
     container_name: payflow_deploy_web
     restart: unless-stopped
     env_file:
       - ./.env.production.local
     networks:
       - payflow_default
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   admin-web:
-    image: payflow-admin-web:deploy
+    logging: *default-logging
+    image: payflow-admin-web:${RELEASE_TAG:?RELEASE_TAG must be set}
     container_name: payflow_deploy_admin
     restart: unless-stopped
     env_file:
       - ./.env.production.local
     networks:
       - payflow_default
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   auth-service:
-    image: payflow-auth-service:test
+    logging: *default-logging
+    image: payflow-auth-service:${RELEASE_TAG:?RELEASE_TAG must be set}
     container_name: payflow_deploy_auth
     restart: unless-stopped
     env_file:
@@ -55,20 +85,37 @@
       PORT: 4002
     networks:
       - payflow_default
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4002/api/auth/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   wallet-service:
-    image: payflow-wallet-service:test
+    logging: *default-logging
+    image: payflow-wallet-service:${RELEASE_TAG:?RELEASE_TAG must be set}
     container_name: payflow_deploy_wallet
     restart: unless-stopped
     env_file:
       - ./.env.production.local
     environment:
       PORT: 4001
+      QR_SIGNING_SECRET: ${QR_SIGNING_SECRET:?QR_SIGNING_SECRET must be set}
     networks:
       - payflow_default
+    # The existing HTTP health endpoint queries PostgreSQL. Keep container
+    # liveness credential-free; dependency readiness is managed externally.
+    healthcheck:
+      test: ["CMD", "node", "-e", "try{process.kill(1,0)}catch{process.exit(1)}"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   payment-service:
-    image: payflow-payment-service:rewards
+    logging: *default-logging
+    image: payflow-payment-service:${RELEASE_TAG:?RELEASE_TAG must be set}
     container_name: payflow_deploy_payment
     restart: unless-stopped
     env_file:
@@ -80,9 +127,16 @@
       REWARD_SERVICE_URL: http://payflow_deploy_reward:4007/api/v1
     networks:
       - payflow_default
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4005/api/v1/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   notification-service:
-    image: payflow-notification-service:test
+    logging: *default-logging
+    image: payflow-notification-service:${RELEASE_TAG:?RELEASE_TAG must be set}
     container_name: payflow_deploy_notification
     restart: unless-stopped
     env_file:
@@ -92,9 +146,16 @@
       AUTH_SERVICE_URL: http://payflow_deploy_auth:4002/api
     networks:
       - payflow_default
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4006/api/v1').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   reward-service:
-    image: payflow-reward-service:deploy
+    logging: *default-logging
+    image: payflow-reward-service:${RELEASE_TAG:?RELEASE_TAG must be set}
     container_name: payflow_deploy_reward
     restart: unless-stopped
     env_file:
@@ -104,9 +165,16 @@
       REWARD_SERVICE_PORT: 4007
     networks:
       - payflow_default
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4007/api/v1/rewards/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   api-gateway:
-    image: payflow-api-gateway:rewards
+    logging: *default-logging
+    image: payflow-api-gateway:${RELEASE_TAG:?RELEASE_TAG must be set}
     container_name: payflow_deploy_gateway
     restart: unless-stopped
     env_file:
@@ -120,6 +188,12 @@
       REWARD_SERVICE_URL: http://payflow_deploy_reward:4007/api/v1
     networks:
       - payflow_default
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/v1/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
 networks:
   payflow_default:

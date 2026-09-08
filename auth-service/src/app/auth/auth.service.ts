@@ -36,6 +36,15 @@ export class AuthService {
       message: 'Auth Service is working successfully',
     };
   }
+  async checkDatabaseReadiness(): Promise<boolean> {
+    try {
+      await this.prisma.$queryRaw`SELECT 1`;
+
+      return true;
+    } catch {
+      return false;
+    }
+  }
 
   async register(dto: RegisterDto) {
     const normalizedEmail = dto.email.trim().toLowerCase();
@@ -170,7 +179,13 @@ export class AuthService {
     };
   }
 
-  async refresh(dto: RefreshTokenDto) {
+  async refresh(
+    dto: RefreshTokenDto,
+    metadata?: {
+      userAgent?: string | null;
+      ipAddress?: string | null;
+    },
+  ) {
     const refreshToken = dto.refreshToken.trim();
 
     let payload: RefreshTokenPayload;
@@ -217,8 +232,18 @@ export class AuthService {
     }
 
     if (storedToken.revokedAt) {
+      await this.prisma.refreshToken.updateMany({
+        where: {
+          userId: storedToken.userId,
+          revokedAt: null,
+        },
+        data: {
+          revokedAt: new Date(),
+        },
+      });
+
       throw new UnauthorizedException(
-        'Refresh token has been revoked',
+        'Refresh token reuse detected. Active sessions were revoked',
       );
     }
 
@@ -267,9 +292,11 @@ export class AuthService {
             storedToken.deviceName,
 
           userAgent:
+            metadata?.userAgent?.trim() ||
             storedToken.userAgent,
 
           ipAddress:
+            metadata?.ipAddress?.trim() ||
             storedToken.ipAddress,
 
           lastUsedAt:

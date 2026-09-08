@@ -33,3 +33,33 @@ export interface AutoPayProvider {
   initiateDebit(providerMandateId: string, input: Record<string, unknown>): Promise<ProviderResult>;
   getDebitStatus(providerReference: string): Promise<ProviderResult>;
 }
+
+export interface UpiProvider {
+  createPayment(input: Record<string, unknown>): Promise<ProviderResult>;
+  createCollectRequest(input: Record<string, unknown>): Promise<ProviderResult>;
+  getStatus(providerReference: string): Promise<ProviderResult>;
+  reverse?(providerReference: string): Promise<ProviderResult>;
+}
+
+export interface BankVerificationProvider {
+  verifyAccount(input: { bankName: string; maskedAccountNumber: string; ifsc: string }): Promise<ProviderResult>;
+  unlink?(providerReference: string): Promise<ProviderResult>;
+}
+
+export interface MerchantSettlementProvider {
+  createPayment(input: Record<string, unknown>): Promise<ProviderResult>;
+  getStatus(providerReference: string): Promise<ProviderResult>;
+  refund(providerReference: string, input: Record<string, unknown>): Promise<ProviderResult>;
+}
+
+/** Deterministic test/development boundary: it never manufactures a provider reference or success. */
+export class NotConfiguredPaymentProvider implements UpiProvider, BankVerificationProvider, MerchantSettlementProvider {
+  private result(): Promise<ProviderResult> { return Promise.resolve({ status: 'NOT_CONFIGURED', failureCode: PROVIDER_NOT_CONFIGURED, message: 'Provider is not configured.' }); }
+  createPayment(input: Record<string, unknown>) { void input; return this.result(); }
+  createCollectRequest(input: Record<string, unknown>) { void input; return this.result(); }
+  getStatus(providerReference: string) { void providerReference; return this.result(); }
+  reverse(providerReference: string) { void providerReference; return this.result(); }
+  verifyAccount(input: { bankName: string; maskedAccountNumber: string; ifsc: string }) { void input; return this.result(); }
+  unlink(providerReference: string) { void providerReference; return this.result(); }
+  refund(providerReference: string, input: Record<string, unknown>) { void providerReference; void input; return this.result(); }
+}

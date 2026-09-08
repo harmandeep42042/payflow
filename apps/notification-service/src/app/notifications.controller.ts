@@ -1,27 +1,18 @@
-﻿import {
-  Controller,
-  Logger,
-} from '@nestjs/common';
+import { MetricsService } from './observability/metrics.service';
+import { Controller, Logger } from '@nestjs/common';
 
-import {
-  Ctx,
-  EventPattern,
-  Payload,
-  RmqContext,
-} from '@nestjs/microservices';
+import { Ctx, EventPattern, Payload, RmqContext } from '@nestjs/microservices';
 
-import {
-  WalletEventPattern,
-} from '@payflow/shared-events';
+import { WalletEventPattern } from '@payflow/shared-events';
 
-import {
-  EmailService,
-} from './email/email.service';
+import { EmailService } from './email/email.service';
 
 import {
   NotificationsGateway,
   RealtimeNotification,
 } from './notifications.gateway';
+
+import { NotificationIdempotencyService } from './notification-idempotency.service';
 
 type EventUser = {
   id?: string;
@@ -65,22 +56,19 @@ type TransferEventPayload = {
 
 @Controller()
 export class NotificationsController {
-  private readonly logger =
-    new Logger(
-      NotificationsController.name,
-    );
+  private readonly logger = new Logger(NotificationsController.name);
 
   constructor(
-    private readonly emailService:
-      EmailService,
+    private readonly emailService: EmailService,
 
-    private readonly notificationsGateway:
-      NotificationsGateway,
+    private readonly notificationsGateway: NotificationsGateway,
+
+    private readonly notificationIdempotency: NotificationIdempotencyService,
+
+    private readonly metrics?: MetricsService,
   ) {}
 
-  @EventPattern(
-    WalletEventPattern.DepositCompleted,
-  )
+  @EventPattern(WalletEventPattern.DepositCompleted)
   async handleDepositCompleted(
     @Payload()
     event: DepositEventPayload,
@@ -88,79 +76,71 @@ export class NotificationsController {
     @Ctx()
     context: RmqContext,
   ): Promise<void> {
-    await this.processMessage(
-      context,
-      'deposit',
-      async () => {
-        const email =
-          this.requireEmail(
-            event.user?.email,
-            'Deposit event user email',
-          );
+    await this.processMessage(context, 'deposit', async () => {
+      const eventId = this.requireEventId(event.eventId);
 
-        await this.emailService
-          .sendDepositCompleted({
+      const email = this.requireEmail(
+        event.user?.email,
+        'Deposit event user email',
+      );
+
+      const dedupeKey = this.buildDedupeKey(eventId, 'deposit-email', email);
+
+      await this.processNotificationSideEffect(
+        {
+          eventId,
+          dedupeKey,
+
+          eventType: WalletEventPattern.DepositCompleted,
+
+          recipient: email,
+
+          subject: 'Deposit completed successfully',
+        },
+
+        async () => {
+          await this.emailService.sendDepositCompleted({
             email,
 
-            firstName:
-              event.user?.firstName,
+            firstName: event.user?.firstName,
 
-            amount:
-              event.amount ??
-              '0.00',
+            amount: event.amount ?? '0.00',
 
-            currency:
-              event.currency ??
-              'INR',
+            currency: event.currency ?? 'INR',
 
-            reference:
-              event.reference,
+            reference: event.reference,
 
-            walletId:
-              event.walletId,
+            walletId: event.walletId,
           });
 
-        this.emitRealtimeNotification({
-          userId:
-            event.user?.id,
+          this.emitRealtimeNotification({
+            userId: event.user?.id,
 
-          email,
+            email,
 
-          type:
-            'wallet.deposit.completed',
+            type: 'wallet.deposit.completed',
 
-          title:
-            'Deposit completed',
+            title: 'Deposit completed',
 
-          message:
-            `${event.currency ?? 'INR'} ${event.amount ?? '0.00'} was added to your wallet.`,
+            message: `${event.currency ?? 'INR'} ${event.amount ?? '0.00'} was added to your wallet.`,
 
-          metadata: {
-            transactionId:
-              event.depositId,
+            metadata: {
+              transactionId: event.depositId,
 
-            depositId:
-              event.depositId,
+              depositId: event.depositId,
 
-            walletId:
-              event.walletId,
+              walletId: event.walletId,
 
-            reference:
-              event.reference,
-          },
-        });
+              reference: event.reference,
+            },
+          });
 
-        this.logger.log(
-          `Deposit email processed for ${email}`,
-        );
-      },
-    );
+          this.logger.log(`Deposit email processed for ${email}`);
+        },
+      );
+    });
   }
-
-  @EventPattern(
-    WalletEventPattern
-      .WithdrawalCompleted,
-  )
+  @EventPattern(WalletEventPattern.WithdrawalCompleted)
   async handleWithdrawalCompleted(
     @Payload()
     event: WithdrawalEventPayload,
@@ -168,78 +148,71 @@ export class NotificationsController {
     @Ctx()
     context: RmqContext,
   ): Promise<void> {
-    await this.processMessage(
-      context,
-      'withdrawal',
-      async () => {
-        const email =
-          this.requireEmail(
-            event.user?.email,
-            'Withdrawal event user email',
-          );
+    await this.processMessage(context, 'withdrawal', async () => {
+      const eventId = this.requireEventId(event.eventId);
 
-        await this.emailService
-          .sendWithdrawalCompleted({
+      const email = this.requireEmail(
+        event.user?.email,
+        'Withdrawal event user email',
+      );
+
+      const dedupeKey = this.buildDedupeKey(eventId, 'withdrawal-email', email);
+
+      await this.processNotificationSideEffect(
+        {
+          eventId,
+          dedupeKey,
+
+          eventType: WalletEventPattern.WithdrawalCompleted,
+
+          recipient: email,
+
+          subject: 'Withdrawal completed successfully',
+        },
+
+        async () => {
+          await this.emailService.sendWithdrawalCompleted({
             email,
 
-            firstName:
-              event.user?.firstName,
+            firstName: event.user?.firstName,
 
-            amount:
-              event.amount ??
-              '0.00',
+            amount: event.amount ?? '0.00',
 
-            currency:
-              event.currency ??
-              'INR',
+            currency: event.currency ?? 'INR',
 
-            reference:
-              event.reference,
+            reference: event.reference,
 
-            walletId:
-              event.walletId,
+            walletId: event.walletId,
           });
 
-        this.emitRealtimeNotification({
-          userId:
-            event.user?.id,
+          this.emitRealtimeNotification({
+            userId: event.user?.id,
 
-          email,
+            email,
 
-          type:
-            'wallet.withdrawal.completed',
+            type: 'wallet.withdrawal.completed',
 
-          title:
-            'Withdrawal completed',
+            title: 'Withdrawal completed',
 
-          message:
-            `${event.currency ?? 'INR'} ${event.amount ?? '0.00'} was withdrawn from your wallet.`,
+            message: `${event.currency ?? 'INR'} ${event.amount ?? '0.00'} was withdrawn from your wallet.`,
 
-          metadata: {
-            transactionId:
-              event.withdrawalId,
+            metadata: {
+              transactionId: event.withdrawalId,
 
-            withdrawalId:
-              event.withdrawalId,
+              withdrawalId: event.withdrawalId,
 
-            walletId:
-              event.walletId,
+              walletId: event.walletId,
 
-            reference:
-              event.reference,
-          },
-        });
+              reference: event.reference,
+            },
+          });
 
-        this.logger.log(
-          `Withdrawal email processed for ${email}`,
-        );
-      },
-    );
+          this.logger.log(`Withdrawal email processed for ${email}`);
+        },
+      );
+    });
   }
-
-  @EventPattern(
-    WalletEventPattern.TransferCompleted,
-  )
+  @EventPattern(WalletEventPattern.TransferCompleted)
   async handleTransferCompleted(
     @Payload()
     event: TransferEventPayload,
@@ -247,157 +220,261 @@ export class NotificationsController {
     @Ctx()
     context: RmqContext,
   ): Promise<void> {
-    await this.processMessage(
-      context,
-      'transfer',
-      async () => {
-        const senderEmail =
-          this.requireEmail(
-            event.sender?.email,
-            'Transfer sender email',
-          );
+    await this.processMessage(context, 'transfer', async () => {
+      const eventId = this.requireEventId(event.eventId);
 
-        const receiverEmail =
-          this.requireEmail(
-            event.receiver?.email,
-            'Transfer receiver email',
-          );
+      const senderEmail = this.requireEmail(
+        event.sender?.email,
+        'Transfer sender email',
+      );
 
-        const senderName =
-          this.getFullName(
-            event.sender,
-          );
+      const receiverEmail = this.requireEmail(
+        event.receiver?.email,
+        'Transfer receiver email',
+      );
 
-        const receiverName =
-          this.getFullName(
-            event.receiver,
-          );
+      const senderName = this.getFullName(event.sender);
 
-        await Promise.all([
-          this.emailService
-            .sendTransferSent({
-              email:
-                senderEmail,
+      const receiverName = this.getFullName(event.receiver);
 
-              firstName:
-                event.sender
-                  ?.firstName,
+      const senderDedupeKey = this.buildDedupeKey(
+        eventId,
+        'transfer-sender-email',
+        senderEmail,
+      );
 
-              amount:
-                event.amount ??
-                '0.00',
+      const receiverDedupeKey = this.buildDedupeKey(
+        eventId,
+        'transfer-receiver-email',
+        receiverEmail,
+      );
 
-              currency:
-                event.currency ??
-                'INR',
+      await this.processNotificationSideEffect(
+        {
+          eventId,
 
-              receiverName,
+          dedupeKey: senderDedupeKey,
 
-              description:
-                event.description,
+          eventType: WalletEventPattern.TransferCompleted,
 
-              transferId:
-                event.transferId,
-            }),
+          recipient: senderEmail,
 
-          this.emailService
-            .sendTransferReceived({
-              email:
-                receiverEmail,
+          subject: 'Money sent successfully',
+        },
 
-              firstName:
-                event.receiver
-                  ?.firstName,
+        async () => {
+          await this.emailService.sendTransferSent({
+            email: senderEmail,
 
-              amount:
-                event.amount ??
-                '0.00',
+            firstName: event.sender?.firstName,
 
-              currency:
-                event.currency ??
-                'INR',
+            amount: event.amount ?? '0.00',
 
-              senderName,
+            currency: event.currency ?? 'INR',
 
-              description:
-                event.description,
+            receiverName,
 
-              transferId:
-                event.transferId,
-            }),
-        ]);
+            description: event.description,
 
-        this.logger.log(
-          `Transfer emails processed for ${senderEmail} and ${receiverEmail}`,
-        );
-      },
-    );
+            transferId: event.transferId,
+          });
+        },
+      );
+
+      await this.processNotificationSideEffect(
+        {
+          eventId,
+
+          dedupeKey: receiverDedupeKey,
+
+          eventType: WalletEventPattern.TransferCompleted,
+
+          recipient: receiverEmail,
+
+          subject: 'Money received successfully',
+        },
+
+        async () => {
+          await this.emailService.sendTransferReceived({
+            email: receiverEmail,
+
+            firstName: event.receiver?.firstName,
+
+            amount: event.amount ?? '0.00',
+
+            currency: event.currency ?? 'INR',
+
+            senderName,
+
+            description: event.description,
+
+            transferId: event.transferId,
+          });
+        },
+      );
+
+      this.logger.log(
+        `Transfer emails processed for ${senderEmail} and ${receiverEmail}`,
+      );
+    });
+  }
+  private requireEventId(eventId: string | undefined): string {
+    const normalized = eventId?.trim();
+
+    if (!normalized) {
+      throw new Error('Notification eventId is missing');
+    }
+
+    return normalized;
   }
 
-  private emitRealtimeNotification(
+  private buildDedupeKey(
+    eventId: string,
+    sideEffect: string,
+    recipient: string,
+  ): string {
+    return [eventId, sideEffect, recipient.trim().toLowerCase()].join(':');
+  }
+
+  private async processNotificationSideEffect(
     input: {
-      userId?: string;
-      email?: string;
-      type: string;
-      title: string;
-      message: string;
-      metadata:
-        Record<string, unknown>;
+      eventId: string;
+      dedupeKey: string;
+      eventType: string;
+      recipient: string;
+      subject: string;
     },
-  ): void {
-    const now =
-      new Date()
-        .toISOString();
 
-    const notification:
-      RealtimeNotification = {
-        id:
-          crypto.randomUUID(),
+    handler: () => Promise<void>,
+  ): Promise<void> {
+    const claim = await this.notificationIdempotency.begin(input);
 
-        userId:
-          input.userId ??
-          null,
-
-        email:
-          input.email ??
-          null,
-
-        type:
-          input.type,
-
-        title:
-          input.title,
-
-        message:
-          input.message,
-
-        channel:
-          'IN_APP',
-
-        status:
-          'SENT',
-
-        isRead:
-          false,
-
-        metadata:
-          input.metadata,
-
-        createdAt:
-          now,
-
-        readAt:
-          null,
-
-        updatedAt:
-          now,
-      };
-
-    this.notificationsGateway
-      .emitToUser(
-        input.userId,
-        notification,
+    if (claim.action === 'SKIP_SENT') {
+      this.metrics?.recordIdempotency(
+        'duplicate',
       );
+
+      this.metrics?.recordNotificationEvent(
+        'delivery',
+        'duplicate',
+      );
+
+      this.logger.log(`Notification already sent; skipping ${input.dedupeKey}`);
+
+      return;
+    }
+
+    if (claim.action === 'BUSY') {
+      this.metrics?.recordIdempotency(
+        'busy',
+      );
+
+      this.metrics?.recordNotificationEvent(
+        'delivery',
+        'busy',
+      );
+
+      throw new Error(
+        `Notification processing already active: ${input.dedupeKey}`,
+      );
+    }
+
+    this.metrics?.recordIdempotency(
+      'accepted',
+    );
+
+    const deliveryStartedAt =
+      Date.now();
+
+    let deliveryCompleted =
+      false;
+
+    try {
+      await handler();
+
+      deliveryCompleted =
+        true;
+
+      this.metrics?.recordDelivery(
+        'email',
+        'success',
+        (Date.now() - deliveryStartedAt) / 1000,
+      );
+
+      await this.notificationIdempotency.markSent(input.dedupeKey);
+
+      this.metrics?.recordNotificationEvent(
+        'delivery',
+        'processed',
+      );
+    } catch (error) {
+      if (!deliveryCompleted) {
+        this.metrics?.recordDelivery(
+          'email',
+          'failure',
+          (Date.now() - deliveryStartedAt) / 1000,
+        );
+      }
+
+      this.metrics?.recordNotificationEvent(
+        'delivery',
+        'failed',
+      );
+
+      try {
+        await this.notificationIdempotency.markFailed(input.dedupeKey, error);
+      } catch (trackingError) {
+        this.logger.error(
+          `Failed to persist notification failure: ${input.dedupeKey}`,
+
+          trackingError instanceof Error
+            ? trackingError.stack
+            : String(trackingError),
+        );
+      }
+
+      throw error;
+    }
+  }
+  private emitRealtimeNotification(input: {
+    userId?: string;
+    email?: string;
+    type: string;
+    title: string;
+    message: string;
+    metadata: Record<string, unknown>;
+  }): void {
+    const now = new Date().toISOString();
+
+    const notification: RealtimeNotification = {
+      id: crypto.randomUUID(),
+
+      userId: input.userId ?? null,
+
+      email: input.email ?? null,
+
+      type: input.type,
+
+      title: input.title,
+
+      message: input.message,
+
+      channel: 'IN_APP',
+
+      status: 'SENT',
+
+      isRead: false,
+
+      metadata: input.metadata,
+
+      createdAt: now,
+
+      readAt: null,
+
+      updatedAt: now,
+    };
+
+    this.notificationsGateway.emitToUser(input.userId, notification);
   }
 
   private async processMessage(
@@ -405,11 +482,9 @@ export class NotificationsController {
     eventName: string,
     handler: () => Promise<void>,
   ): Promise<void> {
-    const channel =
-      context.getChannelRef();
+    const channel = context.getChannelRef();
 
-    const message =
-      context.getMessage();
+    const message = context.getMessage();
 
     try {
       await handler();
@@ -419,51 +494,29 @@ export class NotificationsController {
       this.logger.error(
         `Failed to process ${eventName} event`,
 
-        error instanceof Error
-          ? error.stack
-          : String(error),
+        error instanceof Error ? error.stack : String(error),
       );
 
-      channel.nack(
-        message,
-        false,
-        true,
-      );
+      channel.nack(message, false, true);
     }
   }
 
-  private requireEmail(
-    email: string | undefined,
-    fieldName: string,
-  ): string {
-    const normalized =
-      email?.trim();
+  private requireEmail(email: string | undefined, fieldName: string): string {
+    const normalized = email?.trim();
 
     if (!normalized) {
-      throw new Error(
-        `${fieldName} is missing`,
-      );
+      throw new Error(`${fieldName} is missing`);
     }
 
     return normalized;
   }
 
-  private getFullName(
-    user?: EventUser,
-  ): string {
-    const fullName = [
-      user?.firstName,
-      user?.lastName,
-    ]
+  private getFullName(user?: EventUser): string {
+    const fullName = [user?.firstName, user?.lastName]
       .filter(Boolean)
       .join(' ')
       .trim();
 
-    return fullName ||
-      'Payflow customer';
+    return fullName || 'Payflow customer';
   }
 }
-
-
-
-

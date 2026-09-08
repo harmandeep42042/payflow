@@ -1,0 +1,13 @@
+CREATE TYPE "RiskStatus" AS ENUM ('CLEAR','REVIEW_REQUIRED','RESTRICTED');
+CREATE TYPE "RiskSignalType" AS ENUM ('RAPID_TRANSFERS','DUPLICATE_PATTERN','HIGH_VALUE_ACTIVITY','PROVIDER_RISK');
+CREATE TYPE "RiskSignalStatus" AS ENUM ('OPEN','REVIEWED','DISMISSED','RESOLVED');
+ALTER TABLE "Merchant" ADD COLUMN "ownerUserId" TEXT;
+CREATE UNIQUE INDEX "Merchant_ownerUserId_key" ON "Merchant"("ownerUserId");
+ALTER TABLE "Merchant" ADD CONSTRAINT "Merchant_ownerUserId_fkey" FOREIGN KEY ("ownerUserId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+CREATE TABLE "RiskProfile" ("id" TEXT NOT NULL,"userId" TEXT NOT NULL,"status" "RiskStatus" NOT NULL DEFAULT 'CLEAR',"reviewReason" TEXT,"reviewedAt" TIMESTAMP(3),"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" TIMESTAMP(3) NOT NULL,CONSTRAINT "RiskProfile_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX "RiskProfile_userId_key" ON "RiskProfile"("userId");
+ALTER TABLE "RiskProfile" ADD CONSTRAINT "RiskProfile_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+CREATE TABLE "RiskSignal" ("id" TEXT NOT NULL,"userId" TEXT NOT NULL,"type" "RiskSignalType" NOT NULL,"status" "RiskSignalStatus" NOT NULL DEFAULT 'OPEN',"severity" TEXT NOT NULL DEFAULT 'MEDIUM',"transferId" TEXT,"summary" TEXT NOT NULL,"evidence" JSONB NOT NULL,"detectedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"reviewedAt" TIMESTAMP(3),"reviewedByUserId" TEXT,"resolutionNote" TEXT,CONSTRAINT "RiskSignal_pkey" PRIMARY KEY ("id"));
+CREATE INDEX "RiskSignal_userId_status_detectedAt_idx" ON "RiskSignal"("userId","status","detectedAt");
+CREATE INDEX "RiskSignal_type_status_idx" ON "RiskSignal"("type","status");
+ALTER TABLE "RiskSignal" ADD CONSTRAINT "RiskSignal_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

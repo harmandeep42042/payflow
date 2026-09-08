@@ -1,8 +1,9 @@
-﻿import {
+import {
   Body,
   Controller,
   Get,
   NotFoundException,
+  Optional,
   Param,
   ParseUUIDPipe,
   Post,
@@ -30,6 +31,8 @@ import {
   PaymentJwtAuthGuard,
 } from '../payment-auth/guards/payment-jwt-auth.guard';
 
+import { PaymentOrderRateLimitService } from './security/payment-order-rate-limit.service';
+import { MetricsService } from '../observability/metrics.service';
 type AuthenticatedPaymentRequest = {
   user?: {
     id: string;
@@ -48,8 +51,12 @@ type AuthenticatedPaymentRequest = {
 @Controller('payments')
 export class PaymentsController {
   constructor(
+    private readonly paymentOrderRateLimit: PaymentOrderRateLimitService,
     private readonly paymentsService:
       PaymentsService,
+  
+    @Optional()
+    private readonly metrics?: MetricsService,
   ) {}
 
   @Post('orders')
@@ -62,18 +69,44 @@ export class PaymentsController {
     description:
       'Payment order created successfully',
   })
-  createOrder(
+  async createOrder(
     @Body()
     dto: CreatePaymentOrderDto,
 
     @Req()
     request: AuthenticatedPaymentRequest,
   ) {
-    return this.paymentsService
-      .createOrder(
-        dto,
+    const startedAt = Date.now();
+
+    try {
+      await this.paymentOrderRateLimit.enforce(
         request.user?.id,
       );
+
+      const result =
+        await this.paymentsService.createOrder(
+          dto,
+          request.user?.id,
+        );
+
+      this.metrics?.recordPaymentOperation(
+        'create_order',
+        result?.replayed === true
+          ? 'replay'
+          : 'success',
+        (Date.now() - startedAt) / 1000,
+      );
+
+      return result;
+    } catch (error: unknown) {
+      this.metrics?.recordPaymentOperation(
+        'create_order',
+        'failure',
+        (Date.now() - startedAt) / 1000,
+      );
+
+      throw error;
+    }
   }
 
   @Post(
@@ -89,7 +122,7 @@ export class PaymentsController {
     description:
       'Internal payment order UUID',
   })
-  confirmOrder(
+  async confirmOrder(
     @Param(
       'orderId',
       new ParseUUIDPipe(),
@@ -99,12 +132,34 @@ export class PaymentsController {
     @Req()
     request: AuthenticatedPaymentRequest,
   ) {
-    return this.paymentsService
-      .confirmOrder(
-        orderId,
-        request.user?.id,
-        request.headers.authorization,
+    const startedAt = Date.now();
+
+    try {
+      const result =
+        await this.paymentsService.confirmOrder(
+          orderId,
+          request.user?.id,
+          request.headers.authorization,
+        );
+
+      this.metrics?.recordPaymentOperation(
+        'confirm_order',
+        result?.replayed === true
+          ? 'replay'
+          : 'success',
+        (Date.now() - startedAt) / 1000,
       );
+
+      return result;
+    } catch (error: unknown) {
+      this.metrics?.recordPaymentOperation(
+        'confirm_order',
+        'failure',
+        (Date.now() - startedAt) / 1000,
+      );
+
+      throw error;
+    }
   }
 
   @Get('orders/:orderId')

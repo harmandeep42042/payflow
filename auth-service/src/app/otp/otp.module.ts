@@ -3,12 +3,14 @@ import { JwtModule } from '@nestjs/jwt';
 
 import { PrismaModule } from '@payflow/database';
 import { RedisRateLimitGuard } from '../auth/guards/redis-rate-limit.guard';
+import { SmsModule } from '../sms/sms.module';
 import { OtpController } from './otp.controller';
 import { OtpService } from './otp.service';
 
 @Module({
   imports: [
     PrismaModule,
+    SmsModule,
 
     JwtModule.register({
       secret:

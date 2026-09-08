@@ -47,7 +47,6 @@ export class RecipientLookupService {
       select: {
         id: true,
         email: true,
-        phone: true,
         vpa: true,
         firstName: true,
         lastName: true,
@@ -96,7 +95,6 @@ export class RecipientLookupService {
       recipient: {
         userId: user.id,
         email: user.email,
-        phone: user.phone,
         vpa: user.vpa,
         firstName: user.firstName,
         lastName: user.lastName,

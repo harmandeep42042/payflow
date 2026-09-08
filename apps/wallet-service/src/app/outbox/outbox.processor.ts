@@ -1,28 +1,18 @@
-import {
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+
+import { Injectable, Logger } from '@nestjs/common';
 
 import { Cron } from '@nestjs/schedule';
 
-import {
-  PrismaService,
-} from '@payflow/database';
+import { PrismaService } from '@payflow/database';
 
-import {
-  WalletEventPattern,
-} from '@payflow/shared-events';
+import { WalletEventPattern } from '@payflow/shared-events';
 
-import {
-  RabbitMqPublisher,
-} from '../rabbitmq/rabbitmq.publisher';
+import { RabbitMqPublisher } from '../rabbitmq/rabbitmq.publisher';
 
-import {
-  OutboxService,
-} from './outbox.service';
+import { OutboxService } from './outbox.service';
 
-type StoredPayload =
-  Record<string, unknown>;
+type StoredPayload = Record<string, unknown>;
 
 type EventUser = {
   id: string;
@@ -34,27 +24,22 @@ type EventUser = {
 
 @Injectable()
 export class OutboxProcessor {
-  private readonly logger =
-    new Logger(
-      OutboxProcessor.name,
-    );
+  private readonly logger = new Logger(OutboxProcessor.name);
 
   private isProcessing = false;
 
+  private readonly workerId = randomUUID();
+
   constructor(
-    private readonly outboxService:
-      OutboxService,
+    private readonly outboxService: OutboxService,
 
-    private readonly rabbitMqPublisher:
-      RabbitMqPublisher,
+    private readonly rabbitMqPublisher: RabbitMqPublisher,
 
-    private readonly prisma:
-      PrismaService,
+    private readonly prisma: PrismaService,
   ) {}
 
   @Cron('*/10 * * * * *')
-  async processPendingEvents():
-    Promise<void> {
+  async processPendingEvents(): Promise<void> {
     if (this.isProcessing) {
       return;
     }
@@ -62,9 +47,7 @@ export class OutboxProcessor {
     this.isProcessing = true;
 
     try {
-      const events =
-        await this.outboxService
-          .getPendingEvents();
+      const events = await this.outboxService.claimPendingEvents(this.workerId);
 
       if (events.length === 0) {
         return;
@@ -72,57 +55,64 @@ export class OutboxProcessor {
 
       for (const event of events) {
         try {
-          this.logger.log(
-            `Publishing event ${event.id}: ${event.eventType}`,
-          );
+          this.logger.log(`Publishing event ${event.id}: ${event.eventType}`);
 
-          const storedPayload =
-            this.getStoredPayload(
-              event.payload,
-            );
+          const storedPayload = this.getStoredPayload(event.payload);
 
-          const enrichedPayload =
-            await this.enrichPayload(
-              event.eventType,
-              storedPayload,
-            );
-
-          await this.rabbitMqPublisher.publish(
+          const enrichedPayload = await this.enrichPayload(
             event.eventType,
-            {
-              ...enrichedPayload,
-
-              type:
-                event.eventType,
-
-              eventId:
-                event.id,
-
-              occurredAt:
-                event.createdAt.toISOString(),
-
-              aggregateType:
-                event.aggregateType,
-
-              aggregateId:
-                event.aggregateId,
-            },
+            storedPayload,
           );
 
-          await this.outboxService
-            .markPublished(event.id);
+          await this.rabbitMqPublisher.publish(event.eventType, {
+            ...enrichedPayload,
 
-          this.logger.log(
-            `Event published successfully: ${event.id}`,
-          );
+            type: event.eventType,
+
+            eventId: event.id,
+
+            occurredAt: event.createdAt.toISOString(),
+
+            aggregateType: event.aggregateType,
+
+            aggregateId: event.aggregateId,
+          });
+
+          await this.outboxService.markPublished(event.id, this.workerId);
+
+          this.logger.log(`Event published successfully: ${event.id}`);
         } catch (error) {
           this.logger.error(
             `Failed to publish event: ${event.id}`,
 
-            error instanceof Error
-              ? error.stack
-              : String(error),
+            error instanceof Error ? error.stack : String(error),
           );
+
+          try {
+            const failure = await this.outboxService.recordPublishFailure(
+              event.id,
+              error,
+              this.workerId,
+            );
+
+            if (failure?.status === 'FAILED') {
+              this.logger.error(
+                `Outbox event permanently failed after maximum attempts: ${event.id}`,
+              );
+            } else {
+              this.logger.warn(
+                `Outbox publish failure recorded for retry: ${event.id}`,
+              );
+            }
+          } catch (trackingError) {
+            this.logger.error(
+              `Unable to persist outbox failure state: ${event.id}`,
+
+              trackingError instanceof Error
+                ? trackingError.stack
+                : String(trackingError),
+            );
+          }
         }
       }
     } finally {
@@ -130,14 +120,8 @@ export class OutboxProcessor {
     }
   }
 
-  private getStoredPayload(
-    payload: unknown,
-  ): StoredPayload {
-    if (
-      payload &&
-      typeof payload === 'object' &&
-      !Array.isArray(payload)
-    ) {
+  private getStoredPayload(payload: unknown): StoredPayload {
+    if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
       return payload as StoredPayload;
     }
 
@@ -149,26 +133,14 @@ export class OutboxProcessor {
     payload: StoredPayload,
   ): Promise<StoredPayload> {
     if (
-      eventType ===
-        WalletEventPattern
-          .DepositCompleted ||
-      eventType ===
-        WalletEventPattern
-          .WithdrawalCompleted
+      eventType === WalletEventPattern.DepositCompleted ||
+      eventType === WalletEventPattern.WithdrawalCompleted
     ) {
-      return this.enrichSingleUserEvent(
-        payload,
-      );
+      return this.enrichSingleUserEvent(payload);
     }
 
-    if (
-      eventType ===
-      WalletEventPattern
-        .TransferCompleted
-    ) {
-      return this.enrichTransferEvent(
-        payload,
-      );
+    if (eventType === WalletEventPattern.TransferCompleted) {
+      return this.enrichTransferEvent(payload);
     }
 
     return payload;
@@ -177,77 +149,56 @@ export class OutboxProcessor {
   private async enrichSingleUserEvent(
     payload: StoredPayload,
   ): Promise<StoredPayload> {
-    const userId =
-      this.getStringValue(
-        payload.userId,
-      );
+    const userId = this.getStringValue(payload.userId);
 
     if (!userId) {
-      this.logger.warn(
-        'Outbox event does not contain userId',
-      );
+      this.logger.warn('Outbox event does not contain userId');
 
       return payload;
     }
 
-    const user =
-      await this.prisma.user.findUnique({
-        where: {
-          id: userId,
-        },
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
 
-        select: {
-          id: true,
-          email: true,
-          phone: true,
-          firstName: true,
-          lastName: true,
-        },
-      });
+      select: {
+        id: true,
+        email: true,
+        phone: true,
+        firstName: true,
+        lastName: true,
+      },
+    });
 
     if (!user) {
-      this.logger.warn(
-        `User not found for notification event: ${userId}`,
-      );
+      this.logger.warn(`User not found for notification event: ${userId}`);
 
       return payload;
     }
 
     return {
       ...payload,
-      user:
-        this.mapEventUser(user),
+      user: this.mapEventUser(user),
     };
   }
 
   private async enrichTransferEvent(
     payload: StoredPayload,
   ): Promise<StoredPayload> {
-    const sourceWalletId =
-      this.getStringValue(
-        payload.sourceWalletId,
-      );
+    const sourceWalletId = this.getStringValue(payload.sourceWalletId);
 
-    const destinationWalletId =
-      this.getStringValue(
-        payload.destinationWalletId,
-      );
+    const destinationWalletId = this.getStringValue(
+      payload.destinationWalletId,
+    );
 
-    if (
-      !sourceWalletId ||
-      !destinationWalletId
-    ) {
-      this.logger.warn(
-        'Transfer event does not contain both wallet IDs',
-      );
+    if (!sourceWalletId || !destinationWalletId) {
+      this.logger.warn('Transfer event does not contain both wallet IDs');
 
       return payload;
     }
 
-    const [
-      sourceWallet,
-      destinationWallet,
-    ] = await Promise.all([
+    const [sourceWallet, destinationWallet] = await Promise.all([
       this.prisma.wallet.findUnique({
         where: {
           id: sourceWalletId,
@@ -270,8 +221,7 @@ export class OutboxProcessor {
 
       this.prisma.wallet.findUnique({
         where: {
-          id:
-            destinationWalletId,
+          id: destinationWalletId,
         },
 
         select: {
@@ -290,10 +240,7 @@ export class OutboxProcessor {
       }),
     ]);
 
-    if (
-      !sourceWallet ||
-      !destinationWallet
-    ) {
+    if (!sourceWallet || !destinationWallet) {
       this.logger.warn(
         'Source or destination wallet was not found while enriching transfer event',
       );
@@ -304,53 +251,33 @@ export class OutboxProcessor {
     return {
       ...payload,
 
-      sender:
-        this.mapEventUser(
-          sourceWallet.user,
-        ),
+      sender: this.mapEventUser(sourceWallet.user),
 
-      receiver:
-        this.mapEventUser(
-          destinationWallet.user,
-        ),
+      receiver: this.mapEventUser(destinationWallet.user),
     };
   }
 
-  private mapEventUser(
-    user: EventUser,
-  ): EventUser {
+  private mapEventUser(user: EventUser): EventUser {
     return {
-      id:
-        user.id,
+      id: user.id,
 
-      email:
-        user.email,
+      email: user.email,
 
-      phone:
-        user.phone,
+      phone: user.phone,
 
-      firstName:
-        user.firstName,
+      firstName: user.firstName,
 
-      lastName:
-        user.lastName,
+      lastName: user.lastName,
     };
   }
 
-  private getStringValue(
-    value: unknown,
-  ): string | null {
-    if (
-      typeof value !== 'string'
-    ) {
+  private getStringValue(value: unknown): string | null {
+    if (typeof value !== 'string') {
       return null;
     }
 
-    const normalized =
-      value.trim();
+    const normalized = value.trim();
 
-    return normalized
-      ? normalized
-      : null;
+    return normalized ? normalized : null;
   }
 }

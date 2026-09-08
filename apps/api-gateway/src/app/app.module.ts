@@ -1,4 +1,5 @@
-﻿import { RewardProxyModule } from './reward-proxy/reward-proxy.module';
+import { MetricsModule } from './observability/metrics.module';
+import { RewardProxyModule } from './reward-proxy/reward-proxy.module';
 
 import {
   Module,
@@ -43,6 +44,7 @@ import { CustomerFeaturesProxyModule } from './customer-features-proxy/customer-
 
 @Module({
   imports: [
+    MetricsModule,
     ConfigModule.forRoot({
       isGlobal: true,
     }),

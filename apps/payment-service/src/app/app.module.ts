@@ -21,8 +21,14 @@ import {
   RazorpayModule,
 } from './razorpay/razorpay.module';
 
+import {
+  MetricsModule,
+} from './observability/metrics.module';
+
 @Module({
   imports: [
+    MetricsModule,
+
     ScheduleModule.forRoot(),
     MockPaymentModule,
     RazorpayModule,
@@ -35,3 +41,5 @@ import {
   ],
 })
 export class AppModule {}
+
+

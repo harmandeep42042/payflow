@@ -1,6 +1,8 @@
 import Link from 'next/link';
 
 export default function HomePage() {
+  const apiDocsUrl = process.env.NEXT_PUBLIC_API_DOCS_URL;
+
   return (
     <main className="min-h-screen bg-slate-50">
       <nav className="border-b border-slate-200 bg-white">
@@ -43,15 +45,16 @@ export default function HomePage() {
           >
             Get started
           </Link>
-
-          <a
-            href="http://localhost:4000/swagger"
-            target="_blank"
-            rel="noreferrer"
-            className="rounded-xl border border-slate-300 bg-white px-7 py-3 font-semibold text-slate-800 transition hover:bg-slate-100"
-          >
-            Explore APIs
-          </a>
+          {apiDocsUrl ? (
+            <a
+              href={apiDocsUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-xl border border-slate-300 bg-white px-7 py-3 font-semibold text-slate-800 transition hover:bg-slate-100"
+            >
+              Explore APIs
+            </a>
+          ) : null}
         </div>
       </section>
     </main>

@@ -1,7 +1,48 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, Card, EmptyState, ErrorState, LoadingState, PageContainer, PageHeader, StatusBadge } from '../components/customer';
 import { userAuthenticatedRequest } from '../lib/api';
 type Offer = { id: string; title: string; description: string; merchant: string; category: string; currency: string; benefitDescription: string; status: string; startsAt: string; expiresAt: string; eligible: boolean; claims: Array<{ id: string; status: string }> };
-export default function OffersPage() { const [items, setItems] = useState<Offer[] | null>(null); const [selected, setSelected] = useState<Offer | null>(null); const [error, setError] = useState(''); const [message, setMessage] = useState(''); const load = useCallback(async () => { setError(''); try { setItems(await userAuthenticatedRequest('/customer-features/offers')); } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to load offers'); } }, []); useEffect(() => { void load(); }, [load]); async function claim(item: Offer) { setError(''); try { await userAuthenticatedRequest(`/customer-features/offers/${item.id}/claim`, { method: 'POST', body: '{}' }); setMessage('Offer claimed. This is not merchant redemption or settlement.'); setSelected(null); await load(); } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to claim offer'); } }
-  return <main><PageContainer><PageHeader eyebrow="Rewards and offers" title="Offers" description="Eligibility and expiry are evaluated by the server. Claims do not represent merchant redemption or settlement." actions={<Button variant="secondary" onClick={() => void load()}>Refresh</Button>} /><div aria-live="polite" className="mt-5">{message ? <p className="rounded-xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">{message}</p> : null}{error ? <ErrorState message={error} /> : null}</div>{items === null ? <LoadingState /> : items.length === 0 ? <div className="mt-7"><EmptyState title="No offers" description="No active or recently expired offers are available." /></div> : <div className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{items.map((item) => <Card key={item.id} className="p-5"><div className="flex justify-between gap-3"><h2 className="font-bold">{item.title}</h2><StatusBadge status={item.status} /></div><p className="mt-2 text-sm text-slate-600">{item.merchant} · {item.category}</p><p className="mt-3 font-semibold text-blue-700">{item.benefitDescription}</p><p className="mt-2 text-xs text-slate-500">Expires {new Date(item.expiresAt).toLocaleString()}</p><Button className="mt-4" variant="secondary" onClick={() => setSelected(item)}>Details</Button></Card>)}</div>}{selected ? <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelected(null); }}><Card className="max-h-[90vh] w-full max-w-lg overflow-y-auto p-6" ><div role="dialog" aria-modal="true" aria-labelledby="offer-title"><h2 id="offer-title" className="text-xl font-bold">{selected.title}</h2><p className="mt-3 text-sm leading-6 text-slate-600">{selected.description}</p><dl className="mt-4 space-y-2 text-sm"><div><dt className="font-semibold">Eligibility</dt><dd>{selected.eligible ? 'Eligible' : selected.claims.length ? 'Already claimed' : 'Not eligible or expired'}</dd></div><div><dt className="font-semibold">Validity</dt><dd>{new Date(selected.startsAt).toLocaleString()} – {new Date(selected.expiresAt).toLocaleString()}</dd></div></dl><div className="mt-6 flex justify-end gap-2"><Button variant="secondary" onClick={() => setSelected(null)}>Close</Button><Button disabled={!selected.eligible} onClick={() => void claim(selected)}>Claim</Button></div></div></Card></div> : null}</PageContainer></main>; }
+export default function OffersPage() { const [items, setItems] = useState<Offer[] | null>(null); const [selected, setSelected] = useState<Offer | null>(null); const [error, setError] = useState(''); const [message, setMessage] = useState(''); const [claimPending, setClaimPending] = useState(false); const claimMutationLockRef = useRef(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!selected) return;
+
+    previouslyFocusedRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+
+    const dialog = dialogRef.current;
+    dialog?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setSelected(null);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+
+      const previouslyFocused = previouslyFocusedRef.current;
+      if (previouslyFocused && document.contains(previouslyFocused)) {
+        previouslyFocused.focus();
+      }
+    };
+  }, [selected]); const load = useCallback(async () => { setError(''); try { setItems(await userAuthenticatedRequest('/customer-features/offers')); } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to load offers'); } }, []); useEffect(() => { void load(); }, [load]); async function claim(item: Offer) {
+    if (claimMutationLockRef.current) return;
+    claimMutationLockRef.current = true;
+    setClaimPending(true);
+    try { setError(''); try { await userAuthenticatedRequest(`/customer-features/offers/${item.id}/claim`, { method: 'POST', body: '{}' }); setMessage('Offer claimed. This is not merchant redemption or settlement.'); setSelected(null); await load(); } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to claim offer'); }
+    } finally {
+      claimMutationLockRef.current = false;
+      setClaimPending(false);
+    }
+  }
+  return <main><PageContainer><PageHeader eyebrow="Rewards and offers" title="Offers" description="Eligibility and expiry are evaluated by the server. Claims do not represent merchant redemption or settlement." actions={<Button variant="secondary" onClick={() => void load()}>Refresh</Button>} /><div aria-live="polite" className="mt-5">{message ? <p className="rounded-xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">{message}</p> : null}{error ? <ErrorState message={error} /> : null}</div>{items === null ? <LoadingState /> : items.length === 0 ? <div className="mt-7"><EmptyState title="No offers" description="No active or recently expired offers are available." /></div> : <div className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{items.map((item) => <Card key={item.id} className="p-5"><div className="flex justify-between gap-3"><h2 className="font-bold">{item.title}</h2><StatusBadge status={item.status} /></div><p className="mt-2 text-sm text-slate-600">{item.merchant} Â· {item.category}</p><p className="mt-3 font-semibold text-blue-700">{item.benefitDescription}</p><p className="mt-2 text-xs text-slate-500">Expires {new Date(item.expiresAt).toLocaleString()}</p><Button className="mt-4" variant="secondary" onClick={() => setSelected(item)}>Details</Button></Card>)}</div>}{selected ? <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelected(null); }}><Card className="max-h-[90vh] w-full max-w-lg overflow-y-auto p-6" ><div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="offer-title" tabIndex={-1}><h2 id="offer-title" className="text-xl font-bold">{selected.title}</h2><p className="mt-3 text-sm leading-6 text-slate-600">{selected.description}</p><dl className="mt-4 space-y-2 text-sm"><div><dt className="font-semibold">Eligibility</dt><dd>{selected.eligible ? 'Eligible' : selected.claims.length ? 'Already claimed' : 'Not eligible or expired'}</dd></div><div><dt className="font-semibold">Validity</dt><dd>{new Date(selected.startsAt).toLocaleString()} â€“ {new Date(selected.expiresAt).toLocaleString()}</dd></div></dl><div className="mt-6 flex justify-end gap-2"><Button variant="secondary" onClick={() => setSelected(null)}>Close</Button><Button disabled={claimPending || !selected.eligible} aria-busy={claimPending} onClick={() => void claim(selected)}>Claim</Button></div></div></Card></div> : null}</PageContainer></main>; }

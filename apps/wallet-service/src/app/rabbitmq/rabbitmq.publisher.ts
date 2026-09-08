@@ -12,6 +12,7 @@ import { firstValueFrom } from 'rxjs';
 export class RabbitMqPublisher
   implements OnApplicationBootstrap, OnApplicationShutdown
 {
+  private ready = false;
   private readonly logger = new Logger(RabbitMqPublisher.name);
 
   constructor(
@@ -22,6 +23,7 @@ export class RabbitMqPublisher
   async onApplicationBootstrap(): Promise<void> {
     try {
       await this.client.connect();
+    this.ready = true;
       this.logger.log('RabbitMQ connected successfully');
     } catch (error) {
       this.logger.error(
@@ -33,13 +35,17 @@ export class RabbitMqPublisher
     }
   }
 
-  async publish(eventType: string, payload: unknown): Promise<void> {
+    isReady(): boolean {
+    return this.ready;
+  }
+async publish(eventType: string, payload: unknown): Promise<void> {
     await firstValueFrom(this.client.emit(eventType, payload));
 
     this.logger.log(`Event published: ${eventType}`);
   }
 
   async onApplicationShutdown(): Promise<void> {
+    this.ready = false;
     await this.client.close();
     this.logger.log('RabbitMQ connection closed');
   }

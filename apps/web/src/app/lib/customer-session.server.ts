@@ -22,9 +22,9 @@ export function token(request: Request): string | null {
   return null;
 }
 export function setToken(response: NextResponse, value: string): void {
-  response.cookies.set({ name: COOKIE, value, httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', path: '/', maxAge: 7 * 86400 });
+  response.cookies.set({ name: COOKIE, value, httpOnly: true, secure: process.env.NODE_ENV === 'production' && process.env.COOKIE_SECURE !== 'false', sameSite: 'strict', path: '/', maxAge: 7 * 86400 });
 }
 export function clearToken(response: NextResponse): void {
-  response.cookies.set({ name: COOKIE, value: '', httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', path: '/', maxAge: 0 });
+  response.cookies.set({ name: COOKIE, value: '', httpOnly: true, secure: process.env.NODE_ENV === 'production' && process.env.COOKIE_SECURE !== 'false', sameSite: 'strict', path: '/', maxAge: 0 });
 }
 export function publicSession(login: AdminLoginResponse): CustomerSession { return { accessToken: login.accessToken, user: login.user }; }

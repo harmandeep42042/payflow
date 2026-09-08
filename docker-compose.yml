@@ -1,5 +1,11 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
 services:
-  postgres:
+  postgres:
+    logging: *default-logging
     image: postgres:16
     container_name: payflow_postgres
     restart: unless-stopped
@@ -12,7 +18,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  rabbitmq:
+  rabbitmq:
+    logging: *default-logging
     image: rabbitmq:4-management
     container_name: payflow_rabbitmq
     restart: unless-stopped
@@ -25,7 +32,8 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
 
-  redis:
+  redis:
+    logging: *default-logging
     image: redis:7-alpine
     container_name: payflow_redis
     restart: unless-stopped

@@ -1,3 +1,4 @@
+import { NotificationRuntimeHealthState } from './app/notification-runtime-health-state.service';
 import {
   Logger,
   ValidationPipe,
@@ -112,6 +113,9 @@ async function bootstrap():
   });
 
   await app.startAllMicroservices();
+  app
+    .get(NotificationRuntimeHealthState)
+    .markRabbitMqStarted();
 
   const port =
     Number(

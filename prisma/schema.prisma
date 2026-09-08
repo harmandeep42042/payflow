@@ -23,17 +23,423 @@ model User {
   wallets                Wallet[]
   refreshTokens          RefreshToken[]
   notificationPreference NotificationPreference?
-  contactsOwned          Contact[]               @relation("ContactOwner")
-  contactsReceived       Contact[]               @relation("ContactRecipient")
+  contactsOwned          Contact[]                   @relation("ContactOwner")
+  contactsReceived       Contact[]                   @relation("ContactRecipient")
   offerClaims            OfferClaim[]
-  moneyRequestsCreated   MoneyRequest[]          @relation("MoneyRequester")
-  moneyRequestsToPay     MoneyRequest[]          @relation("MoneyPayer")
-  billSplitsCreated      BillSplit[]             @relation("SplitCreator")
+  moneyRequestsCreated   MoneyRequest[]              @relation("MoneyRequester")
+  moneyRequestsToPay     MoneyRequest[]              @relation("MoneyPayer")
+  billSplitsCreated      BillSplit[]                 @relation("SplitCreator")
   splitAllocations       SplitAllocation[]
   mandates               Mandate[]
   supportCases           SupportCase[]
   rechargeAttempts       RechargeAttempt[]
   billPaymentAttempts    BillPaymentAttempt[]
+  bankAccounts           BankAccount[]
+  paymentMethods         PaymentMethod[]
+  upiPaymentsSent        UpiPaymentIntent[]          @relation("UpiSender")
+  upiPaymentsReceived    UpiPaymentIntent[]          @relation("UpiReceiver")
+  paymentAuthProfile     PaymentAuthProfile?
+  paymentAuthAttempts    PaymentAuthAttempt[]
+  merchantPayments       MerchantPayment[]
+  merchantProfile        Merchant?
+  paymentTemplates       PaymentTemplate[]
+  recurringSchedules     RecurringPaymentSchedule[]
+  transactionCategories  TransactionClassification[]
+  riskProfile            RiskProfile?
+  riskSignals            RiskSignal[]
+}
+
+enum RiskStatus {
+  CLEAR
+  REVIEW_REQUIRED
+  RESTRICTED
+}
+
+enum RiskSignalType {
+  RAPID_TRANSFERS
+  DUPLICATE_PATTERN
+  HIGH_VALUE_ACTIVITY
+  PROVIDER_RISK
+}
+
+enum RiskSignalStatus {
+  OPEN
+  REVIEWED
+  DISMISSED
+  RESOLVED
+}
+
+enum ExternalVerificationStatus {
+  NOT_CONFIGURED
+  PENDING
+  VERIFIED
+  FAILED
+  LOCKED
+}
+
+enum UpiPaymentStatus {
+  CREATED
+  PENDING
+  SUCCESS
+  FAILED
+  EXPIRED
+  REVERSED
+}
+
+enum UpiPaymentKind {
+  PAY
+  COLLECT
+}
+
+enum PaymentAuthenticationStatus {
+  PROVIDER_BLOCKED
+  NOT_CONFIGURED
+  PENDING
+  VERIFIED
+  FAILED
+  LOCKED
+}
+
+enum MerchantOnboardingStatus {
+  DRAFT
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+  REJECTED
+}
+
+enum MerchantPaymentStatus {
+  CREATED
+  PENDING
+
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+  REVERSED
+  NEEDS_REVIEW
+}
+
+enum RefundStatus {
+  PROVIDER_NOT_CONFIGURED
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum PaymentMethodType {
+  BANK_ACCOUNT
+  CARD_TOKEN
+  RUPAY_TOKEN
+  UPI_VPA
+}
+
+enum PaymentMethodStatus {
+  NOT_CONFIGURED
+  PENDING
+  ACTIVE
+  INACTIVE
+  REMOVED
+  FAILED
+}
+
+enum TransactionCategory {
+  FOOD
+  SHOPPING
+  TRAVEL
+  BILLS
+  RECHARGE
+  TRANSFER
+  RENT
+  ENTERTAINMENT
+  OTHER
+}
+
+enum RecurringPaymentStatus {
+  DRAFT
+  PROVIDER_BLOCKED
+  ACTIVE
+  PAUSED
+  CANCELLED
+  COMPLETED
+  FAILED
+}
+
+enum RecurringPaymentFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+model BankAccount {
+  id                  String                     @id @default(uuid())
+  userId              String
+  bankName            String
+  accountHolderName   String
+  maskedAccountNumber String
+  accountFingerprint  String
+  ifsc                String
+  status              ExternalVerificationStatus @default(NOT_CONFIGURED)
+  isPrimary           Boolean                    @default(false)
+  providerReference   String?
+  linkedAt            DateTime                   @default(now())
+  unlinkedAt          DateTime?
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+  user                User                       @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, accountFingerprint])
+  @@index([userId, status])
+}
+
+model PaymentMethod {
+  id               String              @id @default(uuid())
+  userId           String
+  type             PaymentMethodType
+  label            String
+  maskedIdentifier String
+  providerTokenRef String?
+  cardBrand        String?
+  expiryMonth      Int?
+  expiryYear       Int?
+  status           PaymentMethodStatus @default(NOT_CONFIGURED)
+  isDefault        Boolean             @default(false)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  removedAt        DateTime?
+  user             User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, status])
+  @@index([providerTokenRef])
+}
+
+model UpiPaymentIntent {
+  id                   String                     @id @default(uuid())
+  senderUserId         String
+  receiverUserId       String?
+  senderVpa            String
+  receiverVpa          String
+  kind                 UpiPaymentKind
+  amount               Decimal                    @db.Decimal(18, 2)
+  currency             String                     @db.VarChar(3)
+  note                 String?
+  status               UpiPaymentStatus           @default(CREATED)
+  providerState        ExternalVerificationStatus @default(NOT_CONFIGURED)
+  providerReference    String?
+  transactionReference String                     @unique
+  idempotencyKey       String                     @unique
+  expiresAt            DateTime
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+  completedAt          DateTime?
+  sender               User                       @relation("UpiSender", fields: [senderUserId], references: [id], onDelete: Restrict)
+  receiver             User?                      @relation("UpiReceiver", fields: [receiverUserId], references: [id], onDelete: Restrict)
+  auditEvents          UpiTransactionAudit[]
+
+  @@index([senderUserId, status, createdAt])
+  @@index([receiverUserId, status, createdAt])
+  @@index([expiresAt, status])
+}
+
+model UpiTransactionAudit {
+  id           String            @id @default(uuid())
+  upiPaymentId String
+  fromStatus   UpiPaymentStatus?
+  toStatus     UpiPaymentStatus
+  actorUserId  String?
+  reasonCode   String?
+  metadata     Json?
+  createdAt    DateTime          @default(now())
+  upiPayment   UpiPaymentIntent  @relation(fields: [upiPaymentId], references: [id], onDelete: Cascade)
+
+  @@index([upiPaymentId, createdAt])
+}
+
+model PaymentAuthProfile {
+  id                  String                      @id @default(uuid())
+  userId              String                      @unique
+  status              PaymentAuthenticationStatus @default(PROVIDER_BLOCKED)
+  failedAttemptCount  Int                         @default(0)
+  lockedUntil         DateTime?
+  providerReference   String?
+  credentialHash      String?
+  credentialChangedAt DateTime?
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+  user                User                        @relation(fields: [userId], references: [id], onDelete: Restrict)
+}
+
+model PaymentAuthAttempt {
+  id          String                      @id @default(uuid())
+  userId      String
+  operation   String
+  status      PaymentAuthenticationStatus
+  reasonCode  String?
+  attemptedAt DateTime                    @default(now())
+  user        User                        @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, attemptedAt])
+}
+
+model Merchant {
+  id               String                     @id @default(uuid())
+  ownerUserId      String?                    @unique
+  displayName      String
+  legalName        String?
+  category         String
+  merchantVpa      String                     @unique
+  qrIdentity       String                     @unique
+  onboardingStatus MerchantOnboardingStatus   @default(PENDING_VERIFICATION)
+  providerState    ExternalVerificationStatus @default(NOT_CONFIGURED)
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+  payments         MerchantPayment[]
+  owner            User?                      @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+
+  @@index([onboardingStatus, category])
+}
+
+model RiskProfile {
+  id           String     @id @default(uuid())
+  userId       String     @unique
+  status       RiskStatus @default(CLEAR)
+  reviewReason String?
+  reviewedAt   DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  user         User       @relation(fields: [userId], references: [id], onDelete: Restrict)
+}
+
+model RiskSignal {
+  id               String           @id @default(uuid())
+  userId           String
+  type             RiskSignalType
+  status           RiskSignalStatus @default(OPEN)
+  severity         String           @default("MEDIUM")
+  transferId       String?
+  summary          String
+  evidence         Json
+  detectedAt       DateTime         @default(now())
+  reviewedAt       DateTime?
+  reviewedByUserId String?
+  resolutionNote   String?
+  user             User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, status, detectedAt])
+  @@index([type, status])
+}
+
+model MerchantPayment {
+  id                   String                     @id @default(uuid())
+  userId               String
+  merchantId           String
+  amount               Decimal                    @db.Decimal(18, 2)
+  currency             String                     @db.VarChar(3)
+  status               MerchantPaymentStatus      @default(CREATED)
+  providerState        ExternalVerificationStatus @default(NOT_CONFIGURED)
+  providerReference    String?
+  transactionReference String                     @unique
+  idempotencyKey       String                     @unique
+  receiptNumber        String?                    @unique
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+  completedAt          DateTime?
+  processingStartedAt  DateTime?
+  lastRecoveryAt       DateTime?
+  recoveryAttempts     Int                        @default(0)
+  failureReason        String?
+  user                 User                       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  merchant             Merchant                   @relation(fields: [merchantId], references: [id], onDelete: Restrict)
+  refunds              MerchantRefund[]
+
+  @@index([userId, createdAt])
+  @@index([merchantId, status])
+}
+
+model MerchantRefund {
+  id                String          @id @default(uuid())
+  merchantPaymentId String
+  amount            Decimal         @db.Decimal(18, 2)
+  currency          String          @db.VarChar(3)
+  reason            String?
+  status            RefundStatus    @default(PROVIDER_NOT_CONFIGURED)
+  providerReference String?
+  idempotencyKey    String          @unique
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  merchantPayment   MerchantPayment @relation(fields: [merchantPaymentId], references: [id], onDelete: Restrict)
+
+  @@index([merchantPaymentId, status])
+}
+
+model TransactionClassification {
+  id         String              @id @default(uuid())
+  userId     String
+  transferId String
+  category   TransactionCategory @default(OTHER)
+  source     String              @default("USER")
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+  user       User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, transferId])
+  @@index([userId, category])
+}
+
+model PaymentTemplate {
+  id                String                     @id @default(uuid())
+  userId            String
+  name              String
+  destinationRef    String
+  maskedDestination String
+  amount            Decimal?                   @db.Decimal(18, 2)
+  currency          String                     @db.VarChar(3)
+  note              String?
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+  user              User                       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  schedules         RecurringPaymentSchedule[]
+
+  @@index([userId, updatedAt])
+}
+
+model RecurringPaymentSchedule {
+  id             String                      @id @default(uuid())
+  userId         String
+  templateId     String
+  frequency      RecurringPaymentFrequency
+  startAt        DateTime
+  endAt          DateTime?
+  nextRunAt      DateTime
+  status         RecurringPaymentStatus      @default(PROVIDER_BLOCKED)
+  idempotencyKey String                      @unique
+  createdAt      DateTime                    @default(now())
+  updatedAt      DateTime                    @updatedAt
+  user           User                        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  template       PaymentTemplate             @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  executions     RecurringPaymentExecution[]
+
+  @@index([userId, status])
+  @@index([status, nextRunAt])
+}
+
+model RecurringPaymentExecution {
+  id             String                   @id @default(uuid())
+  scheduleId     String
+  scheduledFor   DateTime
+  status         RecurringPaymentStatus   @default(PROVIDER_BLOCKED)
+  idempotencyKey String                   @unique
+  failureCode    String?
+  transferId     String?
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+  schedule       RecurringPaymentSchedule @relation(fields: [scheduleId], references: [id], onDelete: Restrict)
+
+  @@index([scheduleId, scheduledFor])
 }
 
 model RefreshToken {
@@ -134,6 +540,8 @@ model Deposit {
   reference      String
   status         DepositStatus @default(PENDING)
   failureReason  String?
+  settlementPaymentId         String?
+  settlementProviderPaymentId String?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
   completedAt    DateTime?
@@ -144,6 +552,8 @@ model Deposit {
   @@index([walletId])
   @@index([status])
   @@index([createdAt])
+  @@index([settlementPaymentId])
+  @@index([settlementProviderPaymentId])
 }
 
 model Withdrawal {
@@ -183,6 +593,9 @@ model LedgerEntry {
   withdrawal    Withdrawal?   @relation(fields: [withdrawalId], references: [id], onDelete: Restrict)
   ledgerAccount LedgerAccount @relation(fields: [ledgerAccountId], references: [id], onDelete: Restrict)
 
+  @@unique([transferId, ledgerAccountId, entryType], map: "LedgerEntry_transfer_leg_unique")
+  @@unique([depositId, ledgerAccountId, entryType], map: "LedgerEntry_deposit_leg_unique")
+  @@unique([withdrawalId, ledgerAccountId, entryType], map: "LedgerEntry_withdrawal_leg_unique")
   @@index([transferId])
   @@index([depositId])
   @@index([withdrawalId])
@@ -202,15 +615,19 @@ model OutboxEvent {
   createdAt     DateTime     @default(now())
   publishedAt   DateTime?
   lastError     String?
+  claimedAt     DateTime?
+  claimedBy     String?
 
   @@index([status, createdAt])
   @@index([producer, status, createdAt])
+  @@index([producer, status, claimedAt])
   @@index([aggregateType, aggregateId])
 }
 
 model NotificationLog {
   id                String             @id @default(uuid())
-  eventId           String?            @unique
+  eventId           String?
+  dedupeKey         String             @unique
   eventType         String
   recipient         String
   subject           String
@@ -225,6 +642,7 @@ model NotificationLog {
   @@index([status, createdAt])
   @@index([recipient])
   @@index([eventType])
+  @@index([eventId])
 }
 
 model NotificationPreference {
@@ -289,6 +707,7 @@ enum TransferStatus {
   PROCESSING
   COMPLETED
   FAILED
+  NEEDS_REVIEW
   REVERSED
 }
 
@@ -310,6 +729,7 @@ enum WithdrawalStatus {
 
 enum OutboxStatus {
   PENDING
+  PROCESSING
   PUBLISHED
   FAILED
 }
@@ -322,10 +742,13 @@ enum PaymentProvider {
 
 enum PaymentStatus {
   CREATED
+  PROCESSING
+  ORDER_CREATED
   PENDING
   AUTHORIZED
   COMPLETED
   FAILED
+  NEEDS_REVIEW
   CANCELLED
   REFUNDED
   PARTIALLY_REFUNDED
@@ -352,10 +775,16 @@ model Payment {
   completedAt       DateTime?
   failedAt          DateTime?
 
+  processingStartedAt DateTime?
+  lastRecoveryAt      DateTime?
+  recoveryAttempts    Int       @default(0)
+
   @@index([userId, createdAt])
   @@index([walletId, createdAt])
   @@index([status, createdAt])
   @@index([provider, providerOrderId])
+  @@index([provider, status, createdAt])
+  @@index([status, processingStartedAt])
 }
 
 model PasswordResetToken {
@@ -413,9 +842,8 @@ model Notification {
 }
 
 enum RewardType {
-  CASHBACK
   SCRATCH_CARD
-  POINTS
+  REWARDED_AD
 }
 
 enum RewardStatus {
@@ -676,6 +1104,32 @@ model BillPaymentAttempt {
   @@index([status])
 }
 
+model SavedBiller {
+  id          String   @id @default(uuid())
+  userId      String
+  billerId    String   @db.VarChar(120)
+  category    String   @db.VarChar(40)
+  customerRef String   @db.VarChar(160)
+  nickname    String?  @db.VarChar(80)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, billerId, customerRef, category])
+  @@index([userId, updatedAt])
+}
+model BillReminder {
+  id            String   @id @default(uuid())
+  userId        String
+  savedBillerId String
+  remindAt      DateTime
+  note          String?  @db.VarChar(160)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([userId, savedBillerId, remindAt])
+  @@index([userId, remindAt])
+  @@index([savedBillerId])
+}
 enum MandateStatus {
   PENDING
   ACTIVE
@@ -762,4 +1216,59 @@ model SupportCaseEvent {
 
   @@index([caseId, createdAt])
   @@index([actorUserId])
+}
+
+enum NotificationDeadLetterStatus {
+  PENDING
+  REPLAYING
+  REPLAYED
+  REPLAY_FAILED
+}
+
+model NotificationDeadLetter {
+  id              String                       @id @default(uuid())
+  eventId         String?
+  messageKey      String                       @unique
+  eventType       String
+  sourceQueue     String
+  deadLetterQueue String
+  payload         Json
+  headers         Json?
+  reason          String
+  retryCount      Int                          @default(0)
+  status          NotificationDeadLetterStatus @default(PENDING)
+  replayCount     Int                          @default(0)
+  replayedAt      DateTime?
+  replayedBy      String?
+  lastReplayError String?
+  createdAt       DateTime                     @default(now())
+  updatedAt       DateTime                     @updatedAt
+
+  @@index([status, createdAt])
+  @@index([eventId])
+  @@index([eventType])
+  @@index([deadLetterQueue, status])
+}
+
+model ProviderWebhookEvent {
+  id              String   @id @default(uuid())
+  provider        String
+  providerEventId String
+  eventType       String
+  providerOrderId   String?
+  providerPaymentId String?
+  payloadHash     String
+  status          String   @default("RECEIVED")
+  attempts        Int      @default(0)
+  lastError       String?
+  processedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([provider, providerEventId])
+  @@index([provider, status])
+  @@index([eventType])
+  @@index([provider, providerOrderId])
+  @@index([providerPaymentId])
+  @@index([createdAt])
 }

@@ -1,4 +1,4 @@
-﻿import {
+import {
   Body,
   Controller,
   Get,
@@ -16,15 +16,12 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 
-import {
-  GatewayJwtAuthGuard,
-} from '../gateway-auth/guards/gateway-jwt-auth.guard';
+import { GatewayJwtAuthGuard } from '../gateway-auth/guards/gateway-jwt-auth.guard';
 
-import {
-  PaymentProxyService,
-} from './payment-proxy.service';
+import { PaymentProxyService } from './payment-proxy.service';
 
 type AuthenticatedPaymentRequest = {
+  correlationId?: string;
   headers: {
     authorization?: string;
   };
@@ -32,20 +29,14 @@ type AuthenticatedPaymentRequest = {
 
 @ApiTags('Payments')
 @ApiBearerAuth('access-token')
-@UseGuards(
-  GatewayJwtAuthGuard,
-)
+@UseGuards(GatewayJwtAuthGuard)
 @Controller('payments')
 export class PaymentProxyController {
-  constructor(
-    private readonly paymentProxyService:
-      PaymentProxyService,
-  ) {}
+  constructor(private readonly paymentProxyService: PaymentProxyService) {}
 
   @Post('orders')
   @ApiOperation({
-    summary:
-      'Create a payment order through the protected Gateway route',
+    summary: 'Create a payment order through the protected Gateway route',
   })
   createOrder(
     @Body()
@@ -54,100 +45,76 @@ export class PaymentProxyController {
     @Req()
     request: AuthenticatedPaymentRequest,
   ) {
-    return this.paymentProxyService
-      .createOrder(
-        body,
-        request.headers.authorization,
-      );
+    return this.paymentProxyService.createOrder(
+      body,
+      request.headers.authorization,
+      request.correlationId,
+    );
   }
 
-  @Post(
-    'orders/:orderId/confirm',
-  )
+  @Post('orders/:orderId/confirm')
   @ApiOperation({
-    summary:
-      'Confirm a payment order through the protected Gateway route',
+    summary: 'Confirm a payment order through the protected Gateway route',
   })
   @ApiParam({
-    name:
-      'orderId',
-    description:
-      'Internal payment order UUID',
+    name: 'orderId',
+    description: 'Internal payment order UUID',
   })
   confirmOrder(
-    @Param(
-      'orderId',
-      new ParseUUIDPipe(),
-    )
+    @Param('orderId', new ParseUUIDPipe())
     orderId: string,
 
     @Req()
     request: AuthenticatedPaymentRequest,
   ) {
-    return this.paymentProxyService
-      .confirmOrder(
-        orderId,
-        request.headers.authorization,
-      );
+    return this.paymentProxyService.confirmOrder(
+      orderId,
+      request.headers.authorization,
+      request.correlationId,
+    );
   }
 
-  @Get(
-    'orders/:orderId',
-  )
+  @Get('orders/:orderId')
   @ApiOperation({
-    summary:
-      'Get payment order through the protected Gateway route',
+    summary: 'Get payment order through the protected Gateway route',
   })
   @ApiParam({
-    name:
-      'orderId',
-    description:
-      'Internal payment order UUID',
+    name: 'orderId',
+    description: 'Internal payment order UUID',
   })
   getOrder(
-    @Param(
-      'orderId',
-      new ParseUUIDPipe(),
-    )
+    @Param('orderId', new ParseUUIDPipe())
     orderId: string,
 
     @Req()
     request: AuthenticatedPaymentRequest,
   ) {
-    return this.paymentProxyService
-      .getOrder(
-        orderId,
-        request.headers.authorization,
-      );
+    return this.paymentProxyService.getOrder(
+      orderId,
+      request.headers.authorization,
+      request.correlationId,
+    );
   }
 
-  @Get(
-    'users/:userId',
-  )
+  @Get('users/:userId')
   @ApiOperation({
-    summary:
-      'Get user payment history through the protected Gateway route',
+    summary: 'Get user payment history through the protected Gateway route',
   })
   @ApiParam({
-    name:
-      'userId',
-    description:
-      'Payflow user UUID',
+    name: 'userId',
+    description: 'Payflow user UUID',
   })
   getUserPayments(
-    @Param(
-      'userId',
-      new ParseUUIDPipe(),
-    )
+    @Param('userId', new ParseUUIDPipe())
     userId: string,
 
     @Req()
     request: AuthenticatedPaymentRequest,
   ) {
-    return this.paymentProxyService
-      .getUserPayments(
-        userId,
-        request.headers.authorization,
-      );
+    return this.paymentProxyService.getUserPayments(
+      userId,
+      request.headers.authorization,
+      request.correlationId,
+    );
   }
 }

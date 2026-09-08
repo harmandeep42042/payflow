@@ -84,4 +84,8 @@ current-transaction-history-route.txt
 !prisma/migrations/20260824180000_add_customer_feature_domains/migration.sql
 !prisma/migrations/20260824190000_add_user_vpa/migration.sql
 !prisma/migrations/20260821120000_add_outbox_event_producer/migration.sql
+!prisma/migrations/20260825131000_add_regulated_payment_architecture/migration.sql
+!prisma/migrations/20260825143000_add_merchant_ownership_and_risk/migration.sql
 *.dump
+
+apps/web/.env.production.local

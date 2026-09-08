@@ -18,12 +18,14 @@ import { TransactionHistoryQueryDto } from './dto/transaction-history-query.dto'
 import { RecipientLookupService } from '../recipient-lookup/recipient-lookup.service';
 import { TransferByVpaDto } from './dto/transfer-by-vpa.dto';
 import { Decimal } from '@prisma/client/runtime/client';
+import { WalletTransferRiskService } from './security/wallet-transfer-risk.service';
 
 @Injectable()
 export class WalletsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly recipientLookupService: RecipientLookupService,
+    private readonly transferRiskService: WalletTransferRiskService,
   ) {}
 
   getStatus() {
@@ -135,6 +137,27 @@ export class WalletsService {
         authenticatedUserId,
       );
 
+      let replayAmount: Decimal;
+
+      try {
+        replayAmount = new Decimal(amount);
+      } catch {
+        throw new BadRequestException(
+          'Deposit amount must be greater than zero',
+        );
+      }
+
+      if (
+        existingDeposit.walletId !== walletId ||
+        !existingDeposit.amount.eq(replayAmount) ||
+        existingDeposit.currency !== currency ||
+        existingDeposit.reference !== reference
+      ) {
+        throw new ConflictException(
+          'Idempotency key was used for a different deposit request',
+        );
+      }
+
       return {
         id: existingDeposit.id,
         idempotencyKey: existingDeposit.idempotencyKey,
@@ -182,7 +205,7 @@ export class WalletsService {
 
     const customerLedgerAccountId = wallet.ledgerAccount.id;
 
-    const result = await this.prisma.$transaction(async (tx) => {
+    const executeDeposit = () => this.prisma.$transaction(async (tx) => {
       const systemLedgerAccount = await tx.ledgerAccount.upsert({
         where: {
           code: `SYSTEM-CASH-${currency}`,
@@ -298,7 +321,30 @@ export class WalletsService {
         customerCreditEntry,
         outboxEvent,
       };
+
     });
+
+    let result: Awaited<
+      ReturnType<typeof executeDeposit>
+    >;
+
+    try {
+      result = await executeDeposit();
+    } catch (error) {
+      if (
+        error &&
+        typeof error === 'object' &&
+        'code' in error &&
+        error.code === 'P2002'
+      ) {
+        return this.depositWallet(
+          dto,
+          authenticatedUserId,
+        );
+      }
+
+      throw error;
+    }
 
     return {
       id: result.deposit.id,
@@ -360,6 +406,27 @@ export class WalletsService {
         authenticatedUserId,
       );
 
+      let replayAmount: Decimal;
+
+      try {
+        replayAmount = new Decimal(amount);
+      } catch {
+        throw new BadRequestException(
+          'Withdrawal amount must be greater than zero',
+        );
+      }
+
+      if (
+        existingWithdrawal.walletId !== walletId ||
+        !existingWithdrawal.amount.eq(replayAmount) ||
+        existingWithdrawal.currency !== currency ||
+        existingWithdrawal.reference !== reference
+      ) {
+        throw new ConflictException(
+          'Idempotency key was used for a different withdrawal request',
+        );
+      }
+
       return {
         id: existingWithdrawal.id,
         idempotencyKey: existingWithdrawal.idempotencyKey,
@@ -420,7 +487,7 @@ export class WalletsService {
 
     const customerLedgerAccountId = wallet.ledgerAccount.id;
 
-    const result = await this.prisma.$transaction(async (tx) => {
+    const executeWithdrawal = () => this.prisma.$transaction(async (tx) => {
       const systemLedgerAccount = await tx.ledgerAccount.upsert({
         where: {
           code: `SYSTEM-CASH-${currency}`,
@@ -539,7 +606,30 @@ export class WalletsService {
         systemCreditEntry,
         outboxEvent,
       };
+
     });
+
+    let result: Awaited<
+      ReturnType<typeof executeWithdrawal>
+    >;
+
+    try {
+      result = await executeWithdrawal();
+    } catch (error) {
+      if (
+        error &&
+        typeof error === 'object' &&
+        'code' in error &&
+        error.code === 'P2002'
+      ) {
+        return this.withdrawWallet(
+          dto,
+          authenticatedUserId,
+        );
+      }
+
+      throw error;
+    }
 
     return {
       id: result.withdrawal.id,
@@ -765,154 +855,289 @@ export class WalletsService {
     const sourceLedgerAccountId = sourceWallet.ledgerAccount.id;
     const destinationLedgerAccountId = destinationWallet.ledgerAccount.id;
 
-    const execute = () => this.prisma.$transaction(async (tx) => {
-      const transfer = await tx.transfer.create({
-        data: {
-          idempotencyKey,
-          sourceWalletId,
-          destinationWalletId,
-          amount,
-          currency,
-          description,
-          status: 'PROCESSING',
-        },
-      });
+    // ---------------------------------------------------------
+    // PRE-TRANSFER FRAUD / VELOCITY ENFORCEMENT
+    // Idempotent replays have already returned above.
+    // No financial mutation has occurred at this point.
+    // ---------------------------------------------------------
 
-      const sourceUpdate = await tx.wallet.updateMany({
-        where: {
-          id: sourceWallet.id,
-          version: sourceWallet.version,
-          status: 'ACTIVE',
-          balance: {
-            gte: amount,
-          },
-        },
-        data: {
-          balance: {
-            decrement: amount,
-          },
-          version: {
-            increment: 1,
-          },
-        },
-      });
+    await this.transferRiskService.enforce(
+      authenticatedUserId,
+      sourceWalletId,
+      requestedAmount,
+    );
 
-      if (sourceUpdate.count !== 1) {
-        throw new ConflictException(
-          'Source wallet balance or version changed. Please retry.',
-        );
-      }
+    // ---------------------------------------------------------
+    // DURABLE TRANSFER INTENT
+    // ---------------------------------------------------------
 
-      const destinationUpdate = await tx.wallet.updateMany({
-        where: {
-          id: destinationWallet.id,
-          version: destinationWallet.version,
-          status: 'ACTIVE',
-        },
-        data: {
-          balance: {
-            increment: amount,
-          },
-          version: {
-            increment: 1,
-          },
-        },
-      });
+    let pendingTransfer;
 
-      if (destinationUpdate.count !== 1) {
-        throw new ConflictException(
-          'Destination wallet version changed. Please retry.',
-        );
-      }
-
-      const debitEntry = await tx.ledgerEntry.create({
-        data: {
-          transferId: transfer.id,
-          ledgerAccountId: sourceLedgerAccountId,
-          entryType: 'DEBIT',
-          amount,
-          currency,
-        },
-      });
-
-      const creditEntry = await tx.ledgerEntry.create({
-        data: {
-          transferId: transfer.id,
-          ledgerAccountId: destinationLedgerAccountId,
-          entryType: 'CREDIT',
-          amount,
-          currency,
-        },
-      });
-
-      const updatedTransfer = await tx.transfer.update({
-        where: {
-          id: transfer.id,
-        },
-        data: {
-          status: 'COMPLETED',
-          completedAt: new Date(),
-        },
-      });
-
-      const [updatedSourceWallet, updatedDestinationWallet] = await Promise.all(
-        [
-          tx.wallet.findUnique({
-            where: {
-              id: sourceWalletId,
-            },
-          }),
-          tx.wallet.findUnique({
-            where: {
-              id: destinationWalletId,
-            },
-          }),
-        ],
-      );
-
-      if (!updatedSourceWallet || !updatedDestinationWallet) {
-        throw new NotFoundException('Updated wallet records not found');
-      }
-
-      const outboxEvent = await tx.outboxEvent.create({
-        data: {
-          producer: OutboxEventProducer.Wallet,
-          aggregateType: 'TRANSFER',
-          aggregateId: updatedTransfer.id,
-          eventType: WalletEventPattern.TransferCompleted,
-          payload: {
-            transferId: updatedTransfer.id,
+    try {
+      pendingTransfer =
+        await this.prisma.transfer.create({
+          data: {
+            idempotencyKey,
             sourceWalletId,
             destinationWalletId,
             amount,
             currency,
-            description: description ?? null,
-            idempotencyKey,
-            sourceWalletBalance: updatedSourceWallet.balance.toString(),
-            destinationWalletBalance:
-              updatedDestinationWallet.balance.toString(),
-            completedAt: updatedTransfer.completedAt?.toISOString() ?? null,
+            description,
+            status: 'PENDING',
           },
-          status: 'PENDING',
-        },
-      });
+        });
+    } catch (error) {
+      if (
+        error &&
+        typeof error === 'object' &&
+        'code' in error &&
+        error.code === 'P2002'
+      ) {
+        return this.transferWallet(
+          dto,
+          authenticatedUserId,
+        );
+      }
 
-      return {
-        transfer: updatedTransfer,
-        sourceWallet: updatedSourceWallet,
-        destinationWallet: updatedDestinationWallet,
-        debitEntry,
-        creditEntry,
-        outboxEvent,
-      };
-    });
-    let result: Awaited<ReturnType<typeof execute>>;
-    try { result = await execute(); }
-    catch (error) {
-      if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') return this.transferWallet(dto, authenticatedUserId);
       throw error;
     }
 
+    // ---------------------------------------------------------
+    // ATOMIC PENDING -> PROCESSING CLAIM
+    // ---------------------------------------------------------
+
+    const claim =
+      await this.prisma.transfer.updateMany({
+        where: {
+          id: pendingTransfer.id,
+          status: 'PENDING',
+        },
+        data: {
+          status: 'PROCESSING',
+          failureReason: null,
+        },
+      });
+
+    if (claim.count !== 1) {
+      return this.transferWallet(
+        dto,
+        authenticatedUserId,
+      );
+    }
+
+    // ---------------------------------------------------------
+    // MONEY + LEDGER + COMPLETION TRANSACTION
+    // ---------------------------------------------------------
+
+    const execute = () =>
+      this.prisma.$transaction(
+        async (tx) => {
+          const transfer =
+            await tx.transfer.findUnique({
+              where: {
+                id: pendingTransfer.id,
+              },
+            });
+
+          if (
+            !transfer ||
+            transfer.status !== 'PROCESSING'
+          ) {
+            throw new ConflictException(
+              'Transfer is not in PROCESSING state',
+            );
+          }
+
+          const sourceUpdate =
+            await tx.wallet.updateMany({
+              where: {
+                id: sourceWallet.id,
+                version: sourceWallet.version,
+                status: 'ACTIVE',
+                balance: {
+                  gte: amount,
+                },
+              },
+              data: {
+                balance: {
+                  decrement: amount,
+                },
+                version: {
+                  increment: 1,
+                },
+              },
+            });
+
+          if (sourceUpdate.count !== 1) {
+            throw new ConflictException(
+              'Source wallet balance or version changed. Please retry.',
+            );
+          }
+
+          const destinationUpdate =
+            await tx.wallet.updateMany({
+              where: {
+                id: destinationWallet.id,
+                version:
+                  destinationWallet.version,
+                status: 'ACTIVE',
+              },
+              data: {
+                balance: {
+                  increment: amount,
+                },
+                version: {
+                  increment: 1,
+                },
+              },
+            });
+
+          if (
+            destinationUpdate.count !== 1
+          ) {
+            throw new ConflictException(
+              'Destination wallet version changed. Please retry.',
+            );
+          }
+
+          const debitEntry =
+            await tx.ledgerEntry.create({
+              data: {
+                transferId: transfer.id,
+                ledgerAccountId:
+                  sourceLedgerAccountId,
+                entryType: 'DEBIT',
+                amount,
+                currency,
+              },
+            });
+
+          const creditEntry =
+            await tx.ledgerEntry.create({
+              data: {
+                transferId: transfer.id,
+                ledgerAccountId:
+                  destinationLedgerAccountId,
+                entryType: 'CREDIT',
+                amount,
+                currency,
+              },
+            });
+
+          const updatedTransfer =
+            await tx.transfer.update({
+              where: {
+                id: transfer.id,
+              },
+              data: {
+                status: 'COMPLETED',
+                completedAt: new Date(),
+                failureReason: null,
+              },
+            });
+
+          const [
+            updatedSourceWallet,
+            updatedDestinationWallet,
+          ] = await Promise.all([
+            tx.wallet.findUnique({
+              where: {
+                id: sourceWalletId,
+              },
+            }),
+            tx.wallet.findUnique({
+              where: {
+                id: destinationWalletId,
+              },
+            }),
+          ]);
+
+          if (
+            !updatedSourceWallet ||
+            !updatedDestinationWallet
+          ) {
+            throw new NotFoundException(
+              'Updated wallet records not found',
+            );
+          }
+
+          const outboxEvent =
+            await tx.outboxEvent.create({
+              data: {
+                producer:
+                  OutboxEventProducer.Wallet,
+                aggregateType: 'TRANSFER',
+                aggregateId:
+                  updatedTransfer.id,
+                eventType:
+                  WalletEventPattern
+                    .TransferCompleted,
+                payload: {
+                  transferId:
+                    updatedTransfer.id,
+                  sourceWalletId,
+                  destinationWalletId,
+                  amount,
+                  currency,
+                  description:
+                    description ?? null,
+                  idempotencyKey,
+                  sourceWalletBalance:
+                    updatedSourceWallet
+                      .balance
+                      .toString(),
+                  destinationWalletBalance:
+                    updatedDestinationWallet
+                      .balance
+                      .toString(),
+                  completedAt:
+                    updatedTransfer
+                      .completedAt
+                      ?.toISOString() ??
+                    null,
+                },
+                status: 'PENDING',
+              },
+            });
+
+          return {
+            transfer: updatedTransfer,
+            sourceWallet:
+              updatedSourceWallet,
+            destinationWallet:
+              updatedDestinationWallet,
+            debitEntry,
+            creditEntry,
+            outboxEvent,
+          };
+        },
+      );
+
+    let result: Awaited<
+      ReturnType<typeof execute>
+    >;
+
+    try {
+      result = await execute();
+    } catch (error) {
+      const failureReason =
+        error instanceof Error
+          ? error.message
+          : 'Transfer processing failed';
+
+      await this.prisma.transfer.updateMany({
+        where: {
+          id: pendingTransfer.id,
+          status: 'PROCESSING',
+        },
+        data: {
+          status: 'FAILED',
+          failureReason,
+        },
+      });
+
+      throw error;
+    }
     return {
       id: result.transfer.id,
       idempotencyKey: result.transfer.idempotencyKey,
@@ -958,6 +1183,481 @@ export class WalletsService {
     };
   }
 
+  async reverseTransfer(
+    transferId: string,
+    reason = 'Administrative reversal',
+  ) {
+    const normalizedTransferId =
+      transferId.trim();
+
+    const normalizedReason =
+      reason.trim() ||
+      'Administrative reversal';
+
+    if (!normalizedTransferId) {
+      throw new BadRequestException(
+        'Transfer ID is required',
+      );
+    }
+
+    if (normalizedReason.length > 500) {
+      throw new BadRequestException(
+        'Reversal reason must not exceed 500 characters',
+      );
+    }
+
+    const existingTransfer =
+      await this.prisma.transfer.findUnique({
+        where: {
+          id: normalizedTransferId,
+        },
+        include: {
+          sourceWallet: {
+            include: {
+              ledgerAccount: true,
+            },
+          },
+          destinationWallet: {
+            include: {
+              ledgerAccount: true,
+            },
+          },
+        },
+      });
+
+    if (!existingTransfer) {
+      throw new NotFoundException(
+        'Transfer not found',
+      );
+    }
+
+    if (
+      existingTransfer.status ===
+      'REVERSED'
+    ) {
+      return {
+        id: existingTransfer.id,
+        status:
+          existingTransfer.status,
+        amount:
+          existingTransfer.amount.toString(),
+        currency:
+          existingTransfer.currency,
+        failureReason:
+          existingTransfer.failureReason,
+        replayed: true,
+      };
+    }
+
+    if (
+      existingTransfer.status !==
+      'COMPLETED'
+    ) {
+      throw new ConflictException(
+        `Only COMPLETED transfers can be reversed. Current status: ${existingTransfer.status}`,
+      );
+    }
+
+    if (
+      !existingTransfer
+        .sourceWallet
+        .ledgerAccount
+    ) {
+      throw new NotFoundException(
+        'Source wallet ledger account not found',
+      );
+    }
+
+    if (
+      !existingTransfer
+        .destinationWallet
+        .ledgerAccount
+    ) {
+      throw new NotFoundException(
+        'Destination wallet ledger account not found',
+      );
+    }
+
+    if (
+      existingTransfer
+        .destinationWallet
+        .balance
+        .lt(existingTransfer.amount)
+    ) {
+      throw new ConflictException(
+        'Destination wallet does not have sufficient balance for reversal',
+      );
+    }
+
+    const sourceVersion =
+      existingTransfer
+        .sourceWallet
+        .version;
+
+    const destinationVersion =
+      existingTransfer
+        .destinationWallet
+        .version;
+
+    const sourceLedgerAccountId =
+      existingTransfer
+        .sourceWallet
+        .ledgerAccount
+        .id;
+
+    const destinationLedgerAccountId =
+      existingTransfer
+        .destinationWallet
+        .ledgerAccount
+        .id;
+
+    const execute = () =>
+      this.prisma.$transaction(
+        async (tx) => {
+          const claim =
+            await tx.transfer.updateMany({
+              where: {
+                id: existingTransfer.id,
+                status: 'COMPLETED',
+              },
+              data: {
+                status: 'PROCESSING',
+              },
+            });
+
+          if (claim.count !== 1) {
+            const current =
+              await tx.transfer.findUnique({
+                where: {
+                  id: existingTransfer.id,
+                },
+              });
+
+            if (
+              current?.status ===
+              'REVERSED'
+            ) {
+              return {
+                transfer: current,
+                sourceWallet: null,
+                destinationWallet: null,
+                reversalDebitEntry: null,
+                reversalCreditEntry: null,
+                outboxEvent: null,
+                replayed: true,
+              };
+            }
+
+            throw new ConflictException(
+              'Transfer reversal is already being processed',
+            );
+          }
+
+          const destinationUpdate =
+            await tx.wallet.updateMany({
+              where: {
+                id:
+                  existingTransfer
+                    .destinationWalletId,
+                version:
+                  destinationVersion,
+                status: 'ACTIVE',
+                balance: {
+                  gte:
+                    existingTransfer
+                      .amount,
+                },
+              },
+              data: {
+                balance: {
+                  decrement:
+                    existingTransfer
+                      .amount,
+                },
+                version: {
+                  increment: 1,
+                },
+              },
+            });
+
+          if (
+            destinationUpdate.count !==
+            1
+          ) {
+            throw new ConflictException(
+              'Destination wallet balance or version changed during reversal',
+            );
+          }
+
+          const sourceUpdate =
+            await tx.wallet.updateMany({
+              where: {
+                id:
+                  existingTransfer
+                    .sourceWalletId,
+                version:
+                  sourceVersion,
+                status: 'ACTIVE',
+              },
+              data: {
+                balance: {
+                  increment:
+                    existingTransfer
+                      .amount,
+                },
+                version: {
+                  increment: 1,
+                },
+              },
+            });
+
+          if (
+            sourceUpdate.count !== 1
+          ) {
+            throw new ConflictException(
+              'Source wallet version changed during reversal',
+            );
+          }
+
+          const reversalDebitEntry =
+            await tx.ledgerEntry.create({
+              data: {
+                transferId:
+                  existingTransfer.id,
+                ledgerAccountId:
+                  destinationLedgerAccountId,
+                entryType: 'DEBIT',
+                amount:
+                  existingTransfer.amount,
+                currency:
+                  existingTransfer.currency,
+              },
+            });
+
+          const reversalCreditEntry =
+            await tx.ledgerEntry.create({
+              data: {
+                transferId:
+                  existingTransfer.id,
+                ledgerAccountId:
+                  sourceLedgerAccountId,
+                entryType: 'CREDIT',
+                amount:
+                  existingTransfer.amount,
+                currency:
+                  existingTransfer.currency,
+              },
+            });
+
+          const transfer =
+            await tx.transfer.update({
+              where: {
+                id:
+                  existingTransfer.id,
+              },
+              data: {
+                status: 'REVERSED',
+                failureReason:
+                  normalizedReason,
+              },
+            });
+
+          const [
+            sourceWallet,
+            destinationWallet,
+          ] =
+            await Promise.all([
+              tx.wallet.findUnique({
+                where: {
+                  id:
+                    existingTransfer
+                      .sourceWalletId,
+                },
+              }),
+              tx.wallet.findUnique({
+                where: {
+                  id:
+                    existingTransfer
+                      .destinationWalletId,
+                },
+              }),
+            ]);
+
+          if (
+            !sourceWallet ||
+            !destinationWallet
+          ) {
+            throw new NotFoundException(
+              'Updated reversal wallets not found',
+            );
+          }
+
+          const outboxEvent =
+            await tx.outboxEvent.create({
+              data: {
+                producer:
+                  OutboxEventProducer.Wallet,
+                aggregateType:
+                  'TRANSFER',
+                aggregateId:
+                  transfer.id,
+                eventType:
+                  'wallet.transfer.reversed',
+                payload: {
+                  transferId:
+                    transfer.id,
+                  sourceWalletId:
+                    transfer.sourceWalletId,
+                  destinationWalletId:
+                    transfer.destinationWalletId,
+                  amount:
+                    transfer.amount.toString(),
+                  currency:
+                    transfer.currency,
+                  reason:
+                    normalizedReason,
+                  sourceWalletBalance:
+                    sourceWallet.balance.toString(),
+                  destinationWalletBalance:
+                    destinationWallet.balance.toString(),
+                  reversedAt:
+                    new Date().toISOString(),
+                },
+                status: 'PENDING',
+              },
+            });
+
+          return {
+            transfer,
+            sourceWallet,
+            destinationWallet,
+            reversalDebitEntry,
+            reversalCreditEntry,
+            outboxEvent,
+            replayed: false,
+          };
+        },
+      );
+
+    const result =
+      await execute();
+
+    if (result.replayed) {
+      return {
+        id: result.transfer.id,
+        status:
+          result.transfer.status,
+        amount:
+          result.transfer.amount.toString(),
+        currency:
+          result.transfer.currency,
+        failureReason:
+          result.transfer.failureReason,
+        replayed: true,
+      };
+    }
+
+    if (
+      !result.sourceWallet ||
+      !result.destinationWallet ||
+      !result.reversalDebitEntry ||
+      !result.reversalCreditEntry ||
+      !result.outboxEvent
+    ) {
+      throw new ConflictException(
+        'Incomplete reversal result',
+      );
+    }
+
+    return {
+      id: result.transfer.id,
+      status:
+        result.transfer.status,
+      amount:
+        result.transfer.amount.toString(),
+      currency:
+        result.transfer.currency,
+      reason:
+        result.transfer.failureReason,
+
+      sourceWallet: {
+        id:
+          result.sourceWallet.id,
+        balance:
+          result.sourceWallet
+            .balance
+            .toString(),
+        version:
+          result.sourceWallet.version,
+      },
+
+      destinationWallet: {
+        id:
+          result.destinationWallet.id,
+        balance:
+          result.destinationWallet
+            .balance
+            .toString(),
+        version:
+          result.destinationWallet
+            .version,
+      },
+
+      ledgerEntries: {
+        debit: {
+          id:
+            result
+              .reversalDebitEntry
+              .id,
+          ledgerAccountId:
+            result
+              .reversalDebitEntry
+              .ledgerAccountId,
+          entryType:
+            result
+              .reversalDebitEntry
+              .entryType,
+          amount:
+            result
+              .reversalDebitEntry
+              .amount
+              .toString(),
+        },
+
+        credit: {
+          id:
+            result
+              .reversalCreditEntry
+              .id,
+          ledgerAccountId:
+            result
+              .reversalCreditEntry
+              .ledgerAccountId,
+          entryType:
+            result
+              .reversalCreditEntry
+              .entryType,
+          amount:
+            result
+              .reversalCreditEntry
+              .amount
+              .toString(),
+        },
+      },
+
+      outboxEvent: {
+        id:
+          result.outboxEvent.id,
+        eventType:
+          result.outboxEvent
+            .eventType,
+        status:
+          result.outboxEvent.status,
+      },
+
+      replayed: false,
+    };
+  }
   async getWalletById(walletId: string, authenticatedUserId?: string) {
     const wallet = await this.prisma.wallet.findUnique({
       where: {
@@ -1239,3 +1939,7 @@ export class WalletsService {
     };
   }
 }
+
+
+
+

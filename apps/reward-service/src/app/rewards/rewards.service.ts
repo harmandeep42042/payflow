@@ -1,4 +1,4 @@
-﻿import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '@payflow/database';
 
 @Injectable()
@@ -40,6 +40,127 @@ export class RewardsService {
     }
   }
 
+  async completeRewardedAd(
+    userId: string,
+    adSessionId: string,
+    adUnit?: string,
+  ) {
+    if (!userId) {
+      throw new BadRequestException('userId is required');
+    }
+
+    if (!adSessionId || !/^[A-Za-z0-9_-]{16,128}$/.test(adSessionId)) {
+      throw new BadRequestException('Valid adSessionId is required');
+    }
+
+    const wallet = await this.prisma.wallet.findFirst({
+      where: {
+        userId,
+        status: 'ACTIVE',
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+    });
+
+    if (!wallet) {
+      throw new NotFoundException('Active wallet not found');
+    }
+
+    const idempotencyKey = `AD-${userId}-${adSessionId}`;
+
+    const existing = await this.prisma.reward.findUnique({
+      where: {
+        paymentId: idempotencyKey,
+      },
+    });
+
+    if (existing) {
+      return {
+        success: true,
+        created: false,
+        duplicate: true,
+        reward: existing,
+      };
+    }
+
+    const dayStart = new Date();
+    dayStart.setHours(0, 0, 0, 0);
+
+    const tomorrow = new Date(dayStart);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const todayCount = await this.prisma.reward.count({
+      where: {
+        userId,
+        rewardType: 'REWARDED_AD',
+        createdAt: {
+          gte: dayStart,
+          lt: tomorrow,
+        },
+      },
+    });
+
+    if (todayCount >= 5) {
+      throw new BadRequestException(
+        'Daily rewarded-ad limit reached. Try again tomorrow.',
+      );
+    }
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
+
+    try {
+      const reward = await this.prisma.reward.create({
+        data: {
+          userId,
+          walletId: wallet.id,
+          paymentId: idempotencyKey,
+          rewardType: 'REWARDED_AD',
+          amount: '1.00',
+          currency: 'INR',
+          status: 'AVAILABLE',
+          expiresAt,
+        },
+      });
+
+      return {
+        success: true,
+        created: true,
+        duplicate: false,
+        reward: {
+          id: reward.id,
+          amount: reward.amount.toString(),
+          currency: reward.currency,
+          rewardType: reward.rewardType,
+          status: reward.status,
+          expiresAt: reward.expiresAt,
+          adUnit: adUnit ?? null,
+        },
+      };
+    } catch (error) {
+      if (!this.isPaymentIdUniqueConflict(error)) {
+        throw error;
+      }
+
+      const existingReward = await this.prisma.reward.findUnique({
+        where: {
+          paymentId: idempotencyKey,
+        },
+      });
+
+      if (!existingReward) {
+        throw error;
+      }
+
+      return {
+        success: true,
+        created: false,
+        duplicate: true,
+        reward: existingReward,
+      };
+    }
+  }
   async claimReward(rewardId: string, userId: string) {
     if (!rewardId || !userId) throw new BadRequestException('rewardId and userId are required');
     const reward = await this.prisma.reward.findFirst({ where: { id: rewardId, userId } });

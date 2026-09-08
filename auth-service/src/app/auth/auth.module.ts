@@ -1,3 +1,4 @@
+import { RedisService } from '../redis/redis.service';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
@@ -10,6 +11,11 @@ import { RedisRateLimitGuard } from './guards/redis-rate-limit.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
 
+import {
+  AUTH_HEALTH_DATABASE,
+  AUTH_HEALTH_REDIS,
+  AuthHealthController,
+} from './auth-health.controller';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -37,10 +43,18 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     }),
   ],
 
-  controllers: [AuthController],
+  controllers: [AuthController, AuthHealthController],
 
   providers: [
     AuthService,
+    {
+      provide: AUTH_HEALTH_DATABASE,
+      useExisting: AuthService,
+    },
+    {
+      provide: AUTH_HEALTH_REDIS,
+      useExisting: RedisService,
+    },
     JwtStrategy,
     RolesGuard,
     RedisRateLimitGuard,
@@ -48,6 +62,14 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 
   exports: [
     AuthService,
+    {
+      provide: AUTH_HEALTH_DATABASE,
+      useExisting: AuthService,
+    },
+    {
+      provide: AUTH_HEALTH_REDIS,
+      useExisting: RedisService,
+    },
     JwtModule,
     PassportModule,
     RolesGuard,

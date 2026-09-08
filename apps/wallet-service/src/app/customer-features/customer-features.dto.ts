@@ -31,6 +31,17 @@ export class CreateBillPaymentDto {
   @IsString() @Matches(MONEY) amount!: string; @IsString() @Length(3, 3) currency!: string;
   @IsString() @IsNotEmpty() @MaxLength(120) idempotencyKey!: string;
 }
+export class CreateSavedBillerDto {
+  @IsString() @IsNotEmpty() @MaxLength(120) billerId!: string;
+  @IsIn(['ELECTRICITY', 'WATER', 'GAS', 'INTERNET', 'MOBILE_POSTPAID', 'DTH', 'OTHER']) category!: string;
+  @IsString() @IsNotEmpty() @MaxLength(160) customerRef!: string;
+  @IsOptional() @IsString() @MaxLength(80) nickname?: string;
+}
+export class CreateBillReminderDto {
+  @IsUUID() savedBillerId!: string;
+  @IsDateString() remindAt!: string;
+  @IsOptional() @IsString() @MaxLength(160) note?: string;
+}
 export class CreateMandateDto {
   @IsString() @IsNotEmpty() @MaxLength(160) merchant!: string; @IsOptional() @IsString() @Matches(MONEY) amount?: string;
   @IsString() @Matches(MONEY) maxAmount!: string; @IsString() @Length(3, 3) currency!: string;

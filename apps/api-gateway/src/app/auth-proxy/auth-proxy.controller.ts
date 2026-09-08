@@ -80,6 +80,24 @@ export class AuthProxyController {
       .verifyOtp(body);
   }
 
+  @Post('otp/mobile/request')
+  @HttpCode(HttpStatus.OK)
+  requestMobileOtp(@Body() body: unknown) {
+    return this.authProxyService.requestMobileOtp(body);
+  }
+
+  @Post('otp/mobile/verify')
+  @HttpCode(HttpStatus.OK)
+  verifyMobileOtp(@Body() body: unknown) {
+    return this.authProxyService.verifyMobileOtp(body);
+  }
+
+  @Post('otp/mobile/register')
+  @HttpCode(HttpStatus.OK)
+  registerMobileOtp(@Body() body: unknown) {
+    return this.authProxyService.registerMobileOtp(body);
+  }
+
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   logout(@Body() body: unknown) {

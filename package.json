@@ -64,7 +64,6 @@
     "webpack-dev-server": "^5.2.1"
   },
   "dependencies": {
-    "@nestjs-modules/mailer": "^2.3.7",
     "@nestjs/axios": "^4.0.1",
     "@nestjs/common": "^11.0.0",
     "@nestjs/config": "^4.0.4",
@@ -79,9 +78,10 @@
     "@nestjs/websockets": "11.1.28",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
+    "@prometheus-io/client": "^0.16.1",
     "amqp-connection-manager": "^5.0.0",
     "amqplib": "^2.0.1",
-    "axios": "^1.6.0",
+    "axios": "^1.20.0",
     "bcrypt": "^6.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
@@ -92,7 +92,7 @@
     "http-proxy-middleware": "3.0.7",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
-    "next": "~16.1.6",
+    "next": "~16.2.12",
     "nodemailer": "^9.0.3",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",

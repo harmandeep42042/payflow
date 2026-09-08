@@ -11,6 +11,7 @@ type Wallet = { id: string; currency: string; status: string };
 type QrResponse = {
   qr: { payload: string; dataUrl: string };
   recipient: { displayName: string; vpa: string; email: string; currency: string; walletStatus: string };
+  payment: { amount: string | null; expiresAt: string | null; idempotencyKey: string };
 };
 
 export default function ReceivePage() {
@@ -22,6 +23,8 @@ export default function ReceivePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [copyMessage, setCopyMessage] = useState('');
+  const [requestedAmount, setRequestedAmount] = useState('');
+  const [expiryMinutes, setExpiryMinutes] = useState('15');
   const selectedWallet = wallets.find((wallet) => wallet.currency === currency) ?? null;
 
   async function copyPaymentAddress(): Promise<void> {
@@ -53,18 +56,20 @@ export default function ReceivePage() {
     const request = beginLatestRequest(requestRef);
     try {
       setIsLoading(true); setError('');
-      const response = await userAuthenticatedRequest<QrResponse>(`/wallet-qr/my?currency=${encodeURIComponent(selectedCurrency)}`, { signal: request.controller.signal });
+      const query = new URLSearchParams({ currency: selectedCurrency }); if (requestedAmount) { query.set('amount', requestedAmount); query.set('expiresInMinutes', expiryMinutes); }
+      const response = await userAuthenticatedRequest<QrResponse>(`/wallet-qr/my?${query.toString()}`, { signal: request.controller.signal });
       if (isLatestRequest(requestRef, request)) setDetails(response);
     } catch (requestError) {
       if (isLatestRequest(requestRef, request)) setError(requestError instanceof Error ? requestError.message : 'Unable to generate payment QR');
     } finally { if (requestRef.current?.id === request.id) setIsLoading(false); }
-  }, []);
+  }, [requestedAmount, expiryMinutes]);
 
   useEffect(() => { void loadWallets(); }, [loadWallets]);
   useEffect(() => { if (currency) void loadQr(currency); return () => requestRef.current?.controller.abort(); }, [currency, loadQr]);
 
   return <main><PageContainer className="max-w-3xl"><PageHeader eyebrow="Receive" title="Receive money" description="Share this Payflow payment address or QR for the selected wallet currency." />
     {wallets.length > 1 ? <div className="mt-7 max-w-xs"><SelectField id="receive-currency" label="Wallet currency" value={currency} onChange={(event) => setCurrency(event.target.value)}>{wallets.map((wallet) => <option key={wallet.id} value={wallet.currency}>{wallet.currency}</option>)}</SelectField></div> : null}
+    <div className="mt-5 grid gap-3 sm:grid-cols-[1fr_1fr_auto]"><label className="text-sm font-semibold">Optional exact amount<input aria-label="Optional exact amount" inputMode="decimal" value={requestedAmount} onChange={event=>setRequestedAmount(event.target.value)} placeholder="0.00" className="mt-2 min-h-11 w-full rounded-xl border px-3" /></label><label className="text-sm font-semibold">Dynamic QR expiry<select aria-label="Dynamic QR expiry" value={expiryMinutes} onChange={event=>setExpiryMinutes(event.target.value)} disabled={!requestedAmount} className="mt-2 min-h-11 w-full rounded-xl border px-3"><option value="5">5 minutes</option><option value="15">15 minutes</option><option value="60">1 hour</option></select></label><Button type="button" className="self-end" onClick={()=>void loadQr(currency)}>Generate QR</Button></div>
     {error ? <div className="mt-6"><ErrorState message={error} onRetry={() => void (currency ? loadQr(currency) : loadWallets())} /></div> : null}
     {isLoading ? <LoadingState label="Preparing payment QR" /> : !details ? <div className="mt-7"><EmptyState title="No active wallet available" description="An active wallet is required before you can receive money." /></div> : <section className="mt-7 grid min-w-0 gap-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:grid-cols-[minmax(0,280px)_1fr] sm:p-7"><div className="mx-auto w-full max-w-[280px] rounded-2xl border border-slate-200 bg-white p-3"><Image src={details.qr.dataUrl} alt={`Payflow QR for ${details.recipient.vpa}`} width={400} height={400} className="h-auto w-full" unoptimized /></div><div className="min-w-0 self-center"><p className="text-sm font-semibold text-slate-500">Receive as</p><h2 className="mt-1 break-words text-2xl font-bold text-slate-950">{details.recipient.displayName || details.recipient.email}</h2><p className="mt-5 text-sm font-semibold text-slate-500">Payment address</p><p className="mt-1 break-all text-lg font-bold text-blue-700">{details.recipient.vpa}</p><Button type="button" variant="secondary" className="mt-3 w-full sm:w-auto" onClick={() => void copyPaymentAddress()}>Copy payment address</Button><p aria-live="polite" className="mt-2 min-h-5 text-xs font-medium text-slate-600">{copyMessage}</p><p className="mt-4 text-sm font-semibold text-slate-500">Wallet</p><p className="mt-1 break-all font-mono text-sm text-slate-800">{selectedWallet?.id ?? 'Unavailable'}</p><p className="mt-5 text-sm font-semibold text-slate-500">Wallet currency</p><p className="mt-1 text-xl font-bold text-slate-950">{details.recipient.currency}</p><div className="mt-4"><StatusBadge status={details.recipient.walletStatus} /></div><p className="mt-5 text-xs leading-5 text-slate-500">Only request payments in the currency shown. Payflow does not perform currency conversion here.</p></div></section>}
   </PageContainer></main>;

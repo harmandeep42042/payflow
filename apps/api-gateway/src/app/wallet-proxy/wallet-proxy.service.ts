@@ -1,4 +1,5 @@
-﻿import { HttpService } from '@nestjs/axios';
+import { withCorrelationHeaders } from '../observability/correlation-id.middleware';
+import { HttpService } from '@nestjs/axios';
 
 import {
   HttpException,
@@ -61,6 +62,16 @@ export class WalletProxyService {
   generateMyQr(query: Record<string, unknown>, authorization?: string) {
     return this.get('/wallet-qr/my', query, authorization);
   }
+  generateMerchantQr(query: Record<string, unknown>, authorization?: string) {
+    return this.get('/wallet-qr/merchant', query, authorization);
+  }
+  verifyQr(query: Record<string, unknown>, authorization?: string) {
+    return this.get('/wallet-qr/verify', query, authorization);
+  }
+
+  payQr(body: unknown, authorization?: string) {
+    return this.post('/wallet-qr/pay', body, authorization);
+  }
   resolveRecipient(query: Record<string, unknown>, authorization?: string) {
     return this.get('/wallet-recipients/resolve', query, authorization);
   }
@@ -74,13 +85,13 @@ export class WalletProxyService {
       const response = await firstValueFrom(
         this.httpService.get(`${this.walletServiceUrl}${path}`, {
           params,
-          headers: {
+          headers: withCorrelationHeaders({
             ...(authorization
               ? {
                   Authorization: authorization,
                 }
               : {}),
-          },
+          }),
         }),
       );
 
@@ -94,7 +105,7 @@ export class WalletProxyService {
     try {
       const response = await firstValueFrom(
         this.httpService.post(`${this.walletServiceUrl}${path}`, body, {
-          headers: {
+          headers: withCorrelationHeaders({
             'Content-Type': 'application/json',
 
             ...(authorization
@@ -102,7 +113,7 @@ export class WalletProxyService {
                   Authorization: authorization,
                 }
               : {}),
-          },
+          }),
         }),
       );
 

@@ -37,8 +37,8 @@ export function SelectField({ label, id, children, ...props }: SelectHTMLAttribu
   return <div className="space-y-2"><label htmlFor={id} className="block text-sm font-semibold text-slate-800">{label}</label><select id={id} className="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-slate-950 outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100" {...props}>{children}</select></div>;
 }
 
-export function StatusBadge({ status }: { status: string }) {
-  const normalized = status.toUpperCase();
+export function StatusBadge({ status }: { status?: string | null }) {
+  const normalized = (status ?? 'UNKNOWN').toUpperCase();
   const style = ['ACTIVE', 'COMPLETED', 'SUCCESS'].includes(normalized) ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20' : ['PENDING', 'PROCESSING'].includes(normalized) ? 'bg-amber-50 text-amber-800 ring-amber-600/20' : ['FAILED', 'FROZEN', 'CLOSED'].includes(normalized) ? 'bg-red-50 text-red-700 ring-red-600/20' : 'bg-slate-100 text-slate-700 ring-slate-500/20';
   return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-inset ${style}`}>{normalized}</span>;
 }
@@ -48,7 +48,7 @@ export function Avatar({ name }: { name?: string | null }) {
   return <span aria-hidden="true" className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-700">{initials}</span>;
 }
 
-export function LoadingState({ label = 'Loading…' }: { label?: string }) {
+export function LoadingState({ label = 'Loadingâ€¦' }: { label?: string }) {
   return <div role="status" aria-live="polite" className="grid gap-3 py-8"><span className="h-5 w-2/5 animate-pulse rounded bg-slate-200" /><span className="h-16 animate-pulse rounded-xl bg-slate-100" /><span className="sr-only">{label}</span></div>;
 }
 export function EmptyState({ title, description }: { title: string; description: string }) {
@@ -88,5 +88,5 @@ export function Dialog({ open, title, description, children, onClose }: {
 export function ConfirmationDialog({ open, title, description, confirmLabel = 'Confirm', isLoading = false, onConfirm, onClose }: {
   open: boolean; title: string; description: string; confirmLabel?: string; isLoading?: boolean; onConfirm: () => void; onClose: () => void;
 }) {
-  return <Dialog open={open} title={title} description={description} onClose={onClose}><div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><Button variant="secondary" onClick={onClose} disabled={isLoading}>Cancel</Button><Button onClick={onConfirm} disabled={isLoading}>{isLoading ? 'Processing…' : confirmLabel}</Button></div></Dialog>;
+  return <Dialog open={open} title={title} description={description} onClose={onClose}><div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><Button variant="secondary" onClick={onClose} disabled={isLoading}>Cancel</Button><Button onClick={onConfirm} disabled={isLoading}>{isLoading ? 'Processingâ€¦' : confirmLabel}</Button></div></Dialog>;
 }

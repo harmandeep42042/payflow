@@ -1,6 +1,8 @@
-﻿import {
+import {
+  Body,
   Controller,
   Get,
+  Post,
   Query,
   Req,
   UseGuards,
@@ -14,11 +16,10 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 
-import {
-  WalletJwtAuthGuard,
-} from '../wallet-auth/guards/wallet-jwt-auth.guard';
+import { WalletJwtAuthGuard } from '../wallet-auth/guards/wallet-jwt-auth.guard';
 
 import { WalletQrService } from './wallet-qr.service';
+import { PayWalletQrDto } from './dto/pay-wallet-qr.dto';
 
 type AuthenticatedWalletRequest = {
   user?: {
@@ -32,9 +33,7 @@ type AuthenticatedWalletRequest = {
 @ApiBearerAuth('access-token')
 @Controller('wallet-qr')
 export class WalletQrController {
-  constructor(
-    private readonly walletQrService: WalletQrService,
-  ) {}
+  constructor(private readonly walletQrService: WalletQrService) {}
 
   @Get('my')
   @UseGuards(WalletJwtAuthGuard)
@@ -53,10 +52,51 @@ export class WalletQrController {
   generateMyQr(
     @Query('currency') currency = 'INR',
     @Req() request: AuthenticatedWalletRequest,
+    @Query('amount') amount?: string,
+    @Query('expiresInMinutes') expiresInMinutes?: string,
   ) {
     return this.walletQrService.generateMyQr(
       request.user?.id,
       currency,
+      amount,
+      expiresInMinutes,
+    );
+  }
+
+  @Get('merchant')
+  @UseGuards(WalletJwtAuthGuard)
+  @ApiOperation({
+    summary: 'Generate signed QR for authenticated merchant',
+  })
+  generateMerchantQr(
+    @Query('currency') currency = 'INR',
+    @Req() request: AuthenticatedWalletRequest,
+    @Query('amount') amount?: string,
+    @Query('expiresInMinutes') expiresInMinutes?: string,
+  ) {
+    return this.walletQrService.generateMerchantQr(
+      request.user?.id,
+      currency,
+      amount,
+      expiresInMinutes,
+    );
+  }
+  @Get('verify')
+  @UseGuards(WalletJwtAuthGuard)
+  verify(@Query('payload') payload: string) {
+    return this.walletQrService.verifyPayload(payload);
+  }
+
+  @Post('pay')
+  @UseGuards(WalletJwtAuthGuard)
+  @ApiOperation({
+    summary: 'Pay a signed exact-amount Payflow QR',
+  })
+  pay(@Body() dto: PayWalletQrDto, @Req() request: AuthenticatedWalletRequest) {
+    return this.walletQrService.payVerifiedQr(
+      dto.payload,
+      dto.description,
+      request.user?.id,
     );
   }
 }

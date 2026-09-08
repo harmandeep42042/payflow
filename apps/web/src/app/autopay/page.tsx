@@ -1,6 +1,75 @@
 'use client';
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useState,useRef } from 'react';
 import { Button, Card, ConfirmationDialog, EmptyState, ErrorState, Field, LoadingState, PageContainer, PageHeader, SelectField, StatusBadge } from '../components/customer'; import { userAuthenticatedRequest } from '../lib/api';
 type Mandate={id:string;merchant:string;amount?:string|null;maxAmount:string;currency:string;frequency:string;startAt:string;endAt?:string|null;status:string;providerMandateId?:string|null;createdAt:string};type Action={item:Mandate;name:'pause'|'resume'|'cancel'};
-export default function AutoPayPage(){const[items,setItems]=useState<Mandate[]|null>(null);const[selected,setSelected]=useState<Mandate|null>(null);const[action,setAction]=useState<Action|null>(null);const[error,setError]=useState('');const[message,setMessage]=useState('');const[saving,setSaving]=useState(false);const load=useCallback(async()=>{setError('');try{setItems(await userAuthenticatedRequest('/customer-features/mandates'));}catch(reason){setError(reason instanceof Error?reason.message:'Unable to load mandates');}},[]);useEffect(()=>{void load();},[load]);async function create(event:FormEvent<HTMLFormElement>){event.preventDefault();const form=event.currentTarget;const data=new FormData(form);setSaving(true);setError('');try{const result=await userAuthenticatedRequest<Mandate&{code?:string}>('/customer-features/mandates',{method:'POST',body:JSON.stringify({merchant:data.get('merchant'),amount:data.get('amount')||undefined,maxAmount:data.get('maxAmount'),currency:data.get('currency'),frequency:data.get('frequency'),startAt:new Date(String(data.get('startAt'))).toISOString(),endAt:data.get('endAt')?new Date(String(data.get('endAt'))).toISOString():undefined,consent:data.get('consent')==='yes',idempotencyKey:`mandate:${crypto.randomUUID()}`})});setMessage(result.code==='PROVIDER_NOT_CONFIGURED'?'PROVIDER_NOT_CONFIGURED — consent was recorded, but no mandate was activated and no debit will occur.':`Mandate status: ${result.status}.`);form.reset();await load();}catch(reason){setError(reason instanceof Error?reason.message:'Unable to create mandate');}finally{setSaving(false);}}async function confirm(){if(!action)return;setSaving(true);try{const result=await userAuthenticatedRequest<Mandate&{code?:string}>(`/customer-features/mandates/${action.item.id}/${action.name}`,{method:'POST',body:'{}'});setMessage(result.code==='PROVIDER_NOT_CONFIGURED'?'PROVIDER_NOT_CONFIGURED — provider action was not executed.':`Mandate ${action.name} request completed.`);setAction(null);await load();}catch(reason){setError(reason instanceof Error?reason.message:`Unable to ${action.name} mandate`);}finally{setSaving(false);}}
-return <main><PageContainer><PageHeader eyebrow="Payments" title="AutoPay mandates" description="Mandates require explicit consent and authoritative provider authorization. Payflow never performs an automatic debit without provider confirmation." actions={<Button variant="secondary" onClick={()=>void load()}>Refresh</Button>}/><p role="status" className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 font-semibold text-amber-900">PROVIDER_NOT_CONFIGURED — mandate authorization and automatic debits are unavailable.</p><div aria-live="polite" className="mt-4">{message?<p className="rounded-xl bg-blue-50 p-4 text-blue-900">{message}</p>:null}{error?<ErrorState message={error}/>:null}</div><Card className="mt-6 p-6"><h2 className="text-lg font-bold">Create mandate request</h2><form className="mt-5 grid gap-4 sm:grid-cols-2" onSubmit={(event)=>void create(event)}><Field id="mandate-merchant" name="merchant" label="Merchant / biller" required maxLength={160}/><Field id="mandate-amount" name="amount" label="Fixed amount (optional)" inputMode="decimal"/><Field id="mandate-max" name="maxAmount" label="Maximum amount" inputMode="decimal" required/><Field id="mandate-currency" name="currency" label="Currency" defaultValue="INR" maxLength={3} pattern="[A-Za-z]{3}" required/><SelectField id="mandate-frequency" name="frequency" label="Frequency"><option value="WEEKLY">Weekly</option><option value="MONTHLY">Monthly</option><option value="QUARTERLY">Quarterly</option><option value="YEARLY">Yearly</option></SelectField><Field id="mandate-start" name="startAt" label="Start" type="datetime-local" required/><Field id="mandate-end" name="endAt" label="End (optional)" type="datetime-local"/><label className="flex min-h-12 items-center gap-3 rounded-xl border p-3 text-sm font-semibold"><input type="checkbox" name="consent" value="yes" required/>I explicitly consent to creating this mandate request and its maximum amount.</label><Button type="submit" disabled={saving}>{saving?'Creating…':'Create mandate request'}</Button></form></Card><section className="mt-7"><h2 className="text-lg font-bold">Mandates</h2>{items===null?<LoadingState/>:items.length===0?<EmptyState title="No mandates" description="Mandate requests will appear here."/>:<div className="mt-4 space-y-3">{items.map(item=><Card key={item.id} className="p-5"><div className="flex justify-between gap-3"><button className="text-left font-bold underline-offset-4 hover:underline" onClick={()=>setSelected(item)}>{item.merchant}</button><StatusBadge status={item.status}/></div><p className="mt-2 text-sm text-slate-600">Maximum {item.currency} {item.maxAmount} · {item.frequency}</p><div className="mt-4 flex flex-wrap gap-2">{item.status==='ACTIVE'?<Button variant="secondary" onClick={()=>setAction({item,name:'pause'})}>Pause</Button>:null}{item.status==='PAUSED'?<Button variant="secondary" onClick={()=>setAction({item,name:'resume'})}>Resume</Button>:null}{!['CANCELLED','EXPIRED'].includes(item.status)?<Button variant="danger" onClick={()=>setAction({item,name:'cancel'})}>Cancel</Button>:null}</div></Card>)}</div>}</section>{selected?<ConfirmationDialog open title={`${selected.merchant} mandate`} description={`${selected.frequency}; maximum ${selected.currency} ${selected.maxAmount}; starts ${new Date(selected.startAt).toLocaleString()}; provider state ${selected.providerMandateId?selected.status:'PROVIDER_NOT_CONFIGURED'}.`} confirmLabel="Close" onConfirm={()=>setSelected(null)} onClose={()=>setSelected(null)}/>:null}<ConfirmationDialog open={Boolean(action)} title={`${action?.name??'Update'} mandate`} description={`Confirm this ${action?.name??''} request. No debit is performed by this action.`} confirmLabel="Confirm" isLoading={saving} onConfirm={()=>void confirm()} onClose={()=>setAction(null)}/></PageContainer></main>;}
+type MandateSetupReview = {
+  merchant: string;
+  amount: string;
+  maxAmount: string;
+  currency: string;
+  frequency: string;
+  startAt: string;
+  endAt: string;
+  consent: boolean;
+};
+export default function AutoPayPage(){
+const [setupReview,setSetupReview]=useState<MandateSetupReview|null>(null);
+const [setupReviewStep,setSetupReviewStep]=useState<'review'|'confirm'|null>(null);
+const setupFormRef=useRef<HTMLFormElement|null>(null);
+const allowMandateCreateRef=useRef(false);
+const[items,setItems]=useState<Mandate[]|null>(null);const[selected,setSelected]=useState<Mandate|null>(null);const[action,setAction]=useState<Action|null>(null);const[error,setError]=useState('');const[message,setMessage]=useState('');const[saving,setSaving]=useState(false);const load=useCallback(async()=>{setError('');try{setItems(await userAuthenticatedRequest('/customer-features/mandates'));}catch(reason){setError(reason instanceof Error?reason.message:'Unable to load mandates');}},[]);useEffect(()=>{void load();},[load]);function prepareMandateReview(event: FormEvent<HTMLFormElement>){
+  if(allowMandateCreateRef.current){
+    allowMandateCreateRef.current=false;
+    void create(event);
+    return;
+  }
+
+  event.preventDefault();
+
+  const data=new FormData(event.currentTarget);
+  const consent=data.get('consent')==='yes';
+
+  if(!consent){
+    return;
+  }
+
+  setSetupReview({
+    merchant:String(data.get('merchant')??'').trim(),
+    amount:String(data.get('amount')??'').trim(),
+    maxAmount:String(data.get('maxAmount')??'').trim(),
+    currency:String(data.get('currency')??'').trim(),
+    frequency:String(data.get('frequency')??'').trim(),
+    startAt:String(data.get('startAt')??'').trim(),
+    endAt:String(data.get('endAt')??'').trim(),
+    consent,
+  });
+
+  setSetupReviewStep('review');
+}
+async function create(event:FormEvent<HTMLFormElement>){event.preventDefault();const form=event.currentTarget;const data=new FormData(form);setSaving(true);setError('');try{const result=await userAuthenticatedRequest<Mandate&{code?:string}>('/customer-features/mandates',{method:'POST',body:JSON.stringify({merchant:data.get('merchant'),amount:data.get('amount')||undefined,maxAmount:data.get('maxAmount'),currency:data.get('currency'),frequency:data.get('frequency'),startAt:new Date(String(data.get('startAt'))).toISOString(),endAt:data.get('endAt')?new Date(String(data.get('endAt'))).toISOString():undefined,consent:data.get('consent')==='yes',idempotencyKey:`mandate:${crypto.randomUUID()}`})});setMessage(result.code==='PROVIDER_NOT_CONFIGURED'?'PROVIDER_NOT_CONFIGURED — consent was recorded, but no mandate was activated and no debit will occur.':`Mandate status: ${result.status}.`);form.reset();await load();}catch(reason){setError(reason instanceof Error?reason.message:'Unable to create mandate');}finally{setSaving(false);}}async function confirm(){if(!action)return;setSaving(true);try{const result=await userAuthenticatedRequest<Mandate&{code?:string}>(`/customer-features/mandates/${action.item.id}/${action.name}`,{method:'POST',body:'{}'});setMessage(result.code==='PROVIDER_NOT_CONFIGURED'?'PROVIDER_NOT_CONFIGURED — provider action was not executed.':`Mandate ${action.name} request completed.`);setAction(null);await load();}catch(reason){setError(reason instanceof Error?reason.message:`Unable to ${action.name} mandate`);}finally{setSaving(false);}}
+return <main><PageContainer><PageHeader eyebrow="Payments" title="AutoPay mandates" description="Mandates require explicit consent and authoritative provider authorization. Payflow never performs an automatic debit without provider confirmation." actions={<Button variant="secondary" onClick={()=>void load()}>Refresh</Button>}/><p role="status" className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 font-semibold text-amber-900">PROVIDER_NOT_CONFIGURED — mandate authorization and automatic debits are unavailable.</p><div aria-live="polite" className="mt-4">{message?<p className="rounded-xl bg-blue-50 p-4 text-blue-900">{message}</p>:null}{error?<ErrorState message={error}/>:null}</div><Card className="mt-6 p-6"><h2 className="text-lg font-bold">Create mandate request</h2><form ref={setupFormRef} className="mt-5 grid gap-4 sm:grid-cols-2" onSubmit={prepareMandateReview}><Field id="mandate-merchant" name="merchant" label="Merchant / biller" required maxLength={160}/><Field id="mandate-amount" name="amount" label="Fixed amount (optional)" inputMode="decimal"/><Field id="mandate-max" name="maxAmount" label="Maximum amount" inputMode="decimal" required/><Field id="mandate-currency" name="currency" label="Currency" defaultValue="INR" maxLength={3} pattern="[A-Za-z]{3}" required/><SelectField id="mandate-frequency" name="frequency" label="Frequency"><option value="WEEKLY">Weekly</option><option value="MONTHLY">Monthly</option><option value="QUARTERLY">Quarterly</option><option value="YEARLY">Yearly</option></SelectField><Field id="mandate-start" name="startAt" label="Start" type="datetime-local" required/><Field id="mandate-end" name="endAt" label="End (optional)" type="datetime-local"/><label className="flex min-h-12 items-center gap-3 rounded-xl border p-3 text-sm font-semibold"><input type="checkbox" name="consent" value="yes" required/>I explicitly consent to creating this mandate request and its maximum amount.</label><Button type="submit" disabled={saving}>{saving?'Creating…':'Create mandate request'}</Button></form></Card><section className="mt-7"><h2 className="text-lg font-bold">Mandates</h2>{items===null?<LoadingState/>:items.length===0?<EmptyState title="No mandates" description="Mandate requests will appear here."/>:<div className="mt-4 space-y-3">{items.map(item=><Card key={item.id} className="p-5"><div className="flex justify-between gap-3"><button className="text-left font-bold underline-offset-4 hover:underline" onClick={()=>setSelected(item)}>{item.merchant}</button><StatusBadge status={item.status}/></div><p className="mt-2 text-sm text-slate-600">Maximum {item.currency} {item.maxAmount} · {item.frequency}</p><div className="mt-4 flex flex-wrap gap-2">{item.status==='ACTIVE'?<Button variant="secondary" onClick={()=>setAction({item,name:'pause'})}>Pause</Button>:null}{item.status==='PAUSED'?<Button variant="secondary" onClick={()=>setAction({item,name:'resume'})}>Resume</Button>:null}{!['CANCELLED','EXPIRED'].includes(item.status)?<Button variant="danger" onClick={()=>setAction({item,name:'cancel'})}>Cancel</Button>:null}</div></Card>)}</div>}</section>{setupReview&&setupReviewStep==='review'?<ConfirmationDialog
+  open
+  title="Review AutoPay mandate request"
+  description={`Merchant: ${setupReview.merchant}; fixed amount: ${setupReview.amount||'not specified'}; maximum: ${setupReview.currency} ${setupReview.maxAmount}; frequency: ${setupReview.frequency}; starts: ${setupReview.startAt}; ends: ${setupReview.endAt||'not specified'}. This is only a review. Opening it creates no mandate request, provider authorization, or debit.`}
+  confirmLabel="Continue to confirmation"
+  onConfirm={()=>setSetupReviewStep('confirm')}
+  onClose={()=>{setSetupReviewStep(null);setSetupReview(null);}}
+/>:null}
+{setupReview&&setupReviewStep==='confirm'?<ConfirmationDialog
+  open
+  title="Confirm mandate request"
+  description={`Confirm the reviewed request for ${setupReview.merchant}, maximum ${setupReview.currency} ${setupReview.maxAmount}, ${setupReview.frequency}. This creates only a Payflow mandate request. It does not prove that bank or UPI AutoPay is live, does not itself authorize a provider mandate, and performs no debit by itself.`}
+  confirmLabel="Confirm mandate request"
+  isLoading={saving}
+  onConfirm={()=>{
+    const form=setupFormRef.current;
+    if(!form){return;}
+    allowMandateCreateRef.current=true;
+    form.requestSubmit();
+    allowMandateCreateRef.current=false;
+    setSetupReviewStep(null);
+    setSetupReview(null);
+  }}
+  onClose={()=>{setSetupReviewStep(null);setSetupReview(null);}}
+/>:null}
+{selected?<ConfirmationDialog open title={`${selected.merchant} mandate`} description={`${selected.frequency}; maximum ${selected.currency} ${selected.maxAmount}; starts ${new Date(selected.startAt).toLocaleString()}; provider state ${selected.providerMandateId?selected.status:'PROVIDER_NOT_CONFIGURED'}.`} confirmLabel="Close" onConfirm={()=>setSelected(null)} onClose={()=>setSelected(null)}/>:null}<ConfirmationDialog open={Boolean(action)} title={`${action?.name??'Update'} mandate`} description={`Confirm this ${action?.name??''} request. No debit is performed by this action.`} confirmLabel="Confirm" isLoading={saving} onConfirm={()=>void confirm()} onClose={()=>setAction(null)}/></PageContainer></main>;}

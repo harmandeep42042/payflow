@@ -1,11 +1,14 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useRef, useState } from "react";
 import type { Html5Qrcode } from "html5-qrcode";
+import { userAuthenticatedRequest } from "../lib/api";
 
 type ScanResult = {
   vpa: string;
   currency: string;
+  amount: string | null;
+  idempotencyKey: string;
 };
 
 export default function ScanPage() {
@@ -14,6 +17,15 @@ export default function ScanPage() {
     useState<ScanResult | null>(null);
   const [error, setError] =
     useState("");
+  const [isInitializing, setIsInitializing] =
+    useState(true);
+  const [isVerifying, setIsVerifying] =
+    useState(false);
+
+  const qrPayloadRef =
+    useRef<string | null>(null);
+  const verificationInFlightRef =
+    useRef(false);
 
   useEffect(() => {
     let mounted = true;
@@ -50,33 +62,59 @@ export default function ScanPage() {
           async (
             decodedText: string,
           ) => {
-            const parsed =
-              parsePayflowQr(
-                decodedText,
-              );
-
-            if (!parsed) {
-              setError(
-                "This is not a valid Payflow payment QR.",
-              );
+            if (verificationInFlightRef.current) {
               return;
             }
 
-            setError("");
-            setResult(parsed);
+            verificationInFlightRef.current = true;
+            setIsVerifying(true);
 
             try {
-              await scanner.stop();
-            } catch {
-              // Scanner may already be stopped.
+              const verified =
+                await userAuthenticatedRequest<ScanResult>(
+                  `/wallet-qr/verify?payload=${encodeURIComponent(decodedText)}`,
+                );
+
+              if (!mounted) {
+                return;
+              }
+
+              qrPayloadRef.current = decodedText;
+              setError("");
+              setResult(verified);
+
+              try {
+                await scanner.stop();
+              } catch {
+                // Scanner may already be stopped.
+              }
+            } catch (reason) {
+              if (mounted) {
+                setError(
+                  reason instanceof Error
+                    ? reason.message
+                    : "This QR is invalid, expired, or has been altered.",
+                );
+              }
+            } finally {
+              verificationInFlightRef.current = false;
+
+              if (mounted) {
+                setIsVerifying(false);
+              }
             }
           },
           () => {
             // Ignore normal camera scanning errors.
           },
         );
+
+        if (mounted) {
+          setIsInitializing(false);
+        }
       } catch {
         if (mounted) {
+          setIsInitializing(false);
           setError(
             "Unable to access the camera. Please allow camera permission and try again.",
           );
@@ -99,59 +137,24 @@ export default function ScanPage() {
     };
   }, []);
 
-  function parsePayflowQr(
-    text: string,
-  ): ScanResult | null {
-    try {
-      const url =
-        new URL(text);
-
-      if (
-        url.protocol !==
-        "payflow:"
-      ) {
-        return null;
-      }
-
-      const vpa =
-        url.searchParams
-          .get("vpa")
-          ?.trim()
-          .toLowerCase();
-
-      const currency =
-        (
-          url.searchParams.get(
-            "currency",
-          ) || "INR"
-        )
-          .trim()
-          .toUpperCase();
-
-      if (!vpa) {
-        return null;
-      }
-
-      return {
-        vpa,
-        currency,
-      };
-    } catch {
-      return null;
-    }
-  }
-
   function continueToPay() {
     if (!result) {
       return;
     }
 
-    window.location.href =
-      `/send-money?vpa=${encodeURIComponent(
-        result.vpa,
-      )}&currency=${encodeURIComponent(
-        result.currency,
-      )}`;
+    const payload = qrPayloadRef.current;
+
+    if (!payload) {
+      setError("QR payment payload is missing. Please scan again.");
+      return;
+    }
+
+    sessionStorage.setItem(
+      "payflow:qr-payment-payload",
+      payload,
+    );
+
+    window.location.href = "/send-money?qr=1";
   }
 
   return (
@@ -171,6 +174,30 @@ export default function ScanPage() {
         Scan a Payflow QR code to
         make a payment.
       </p>
+
+      {!result && isInitializing && (
+        <p
+          role="status"
+          aria-live="polite"
+          style={{
+            marginTop: "20px",
+          }}
+        >
+          Starting camera...
+        </p>
+      )}
+
+      {!result && isVerifying && (
+        <p
+          role="status"
+          aria-live="polite"
+          style={{
+            marginTop: "20px",
+          }}
+        >
+          Verifying QR code...
+        </p>
+      )}
 
       {!result && (
         <div
@@ -215,6 +242,7 @@ export default function ScanPage() {
             </strong>{" "}
             {result.vpa}
           </p>
+          {result.amount ? <p><strong>Amount:</strong>{" "}{result.amount} {result.currency}</p> : null}
 
           <p>
             <strong>
@@ -228,6 +256,8 @@ export default function ScanPage() {
             onClick={
               continueToPay
             }
+            disabled={isVerifying}
+            aria-busy={isVerifying}
             style={{
               marginTop: "16px",
               padding:
@@ -235,7 +265,13 @@ export default function ScanPage() {
               borderRadius:
                 "10px",
               cursor:
-                "pointer",
+                isVerifying
+                  ? "not-allowed"
+                  : "pointer",
+              opacity:
+                isVerifying
+                  ? 0.6
+                  : 1,
             }}
           >
             Continue to Pay
@@ -245,3 +281,4 @@ export default function ScanPage() {
     </main>
   );
 }
+

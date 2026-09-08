@@ -1,4 +1,4 @@
-﻿FROM node:24-alpine
+FROM node:24-alpine
 
 WORKDIR /app
 
@@ -17,5 +17,7 @@ COPY dist/apps/wallet-service/main.js ./main.js
 COPY dist/apps/wallet-service/main.js.map ./main.js.map
 
 EXPOSE 4001
+
+USER node
 
 CMD ["node", "main.js"]

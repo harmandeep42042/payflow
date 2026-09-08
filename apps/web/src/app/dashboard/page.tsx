@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import {
   useCallback,
@@ -204,7 +204,7 @@ export default function UserDashboardPage() {
               | UserWallet
               | UserWallet[]
               | {
-                  data?: UserWallet;
+                  data?: UserWallet | UserWallet[];
                   wallets?: UserWallet[];
                 }
             >(
@@ -235,7 +235,8 @@ export default function UserDashboardPage() {
               'object' &&
             'data' in walletResponse
           ) {
-            resolvedWallets = walletResponse.data ? [walletResponse.data] : [];
+            const data = walletResponse.data;
+            resolvedWallets = Array.isArray(data) ? data : data ? [data] : [];
           }
           else if (
             walletResponse &&

@@ -39,13 +39,19 @@
 }
 
 {$API_DOMAIN} {
-	encode gzip zstd
+    encode gzip zstd
 
-	import public_hardening
+    import public_hardening
 
-	reverse_proxy api-gateway:4000 {
-		health_uri /api/v1/health
-		health_interval 30s
-		health_timeout 5s
-	}
+    handle /api/v1/payments/razorpay/webhook {
+        reverse_proxy payment-service:4005
+    }
+
+    handle {
+        reverse_proxy api-gateway:4000 {
+            health_uri /api/v1/health
+            health_interval 30s
+            health_timeout 5s
+        }
+    }
 }

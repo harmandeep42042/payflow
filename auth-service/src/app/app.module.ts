@@ -1,3 +1,4 @@
+import { MetricsModule } from './observability/metrics.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 
@@ -11,6 +12,7 @@ import { RedisModule } from './redis/redis.module';
 
 @Module({
   imports: [
+    MetricsModule,
     ConfigModule.forRoot({
       isGlobal: true,
     }),

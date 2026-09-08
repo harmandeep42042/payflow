@@ -1,0 +1,29 @@
+services:
+  prometheus:
+    image: prom/prometheus@sha256:63805ebb8d2b3920190daf1cb14a60871b16fd38bed42b857a3182bc621f4996
+    container_name: payflow_prometheus
+    restart: unless-stopped
+
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+
+    ports:
+      - "127.0.0.1:9090:9090"
+
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+
+    networks:
+      - payflow_default
+
+volumes:
+  prometheus_data:
+
+networks:
+  payflow_default:
+    external: true
+    name: payflow_default

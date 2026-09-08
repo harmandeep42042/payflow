@@ -1,4 +1,4 @@
-import {
+﻿import {
   Body,
   Controller,
   Get,
@@ -9,6 +9,10 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+
+import { WalletRolesGuard } from '../wallet-auth/guards/wallet-roles.guard';
+import { WalletRoles } from '../wallet-auth/decorators/wallet-roles.decorator';
+
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -200,6 +204,45 @@ export class WalletsController {
     return this.walletsService.transferWallet(dto, request.user?.id);
   }
 
+  @Post('admin/transfers/:transferId/reverse')
+  @UseGuards(
+    WalletJwtAuthGuard,
+    WalletRolesGuard,
+  )
+  @WalletRoles('ADMIN')
+  @ApiOperation({
+    summary:
+      'Administratively reverse a completed transfer',
+  })
+  @ApiResponse({
+    status: 201,
+    description:
+      'Transfer reversed successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description:
+      'Transfer not found',
+  })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Transfer cannot be reversed',
+  })
+  reverseTransfer(
+    @Param('transferId')
+    transferId: string,
+
+    @Body()
+    body: {
+      reason?: string;
+    },
+  ) {
+    return this.walletsService.reverseTransfer(
+      transferId,
+      body?.reason,
+    );
+  }
   @Get('user/:userId')
   @UseGuards(WalletJwtAuthGuard)
   @ApiOperation({
@@ -308,3 +351,5 @@ export class WalletsController {
     return this.walletsService.getWalletById(walletId, request.user?.id);
   }
 }
+
+

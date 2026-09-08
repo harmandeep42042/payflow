@@ -7,10 +7,11 @@ describe('CustomerFeaturesService', () => {
   const prisma = {
     user: { findUnique: jest.fn(), count: jest.fn() }, contact: { create: jest.fn(), findUnique: jest.fn(), findMany: jest.fn(), update: jest.fn(), delete: jest.fn() },
     wallet: { findUnique: jest.fn(), findMany: jest.fn() }, deposit: { findMany: jest.fn() }, withdrawal: { findMany: jest.fn() }, transfer: { findMany: jest.fn() }, moneyRequest: { upsert: jest.fn(), findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
-    rechargeAttempt: { findUnique: jest.fn(), create: jest.fn() }, billPaymentAttempt: { findUnique: jest.fn(), create: jest.fn() },
+    rechargeAttempt: { findUnique: jest.fn(), create: jest.fn() }, billPaymentAttempt: { findUnique: jest.fn(), create: jest.fn() }, savedBiller: { findMany: jest.fn(), findUnique: jest.fn(), upsert: jest.fn(), delete: jest.fn() }, billReminder: { findMany: jest.fn(), findUnique: jest.fn(), upsert: jest.fn(), delete: jest.fn() },
     mandate: { create: jest.fn(), findUnique: jest.fn(), update: jest.fn() }, supportCase: { findUnique: jest.fn(), update: jest.fn() },
     splitAllocation: { findUnique: jest.fn() }, offer: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() }, offerClaim: { findUnique: jest.fn(), create: jest.fn() },
     outboxEvent: { create: jest.fn() }, auditLog: { create: jest.fn() },
+    transactionClassification: { findMany: jest.fn() },
   };
   const wallets = { transferWallet: jest.fn() };
   let service: CustomerFeaturesService;
@@ -18,6 +19,7 @@ describe('CustomerFeaturesService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     prisma.user.findUnique.mockResolvedValue({ id: 'payer', status: 'ACTIVE' });
+    prisma.transactionClassification.findMany.mockResolvedValue([]);
     service = new CustomerFeaturesService(prisma as never, wallets as never);
   });
 
@@ -203,5 +205,231 @@ describe('CustomerFeaturesService', () => {
     const findMany = jest.fn().mockResolvedValue([]); (prisma.contact as unknown as { findMany: jest.Mock }).findMany = findMany;
     await service.listContacts('jwt-user', 'query-user-id');
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ ownerUserId: 'jwt-user' }) }));
+  });
+
+  it('scopes saved biller listing to the JWT identity', async () => {
+    prisma.savedBiller.findMany.mockResolvedValue([]);
+
+    await service.listSavedBillers('jwt-user');
+
+    expect(prisma.savedBiller.findMany).toHaveBeenCalledWith({
+      where: { userId: 'jwt-user' },
+      orderBy: { updatedAt: 'desc' },
+    });
+  });
+
+  it('creates a saved biller with JWT identity and no payment side effect', async () => {
+    prisma.savedBiller.upsert.mockResolvedValue({
+      id: 'saved-biller',
+      userId: 'jwt-user',
+      billerId: 'provider-biller',
+      category: 'ELECTRICITY',
+      customerRef: 'account-123',
+      nickname: 'Home',
+    });
+
+    prisma.billPaymentAttempt.create.mockClear();
+    wallets.transferWallet.mockClear();
+
+    await service.createSavedBiller(
+      'jwt-user',
+      {
+        userId: 'browser-user-must-be-ignored',
+        billerId: ' provider-biller ',
+        category: 'ELECTRICITY',
+        customerRef: ' account-123 ',
+        nickname: ' Home ',
+      } as never,
+    );
+
+    expect(prisma.savedBiller.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          userId: 'jwt-user',
+          billerId: 'provider-biller',
+          category: 'ELECTRICITY',
+          customerRef: 'account-123',
+          nickname: 'Home',
+        }),
+      }),
+    );
+
+    expect(prisma.billPaymentAttempt.create).not.toHaveBeenCalled();
+    expect(wallets.transferWallet).not.toHaveBeenCalled();
+  });
+
+  it('prevents another JWT user from deleting a saved biller', async () => {
+    prisma.savedBiller.findUnique.mockResolvedValue({
+      id: 'saved-biller',
+      userId: 'owner-user',
+    });
+
+    prisma.savedBiller.delete.mockClear();
+
+    await expect(
+      service.deleteSavedBiller(
+        'intruder-user',
+        'saved-biller',
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(prisma.savedBiller.delete).not.toHaveBeenCalled();
+  });
+
+  it('scopes bill reminders to the JWT identity and orders upcoming reminders', async () => {
+    prisma.billReminder.findMany.mockResolvedValue([]);
+
+    await service.listBillReminders(
+      'jwt-user',
+    );
+
+    expect(
+      prisma.billReminder.findMany,
+    ).toHaveBeenCalledWith({
+      where: {
+        userId: 'jwt-user',
+      },
+      orderBy: {
+        remindAt: 'asc',
+      },
+    });
+  });
+
+  it('creates a reminder only for a JWT-owned saved biller without payment side effects', async () => {
+    const remindAt =
+      new Date(
+        Date.now() + 86_400_000,
+      ).toISOString();
+
+    prisma.savedBiller.findUnique.mockResolvedValue({
+      id: 'saved-biller',
+      userId: 'jwt-user',
+    });
+
+    prisma.billReminder.upsert.mockResolvedValue({
+      id: 'reminder',
+      userId: 'jwt-user',
+      savedBillerId: 'saved-biller',
+      remindAt: new Date(remindAt),
+      note: 'Pay after salary',
+    });
+
+    prisma.billPaymentAttempt.create.mockClear();
+    wallets.transferWallet.mockClear();
+
+    await service.createBillReminder(
+      'jwt-user',
+      {
+        savedBillerId:
+          'saved-biller',
+        remindAt,
+        note:
+          ' Pay after salary ',
+      },
+    );
+
+    expect(
+      prisma.billReminder.upsert,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create:
+          expect.objectContaining({
+            userId:
+              'jwt-user',
+            savedBillerId:
+              'saved-biller',
+            note:
+              'Pay after salary',
+          }),
+      }),
+    );
+
+    expect(
+      prisma.billPaymentAttempt.create,
+    ).not.toHaveBeenCalled();
+
+    expect(
+      wallets.transferWallet,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('rejects creating a reminder for another users saved biller', async () => {
+    const remindAt =
+      new Date(
+        Date.now() + 86_400_000,
+      ).toISOString();
+
+    prisma.savedBiller.findUnique.mockResolvedValue({
+      id: 'saved-biller',
+      userId: 'owner-user',
+    });
+
+    prisma.billReminder.upsert.mockClear();
+
+    await expect(
+      service.createBillReminder(
+        'intruder-user',
+        {
+          savedBillerId:
+            'saved-biller',
+          remindAt,
+        },
+      ),
+    ).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+
+    expect(
+      prisma.billReminder.upsert,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('rejects a reminder scheduled in the past', async () => {
+    prisma.savedBiller.findUnique.mockResolvedValue({
+      id: 'saved-biller',
+      userId: 'jwt-user',
+    });
+
+    prisma.billReminder.upsert.mockClear();
+
+    await expect(
+      service.createBillReminder(
+        'jwt-user',
+        {
+          savedBillerId:
+            'saved-biller',
+          remindAt:
+            '2020-01-01T00:00:00.000Z',
+        },
+      ),
+    ).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+
+    expect(
+      prisma.billReminder.upsert,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('prevents another JWT user from deleting a bill reminder', async () => {
+    prisma.billReminder.findUnique.mockResolvedValue({
+      id: 'reminder',
+      userId: 'owner-user',
+    });
+
+    prisma.billReminder.delete.mockClear();
+
+    await expect(
+      service.deleteBillReminder(
+        'intruder-user',
+        'reminder',
+      ),
+    ).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+
+    expect(
+      prisma.billReminder.delete,
+    ).not.toHaveBeenCalled();
   });
 });

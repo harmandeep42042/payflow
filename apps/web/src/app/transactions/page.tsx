@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import {
   useCallback,
@@ -58,6 +58,7 @@ type WalletTransaction = {
   completedAt?: string | null;
   sourceWalletId?: string | null;
   destinationWalletId?: string | null;
+  idempotencyKey?: string | null;
   counterparty?: {
     walletId: string;
     userId: string;
@@ -66,6 +67,12 @@ type WalletTransaction = {
     email: string;
   } | null;
 };
+
+const isQrPayment = (
+  transaction: WalletTransaction,
+): boolean =>
+  transaction.type === 'TRANSFER' &&
+  transaction.idempotencyKey?.startsWith('qr:') === true;
 
 type TransactionHistoryResponse = {
   items?: WalletTransaction[];
@@ -127,6 +134,17 @@ export default function TransactionsPage() {
       | 'DEPOSIT'
       | 'WITHDRAWAL'
       | 'TRANSFER'
+    >('ALL');
+
+  
+  const [statusFilter, setStatusFilter] =
+    useState<
+      | 'ALL'
+      | 'PENDING'
+      | 'PROCESSING'
+      | 'COMPLETED'
+      | 'FAILED'
+      | 'REVERSED'
     >('ALL');
 
   const [search, setSearch] =
@@ -330,6 +348,14 @@ export default function TransactionsPage() {
             return false;
           }
 
+          
+          if (
+            statusFilter !== 'ALL' &&
+            transaction.status !== statusFilter
+          ) {
+            return false;
+          }
+
           if (normalizedSearch) {
             const counterpartyName =
               transaction.counterparty
@@ -385,6 +411,7 @@ export default function TransactionsPage() {
       );
     }, [
       filter,
+      statusFilter,
       fromDate,
       search,
       toDate,
@@ -396,6 +423,50 @@ export default function TransactionsPage() {
 
 const pageSize = 5;
 
+const transactionSummary =
+  useMemo(() => {
+    return filteredTransactions.reduce(
+      (
+        summary,
+        transaction,
+      ) => {
+        const amount =
+          Number(transaction.amount);
+
+        if (!Number.isFinite(amount)) {
+          return summary;
+        }
+
+        if (
+          transaction.direction ===
+          'CREDIT'
+        ) {
+          summary.moneyIn += amount;
+        } else {
+          summary.moneyOut += amount;
+        }
+
+        summary.total += 1;
+
+        return summary;
+      },
+      {
+        moneyIn: 0,
+        moneyOut: 0,
+        total: 0,
+      },
+    );
+  }, [filteredTransactions]);
+
+const netFlow =
+  (
+    Math.round(
+      transactionSummary.moneyIn * 100,
+    ) -
+    Math.round(
+      transactionSummary.moneyOut * 100,
+    )
+  ) / 100;
 const totalPages = Math.max(
   1,
   Math.ceil(
@@ -423,6 +494,7 @@ useEffect(() => {
   setCurrentPage(1);
 }, [
   filter,
+  statusFilter,
   search,
   fromDate,
   toDate,
@@ -494,7 +566,9 @@ const downloadReceipt = (
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(15);
     pdf.text(
-      'Transaction Receipt',
+      isQrPayment(transaction)
+        ? 'QR Payment Receipt'
+        : 'Transaction Receipt',
       20,
       y,
     );
@@ -549,7 +623,7 @@ const downloadReceipt = (
 
       const wrapped =
         pdf.splitTextToSize(
-          value || '—',
+          value || 'Ã¢â‚¬â€',
           110,
         );
 
@@ -584,12 +658,24 @@ const downloadReceipt = (
 
     addRow(
       'Reference',
-      transaction.reference ?? '—',
+      transaction.reference ?? 'Ã¢â‚¬â€',
     );
+
+    if (isQrPayment(transaction)) {
+      addRow(
+        'Payment Method',
+        'QR Payment',
+      );
+
+      addRow(
+        'Payment Reference',
+        transaction.idempotencyKey ?? 'Ã¢â‚¬â€',
+      );
+    }
 
     addRow(
       'Description',
-      transaction.description ?? '—',
+      transaction.description ?? 'Ã¢â‚¬â€',
     );
 
     if (
@@ -644,7 +730,7 @@ const downloadReceipt = (
         ? new Date(
             transaction.completedAt,
           ).toLocaleString('en-IN')
-        : '—',
+        : 'Ã¢â‚¬â€',
     );
 
     y += 8;
@@ -753,6 +839,68 @@ const downloadReceipt = (
           </article>
         </div>
 
+        <section className="mt-7">
+          <div className="mb-4">
+            <p className="text-sm font-semibold uppercase tracking-wide text-sky-600">
+              Filtered Summary
+            </p>
+
+            <h2 className="mt-1 text-xl font-bold text-slate-900">
+              Transaction overview
+            </h2>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <article className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5">
+              <p className="text-sm font-semibold text-emerald-700">
+                Money In
+              </p>
+
+              <p className="mt-2 text-2xl font-bold text-emerald-800">
+                {formatMoney(
+                  transactionSummary.moneyIn,
+                  wallet?.currency ?? 'INR',
+                )}
+              </p>
+            </article>
+
+            <article className="rounded-2xl border border-red-100 bg-red-50 p-5">
+              <p className="text-sm font-semibold text-red-700">
+                Money Out
+              </p>
+
+              <p className="mt-2 text-2xl font-bold text-red-800">
+                {formatMoney(
+                  transactionSummary.moneyOut,
+                  wallet?.currency ?? 'INR',
+                )}
+              </p>
+            </article>
+
+            <article className="rounded-2xl border border-sky-100 bg-sky-50 p-5">
+              <p className="text-sm font-semibold text-sky-700">
+                Net Flow
+              </p>
+
+              <p className="mt-2 text-2xl font-bold text-sky-800">
+                {formatMoney(
+                  netFlow,
+                  wallet?.currency ?? 'INR',
+                )}
+              </p>
+            </article>
+
+            <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <p className="text-sm font-semibold text-slate-600">
+                Transactions
+              </p>
+
+              <p className="mt-2 text-2xl font-bold text-slate-900">
+                {transactionSummary.total}
+              </p>
+            </article>
+          </div>
+        </section>
         {error ? (
           <div className="mt-6"><ErrorState message={error} onRetry={() => void loadTransactions()} /></div>
         ) : null}
@@ -824,7 +972,8 @@ const downloadReceipt = (
                     setSearch('');
                     setFromDate('');
                     setToDate('');
-                    setFilter('ALL');
+                    
+                    setStatusFilter('ALL');
                   }}
                   className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
                 >
@@ -845,25 +994,38 @@ const downloadReceipt = (
                 )
               }
               className="rounded-xl border border-slate-300 px-4 py-2 text-slate-800 outline-none"
+              aria-label="Filter by transaction type"
             >
-              <option value="ALL">
-                All Types
-              </option>
+              <option value="ALL">All Types</option>
+              <option value="DEPOSIT">Deposits</option>
+              <option value="WITHDRAWAL">Withdrawals</option>
+              <option value="TRANSFER">Transfers</option>
+            </select>
 
-              <option value="DEPOSIT">
-                Deposits
-              </option>
-
-              <option value="WITHDRAWAL">
-                Withdrawals
-              </option>
-
-              <option value="TRANSFER">
-                Transfers
-              </option>
+            <select
+              value={statusFilter}
+              onChange={(event) =>
+                setStatusFilter(
+                  event.target.value as
+                    | 'ALL'
+                    | 'PENDING'
+                    | 'PROCESSING'
+                    | 'COMPLETED'
+                    | 'FAILED'
+                    | 'REVERSED',
+                )
+              }
+              className="rounded-xl border border-slate-300 px-4 py-2 text-slate-800 outline-none"
+              aria-label="Filter by transaction status"
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="PENDING">Pending</option>
+              <option value="PROCESSING">Processing</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="FAILED">Failed</option>
+              <option value="REVERSED">Reversed</option>
             </select>
           </div>
-
           {isLoading ? (
             <div className="px-6"><LoadingState label="Loading transactions" /></div>
           ) : filteredTransactions.length ===
@@ -1081,7 +1243,9 @@ const downloadReceipt = (
                 </p>
 
                 <h2 id="transaction-details-title" className="mt-1 text-2xl font-bold text-slate-900">
-                  {selectedTransaction.type}
+                  {isQrPayment(selectedTransaction)
+                    ? 'QR PAYMENT'
+                    : selectedTransaction.type}
                 </h2>
               </div>
 
@@ -1158,16 +1322,38 @@ const downloadReceipt = (
                   Reference
                 </p>
                 <p className="mt-1 text-sm text-slate-800">
-                  {selectedTransaction.reference ?? '—'}
+                  {selectedTransaction.reference ?? 'Ã¢â‚¬â€'}
                 </p>
               </div>
+
+              {isQrPayment(selectedTransaction) && (
+                <>
+                  <div>
+                    <p className="text-xs font-bold uppercase text-slate-400">
+                      Payment Method
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-slate-800">
+                      QR Payment
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-bold uppercase text-slate-400">
+                      Payment Reference
+                    </p>
+                    <p className="mt-1 break-all text-sm text-slate-800">
+                      {selectedTransaction.idempotencyKey ?? 'Ã¢â‚¬â€'}
+                    </p>
+                  </div>
+                </>
+              )}
 
               <div>
                 <p className="text-xs font-bold uppercase text-slate-400">
                   Description
                 </p>
                 <p className="mt-1 text-sm text-slate-800">
-                  {selectedTransaction.description ?? '—'}
+                  {selectedTransaction.description ?? 'Ã¢â‚¬â€'}
                 </p>
               </div>
 
@@ -1202,7 +1388,7 @@ const downloadReceipt = (
                       Source Wallet
                     </p>
                     <p className="mt-1 break-all text-sm text-slate-800">
-                      {selectedTransaction.sourceWalletId ?? '—'}
+                      {selectedTransaction.sourceWalletId ?? 'Ã¢â‚¬â€'}
                     </p>
                   </div>
 
@@ -1211,7 +1397,7 @@ const downloadReceipt = (
                       Destination Wallet
                     </p>
                     <p className="mt-1 break-all text-sm text-slate-800">
-                      {selectedTransaction.destinationWalletId ?? '—'}
+                      {selectedTransaction.destinationWalletId ?? 'Ã¢â‚¬â€'}
                     </p>
                   </div>
                 </>
@@ -1226,7 +1412,7 @@ const downloadReceipt = (
                     ? new Date(
                         selectedTransaction.completedAt,
                       ).toLocaleString('en-IN')
-                    : '—'}
+                    : 'Ã¢â‚¬â€'}
                 </p>
               </div>
             </div>
@@ -1236,6 +1422,12 @@ const downloadReceipt = (
 </main>
   );
 }
+
+
+
+
+
+
 
 
 

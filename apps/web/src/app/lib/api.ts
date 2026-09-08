@@ -52,6 +52,93 @@ export async function loginUser(email: string, password: string): Promise<UserSe
   });
   saveUserSession(session); return session;
 }
+export type MobileOtpVerifyResponse =
+  | {
+      registrationRequired: true;
+      registrationToken: string;
+    }
+  | ({
+      registrationRequired: false;
+    } & UserSessionResponse);
+
+export async function requestMobileOtp(
+  phone: string,
+): Promise<void> {
+  await request<unknown>(
+    '/api/customer-session/mobile/request',
+    {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ phone }),
+    },
+  );
+}
+
+export async function verifyMobileOtp(
+  phone: string,
+  otp: string,
+): Promise<MobileOtpVerifyResponse> {
+  resetRefreshState();
+  clearUserSession();
+
+  const result =
+    await request<MobileOtpVerifyResponse>(
+      '/api/customer-session/mobile/verify',
+      {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ phone, otp }),
+      },
+    );
+
+  if (!result.registrationRequired) {
+    saveUserSession(result);
+  }
+
+  return result;
+}
+
+export async function registerMobileUser(
+  registrationToken: string,
+  firstName: string,
+  lastName: string,
+  email: string,
+  password: string,
+): Promise<UserSessionResponse> {
+  resetRefreshState();
+  clearUserSession();
+
+  const session =
+    await request<UserSessionResponse>(
+      '/api/customer-session/mobile/register',
+      {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          registrationToken,
+          firstName,
+          ...(lastName.trim()
+            ? { lastName }
+            : {}),
+          email,
+          password,
+        }),
+      },
+    );
+
+  saveUserSession(session);
+
+  return session;
+}
 async function refreshSession(): Promise<UserSessionResponse> {
   if (refreshFailure) throw refreshFailure;
   if (!refreshPromise) {

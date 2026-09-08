@@ -9,11 +9,12 @@ RUN corepack enable && corepack prepare pnpm@11.18.0 --activate
 COPY dist/apps/api-gateway/package.json ./package.json
 COPY dist/apps/api-gateway/pnpm-lock.yaml ./pnpm-lock.yaml
 
-RUN pnpm install --prod --frozen-lockfile --ignore-scripts
-
+RUN --mount=type=cache,id=payflow-pnpm-store,target=/root/.local/share/pnpm/store/v11 pnpm install --prod --frozen-lockfile --ignore-scripts
 COPY dist/apps/api-gateway/main.js ./main.js
 COPY dist/apps/api-gateway/main.js.map ./main.js.map
 
 EXPOSE 4000
+
+USER node
 
 CMD ["node", "main.js"]

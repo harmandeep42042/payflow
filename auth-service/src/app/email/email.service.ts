@@ -3,7 +3,7 @@ import {
   Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { MailerService } from '@nestjs-modules/mailer';
+import nodemailer, { Transporter } from 'nodemailer';
 
 import { buildOtpEmailTemplate } from './templates/otp.template';
 import { buildResetPasswordEmailTemplate } from './templates/reset-password.template';
@@ -17,9 +17,38 @@ export type EmailDeliveryResult = {
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
 
-  constructor(
-    private readonly mailerService: MailerService,
-  ) {}
+  private readonly transporter: Transporter;
+
+  private readonly fromAddress: string;
+
+  constructor() {
+    const port = Number(process.env.MAIL_PORT ?? 587);
+
+    const secure =
+      String(
+        process.env.MAIL_SECURE ?? 'false',
+      ).toLowerCase() === 'true';
+
+    this.fromAddress =
+      `"${process.env.MAIL_FROM_NAME ?? 'Payflow'}" <${
+        process.env.MAIL_FROM_EMAIL ??
+        process.env.MAIL_USER ??
+        ''
+      }>`;
+
+    this.transporter =
+      nodemailer.createTransport({
+        host:
+          process.env.MAIL_HOST ??
+          'smtp.gmail.com',
+        port,
+        secure,
+        auth: {
+          user: process.env.MAIL_USER,
+          pass: process.env.MAIL_PASSWORD,
+        },
+      });
+  }
 
   async sendOtpEmail(input: {
     email: string;
@@ -48,7 +77,8 @@ export class EmailService {
     }
 
     try {
-      await this.mailerService.sendMail({
+      await this.transporter.sendMail({
+        from: this.fromAddress,
         to: input.email,
         subject: 'Your Payflow OTP',
         html: buildOtpEmailTemplate(
@@ -94,7 +124,8 @@ export class EmailService {
     }
 
     try {
-      await this.mailerService.sendMail({
+      await this.transporter.sendMail({
+        from: this.fromAddress,
         to: input.email,
         subject: 'Welcome to Payflow',
         html: buildWelcomeEmailTemplate(
@@ -149,7 +180,8 @@ export class EmailService {
     }
 
     try {
-      await this.mailerService.sendMail({
+      await this.transporter.sendMail({
+        from: this.fromAddress,
         to: input.email,
         subject: 'Reset your Payflow password',
         html: buildResetPasswordEmailTemplate(

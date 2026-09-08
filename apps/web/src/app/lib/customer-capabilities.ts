@@ -19,6 +19,7 @@ export const customerCapabilities: CustomerCapability[] = [
   { name: 'Scan to pay', description: 'Payflow QR parsing with recipient hand-off to the protected send flow.', status: 'IMPLEMENTED', href: '/scan' },
   { name: 'Deposit and withdraw', description: 'Existing isolated Payflow wallet funding and withdrawal flows.', status: 'IMPLEMENTED', href: '/deposit' },
   { name: 'Transactions', description: 'Searchable recent wallet activity with exact currency-aware amounts.', status: 'IMPLEMENTED', href: '/transactions' },
+  { name: 'Payment setup and statements', description: 'Manage your Payflow VPA, masked bank records, tokenized-method status, recurring-payment readiness and exact downloadable statements.', status: 'FOUNDATION ONLY', href: '/financial-tools' },
   { name: 'Rewards', description: 'Available and claimed rewards backed by the existing rewards service.', status: 'IMPLEMENTED', href: '/rewards' },
   { name: 'Offers marketplace', description: 'Persisted catalogue, eligibility, expiry and duplicate-safe claim lifecycle.', status: 'IMPLEMENTED', href: '/offers' },
   { name: 'Contacts and favourites', description: 'Private authenticated contacts with ownership and active-recipient enforcement.', status: 'IMPLEMENTED', href: '/contacts' },

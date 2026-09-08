@@ -1,0 +1,62 @@
+groups:
+  - name: payflow-production
+    rules:
+      - alert: PayflowServiceDown
+        expr: up{job=~"payflow-(gateway|auth|wallet|payment|notification)"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: observability
+        annotations:
+          summary: "Payflow production service is down"
+          description: "Prometheus target {{ $labels.job }} at {{ $labels.instance }} has been down for more than 2 minutes."
+
+      - alert: PayflowGatewayTargetMissing
+        expr: absent(up{job="payflow-gateway"})
+        for: 2m
+        labels:
+          severity: critical
+          component: gateway
+        annotations:
+          summary: "Gateway Prometheus target missing"
+          description: "The payflow-gateway target is no longer present in Prometheus."
+
+      - alert: PayflowAuthTargetMissing
+        expr: absent(up{job="payflow-auth"})
+        for: 2m
+        labels:
+          severity: critical
+          component: auth
+        annotations:
+          summary: "Auth Prometheus target missing"
+          description: "The payflow-auth target is no longer present in Prometheus."
+
+      - alert: PayflowWalletTargetMissing
+        expr: absent(up{job="payflow-wallet"})
+        for: 2m
+        labels:
+          severity: critical
+          component: wallet
+        annotations:
+          summary: "Wallet Prometheus target missing"
+          description: "The payflow-wallet target is no longer present in Prometheus."
+
+      - alert: PayflowPaymentTargetMissing
+        expr: absent(up{job="payflow-payment"})
+        for: 2m
+        labels:
+          severity: critical
+          component: payment
+        annotations:
+          summary: "Payment Prometheus target missing"
+          description: "The payflow-payment target is no longer present in Prometheus."
+
+      - alert: PayflowNotificationTargetMissing
+        expr: absent(up{job="payflow-notification"})
+        for: 2m
+        labels:
+          severity: critical
+          component: notification
+        annotations:
+          summary: "Notification Prometheus target missing"
+          description: "The payflow-notification target is no longer present in Prometheus."

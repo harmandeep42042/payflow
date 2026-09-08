@@ -1,14 +1,6 @@
-import {
-  Controller,
-  Logger,
-} from '@nestjs/common';
+import { Controller, Logger } from '@nestjs/common';
 
-import {
-  Ctx,
-  EventPattern,
-  Payload,
-  RmqContext,
-} from '@nestjs/microservices';
+import { Ctx, EventPattern, Payload, RmqContext } from '@nestjs/microservices';
 
 import {
   NotificationEvent,
@@ -18,8 +10,15 @@ import {
 type DeadLetterChannel = {
   ack(message: unknown): void;
   nack(message: unknown, allUpTo: boolean, requeue: boolean): void;
-  assertQueue(queue: string, options: Record<string, unknown>): Promise<unknown>;
-  sendToQueue(queue: string, content: Buffer, options: Record<string, unknown>): boolean;
+  assertQueue(
+    queue: string,
+    options: Record<string, unknown>,
+  ): Promise<unknown>;
+  sendToQueue(
+    queue: string,
+    content: Buffer,
+    options: Record<string, unknown>,
+  ): boolean;
 };
 
 type DeadLetterMessage = {
@@ -33,19 +32,11 @@ type DeadLetterMessage = {
 
 @Controller()
 export class NotificationsController {
-  private readonly logger =
-    new Logger(
-      NotificationsController.name,
-    );
+  private readonly logger = new Logger(NotificationsController.name);
 
-  constructor(
-    private readonly notificationsService:
-      NotificationsService,
-  ) {}
+  constructor(private readonly notificationsService: NotificationsService) {}
 
-  @EventPattern(
-    'wallet.deposit.completed',
-  )
+  @EventPattern('wallet.deposit.completed')
   handleDepositCompleted(
     @Payload()
     event: NotificationEvent,
@@ -53,16 +44,10 @@ export class NotificationsController {
     @Ctx()
     context: RmqContext,
   ): Promise<void> {
-    return this.handleEvent(
-      'wallet.deposit.completed',
-      event,
-      context,
-    );
+    return this.handleEvent('wallet.deposit.completed', event, context);
   }
 
-  @EventPattern(
-    'wallet.withdrawal.completed',
-  )
+  @EventPattern('wallet.withdrawal.completed')
   handleWithdrawalCompleted(
     @Payload()
     event: NotificationEvent,
@@ -70,16 +55,10 @@ export class NotificationsController {
     @Ctx()
     context: RmqContext,
   ): Promise<void> {
-    return this.handleEvent(
-      'wallet.withdrawal.completed',
-      event,
-      context,
-    );
+    return this.handleEvent('wallet.withdrawal.completed', event, context);
   }
 
-  @EventPattern(
-    'wallet.transfer.completed',
-  )
+  @EventPattern('wallet.transfer.completed')
   async handleTransferCompleted(
     @Payload()
     event: NotificationEvent,
@@ -87,120 +66,87 @@ export class NotificationsController {
     @Ctx()
     context: RmqContext,
   ): Promise<void> {
-    const channel =
-      context.getChannelRef() as DeadLetterChannel;
+    const channel = context.getChannelRef() as DeadLetterChannel;
 
-    const message =
-      context.getMessage() as unknown as DeadLetterMessage;
+    const message = context.getMessage() as unknown as DeadLetterMessage;
 
     try {
       this.logger.log(
-        `Received wallet.transfer.completed: ${JSON.stringify(
-          event,
-        )}`,
+        `Received wallet.transfer.completed: ${JSON.stringify(event)}`,
       );
 
-      const sender =
-        event.sender as
-          | {
-              id?: string;
-              email?: string;
-              firstName?: string;
-              lastName?: string;
-            }
-          | undefined;
+      const sender = event.sender as
+        | {
+            id?: string;
+            email?: string;
+            firstName?: string;
+            lastName?: string;
+          }
+        | undefined;
 
-      const receiver =
-        event.receiver as
-          | {
-              id?: string;
-              email?: string;
-              firstName?: string;
-              lastName?: string;
-            }
-          | undefined;
+      const receiver = event.receiver as
+        | {
+            id?: string;
+            email?: string;
+            firstName?: string;
+            lastName?: string;
+          }
+        | undefined;
 
       if (!sender?.id || !receiver?.id) {
-        throw new Error(
-          'Transfer event sender/receiver userId is missing',
-        );
+        throw new Error('Transfer event sender/receiver userId is missing');
       }
 
-      const amount =
-        event.amount ?? '0';
+      const amount = event.amount ?? '0';
 
-      const currency =
-        event.currency ?? 'INR';
+      const currency = event.currency ?? 'INR';
 
-      const transferId =
-        event.transferId ?? null;
+      const transferId = event.transferId ?? null;
 
       await Promise.all([
-        this.notificationsService.process(
-          'wallet.transfer.sent',
-          {
-            ...event,
-            userId: sender.id,
-            email:
-              sender.email ?? null,
-            type:
-              'wallet.transfer.sent',
-            title:
-              'Money sent',
-            message:
-              `${currency} ${amount} was sent successfully.`,
-            metadata: {
-              transferId,
-              direction: 'SENT',
-              counterparty:
-                receiver.email ?? null,
-            },
+        this.notificationsService.process('wallet.transfer.sent', {
+          ...event,
+          userId: sender.id,
+          email: sender.email ?? null,
+          type: 'wallet.transfer.sent',
+          title: 'Money sent',
+          message: `${currency} ${amount} was sent successfully.`,
+          metadata: {
+            transferId,
+            direction: 'SENT',
+            counterparty: receiver.email ?? null,
           },
-        ),
+        }),
 
-        this.notificationsService.process(
-          'wallet.transfer.received',
-          {
-            ...event,
-            userId: receiver.id,
-            email:
-              receiver.email ?? null,
-            type:
-              'wallet.transfer.received',
-            title:
-              'Money received',
-            message:
-              `${currency} ${amount} was received successfully.`,
-            metadata: {
-              transferId,
-              direction: 'RECEIVED',
-              counterparty:
-                sender.email ?? null,
-            },
+        this.notificationsService.process('wallet.transfer.received', {
+          ...event,
+          userId: receiver.id,
+          email: receiver.email ?? null,
+          type: 'wallet.transfer.received',
+          title: 'Money received',
+          message: `${currency} ${amount} was received successfully.`,
+          metadata: {
+            transferId,
+            direction: 'RECEIVED',
+            counterparty: sender.email ?? null,
           },
-        ),
+        }),
       ]);
 
       channel.ack(message);
 
-      this.logger.log(
-        'Acknowledged wallet.transfer.completed',
-      );
+      this.logger.log('Acknowledged wallet.transfer.completed');
     } catch (error) {
       this.logger.error(
         'Failed to process wallet.transfer.completed',
-        error instanceof Error
-          ? error.stack
-          : String(error),
+        error instanceof Error ? error.stack : String(error),
       );
 
       await this.deadLetter(channel, message, 'wallet.transfer.completed');
     }
   }
 
-  @EventPattern(
-    'payment.completed',
-  )
+  @EventPattern('payment.completed')
   handlePaymentCompleted(
     @Payload()
     event: NotificationEvent,
@@ -208,16 +154,10 @@ export class NotificationsController {
     @Ctx()
     context: RmqContext,
   ): Promise<void> {
-    return this.handleEvent(
-      'payment.completed',
-      event,
-      context,
-    );
+    return this.handleEvent('payment.completed', event, context);
   }
 
-  @EventPattern(
-    'user.registered',
-  )
+  @EventPattern('user.registered')
   handleUserRegistered(
     @Payload()
     event: NotificationEvent,
@@ -225,32 +165,117 @@ export class NotificationsController {
     @Ctx()
     context: RmqContext,
   ): Promise<void> {
-    return this.handleEvent(
-      'user.registered',
-      event,
-      context,
-    );
+    return this.handleEvent('user.registered', event, context);
   }
 
-  @EventPattern('money.request.created') handleMoneyRequestCreated(@Payload() event: NotificationEvent, @Ctx() context: RmqContext) { return this.handleFanout('money.request.created', event, context); }
-  @EventPattern('money.request.accepted') handleMoneyRequestAccepted(@Payload() event: NotificationEvent, @Ctx() context: RmqContext) { return this.handleFanout('money.request.accepted', event, context); }
-  @EventPattern('money.request.declined') handleMoneyRequestDeclined(@Payload() event: NotificationEvent, @Ctx() context: RmqContext) { return this.handleFanout('money.request.declined', event, context); }
-  @EventPattern('money.request.cancelled') handleMoneyRequestCancelled(@Payload() event: NotificationEvent, @Ctx() context: RmqContext) { return this.handleFanout('money.request.cancelled', event, context); }
-  @EventPattern('split.created') handleSplitCreated(@Payload() event: NotificationEvent, @Ctx() context: RmqContext) { return this.handleFanout('split.created', event, context); }
-  @EventPattern('split.allocation.paid') handleSplitPaid(@Payload() event: NotificationEvent, @Ctx() context: RmqContext) { return this.handleFanout('split.allocation.paid', event, context); }
-  @EventPattern('offer.claimed') handleOfferClaimed(@Payload() event: NotificationEvent, @Ctx() context: RmqContext) { return this.handleFanout('offer.claimed', event, context); }
-  @EventPattern('recharge.status') handleRechargeStatus(@Payload() event: NotificationEvent, @Ctx() context: RmqContext) { return this.handleFanout('recharge.status', event, context); }
-  @EventPattern('bill.payment.status') handleBillPaymentStatus(@Payload() event: NotificationEvent, @Ctx() context: RmqContext) { return this.handleFanout('bill.payment.status', event, context); }
-  @EventPattern('mandate.created') handleMandateCreated(@Payload() event: NotificationEvent, @Ctx() context: RmqContext) { return this.handleFanout('mandate.created', event, context); }
-  @EventPattern('mandate.pause') handleMandatePaused(@Payload() event: NotificationEvent, @Ctx() context: RmqContext) { return this.handleFanout('mandate.pause', event, context); }
-  @EventPattern('mandate.resume') handleMandateResumed(@Payload() event: NotificationEvent, @Ctx() context: RmqContext) { return this.handleFanout('mandate.resume', event, context); }
-  @EventPattern('mandate.cancel') handleMandateCancelled(@Payload() event: NotificationEvent, @Ctx() context: RmqContext) { return this.handleFanout('mandate.cancel', event, context); }
-  @EventPattern('support.case.created') handleCaseCreated(@Payload() event: NotificationEvent, @Ctx() context: RmqContext) { return this.handleFanout('support.case.created', event, context); }
-  @EventPattern('support.case.updated') handleCaseUpdated(@Payload() event: NotificationEvent, @Ctx() context: RmqContext) { return this.handleFanout('support.case.updated', event, context); }
+  @EventPattern('money.request.created') handleMoneyRequestCreated(
+    @Payload() event: NotificationEvent,
+    @Ctx() context: RmqContext,
+  ) {
+    return this.handleFanout('money.request.created', event, context);
+  }
+  @EventPattern('money.request.accepted') handleMoneyRequestAccepted(
+    @Payload() event: NotificationEvent,
+    @Ctx() context: RmqContext,
+  ) {
+    return this.handleFanout('money.request.accepted', event, context);
+  }
+  @EventPattern('money.request.declined') handleMoneyRequestDeclined(
+    @Payload() event: NotificationEvent,
+    @Ctx() context: RmqContext,
+  ) {
+    return this.handleFanout('money.request.declined', event, context);
+  }
+  @EventPattern('money.request.cancelled') handleMoneyRequestCancelled(
+    @Payload() event: NotificationEvent,
+    @Ctx() context: RmqContext,
+  ) {
+    return this.handleFanout('money.request.cancelled', event, context);
+  }
+  @EventPattern('split.created') handleSplitCreated(
+    @Payload() event: NotificationEvent,
+    @Ctx() context: RmqContext,
+  ) {
+    return this.handleFanout('split.created', event, context);
+  }
+  @EventPattern('split.allocation.paid') handleSplitPaid(
+    @Payload() event: NotificationEvent,
+    @Ctx() context: RmqContext,
+  ) {
+    return this.handleFanout('split.allocation.paid', event, context);
+  }
+  @EventPattern('offer.claimed') handleOfferClaimed(
+    @Payload() event: NotificationEvent,
+    @Ctx() context: RmqContext,
+  ) {
+    return this.handleFanout('offer.claimed', event, context);
+  }
+  @EventPattern('recharge.status') handleRechargeStatus(
+    @Payload() event: NotificationEvent,
+    @Ctx() context: RmqContext,
+  ) {
+    return this.handleFanout('recharge.status', event, context);
+  }
+  @EventPattern('bill.payment.status') handleBillPaymentStatus(
+    @Payload() event: NotificationEvent,
+    @Ctx() context: RmqContext,
+  ) {
+    return this.handleFanout('bill.payment.status', event, context);
+  }
+  @EventPattern('mandate.created') handleMandateCreated(
+    @Payload() event: NotificationEvent,
+    @Ctx() context: RmqContext,
+  ) {
+    return this.handleFanout('mandate.created', event, context);
+  }
+  @EventPattern('mandate.pause') handleMandatePaused(
+    @Payload() event: NotificationEvent,
+    @Ctx() context: RmqContext,
+  ) {
+    return this.handleFanout('mandate.pause', event, context);
+  }
+  @EventPattern('mandate.resume') handleMandateResumed(
+    @Payload() event: NotificationEvent,
+    @Ctx() context: RmqContext,
+  ) {
+    return this.handleFanout('mandate.resume', event, context);
+  }
+  @EventPattern('mandate.cancel') handleMandateCancelled(
+    @Payload() event: NotificationEvent,
+    @Ctx() context: RmqContext,
+  ) {
+    return this.handleFanout('mandate.cancel', event, context);
+  }
+  @EventPattern('support.case.created') handleCaseCreated(
+    @Payload() event: NotificationEvent,
+    @Ctx() context: RmqContext,
+  ) {
+    return this.handleFanout('support.case.created', event, context);
+  }
+  @EventPattern('support.case.updated') handleCaseUpdated(
+    @Payload() event: NotificationEvent,
+    @Ctx() context: RmqContext,
+  ) {
+    return this.handleFanout('support.case.updated', event, context);
+  }
 
-  private handleFanout(eventName: string, event: NotificationEvent, context: RmqContext): Promise<void> {
-    const userIds = Array.isArray(event['userIds']) ? event['userIds'].filter((value): value is string => typeof value === 'string' && Boolean(value.trim())) : [];
-    return this.handleEvent(eventName, { ...event, userIds: undefined, fanoutUserIds: userIds }, context, userIds);
+  private handleFanout(
+    eventName: string,
+    event: NotificationEvent,
+    context: RmqContext,
+  ): Promise<void> {
+    const userIds = Array.isArray(event['userIds'])
+      ? event['userIds'].filter(
+          (value): value is string =>
+            typeof value === 'string' && Boolean(value.trim()),
+        )
+      : [];
+    return this.handleEvent(
+      eventName,
+      { ...event, userIds: undefined, fanoutUserIds: userIds },
+      context,
+      userIds,
+    );
   }
 
   private async handleEvent(
@@ -259,33 +284,28 @@ export class NotificationsController {
     context: RmqContext,
     userIds?: string[],
   ): Promise<void> {
-    const channel =
-      context.getChannelRef() as DeadLetterChannel;
+    const channel = context.getChannelRef() as DeadLetterChannel;
 
-    const message =
-      context.getMessage() as unknown as DeadLetterMessage;
+    const message = context.getMessage() as unknown as DeadLetterMessage;
 
     try {
-      this.logger.log(
-        `Received ${eventName}: ${JSON.stringify(
-          event,
-        )}`,
-      );
+      this.logger.log(`Received ${eventName}: ${JSON.stringify(event)}`);
 
-      if (userIds) await Promise.all([...new Set(userIds)].map((userId) => this.notificationsService.process(eventName, { ...event, userId })));
+      if (userIds)
+        await Promise.all(
+          [...new Set(userIds)].map((userId) =>
+            this.notificationsService.process(eventName, { ...event, userId }),
+          ),
+        );
       else await this.notificationsService.process(eventName, event);
 
       channel.ack(message);
 
-      this.logger.log(
-        `Acknowledged ${eventName}`,
-      );
+      this.logger.log(`Acknowledged ${eventName}`);
     } catch (error) {
       this.logger.error(
         `Failed to process ${eventName}`,
-        error instanceof Error
-          ? error.stack
-          : String(error),
+        error instanceof Error ? error.stack : String(error),
       );
 
       await this.deadLetter(channel, message, eventName);
@@ -298,26 +318,120 @@ export class NotificationsController {
     eventName: string,
   ): Promise<void> {
     const primaryQueue = process.env['RABBITMQ_QUEUE'] ?? 'wallet_events';
+
     const deadLetterQueue = `${primaryQueue}.dead`;
 
+    const retryDelays = [5_000, 15_000, 60_000];
+
+    const headers = message.properties?.headers ?? {};
+
+    const rawRetryCount = headers['x-payflow-retry-count'];
+
+    const parsedRetryCount =
+      typeof rawRetryCount === 'number'
+        ? rawRetryCount
+        : typeof rawRetryCount === 'string'
+          ? Number(rawRetryCount)
+          : 0;
+
+    const retryCount =
+      Number.isFinite(parsedRetryCount) && parsedRetryCount >= 0
+        ? Math.floor(parsedRetryCount)
+        : 0;
+
     try {
-      await channel.assertQueue(deadLetterQueue, { durable: true });
+      if (retryCount < retryDelays.length) {
+        const nextRetryCount = retryCount + 1;
+
+        const retryQueue = `${primaryQueue}.retry.${nextRetryCount}`;
+
+        const retryDelay = retryDelays[retryCount];
+
+        await channel.assertQueue(retryQueue, {
+          durable: true,
+
+          arguments: {
+            'x-message-ttl': retryDelay,
+
+            'x-dead-letter-exchange': '',
+
+            'x-dead-letter-routing-key': primaryQueue,
+          },
+        });
+
+        channel.sendToQueue(retryQueue, message.content, {
+          persistent: true,
+
+          contentType: message.properties?.contentType,
+
+          contentEncoding: message.properties?.contentEncoding,
+
+          headers: {
+            ...headers,
+
+            'x-payflow-retry-count': nextRetryCount,
+
+            'x-payflow-last-failure': 'notification-processing-failed',
+
+            'x-payflow-event-name': eventName,
+          },
+        });
+
+        channel.ack(message);
+
+        this.logger.warn(
+          [
+            '[NOTIFICATION RETRY SCHEDULED]',
+            `event=${eventName}`,
+            `retry=${nextRetryCount}`,
+            `delayMs=${retryDelay}`,
+            `queue=${retryQueue}`,
+          ].join(' | '),
+        );
+
+        return;
+      }
+
+      await channel.assertQueue(deadLetterQueue, {
+        durable: true,
+      });
+
       channel.sendToQueue(deadLetterQueue, message.content, {
         persistent: true,
+
         contentType: message.properties?.contentType,
+
         contentEncoding: message.properties?.contentEncoding,
+
         headers: {
-          ...message.properties?.headers,
-          'x-payflow-dead-letter-reason': 'notification-processing-failed',
+          ...headers,
+
+          'x-payflow-retry-count': retryCount,
+
+          'x-payflow-dead-letter-reason': 'notification-retry-exhausted',
+
           'x-payflow-event-name': eventName,
         },
       });
+
       channel.ack(message);
+
+      this.logger.error(
+        [
+          '[NOTIFICATION RETRY EXHAUSTED]',
+          `event=${eventName}`,
+          `retries=${retryCount}`,
+          `queue=${deadLetterQueue}`,
+        ].join(' | '),
+      );
     } catch (routingError) {
       this.logger.error(
-        `Failed to route ${eventName} to the notification dead-letter queue`,
-        routingError instanceof Error ? routingError.stack : String(routingError),
+        `Failed to route ${eventName} through notification retry/dead-letter topology`,
+        routingError instanceof Error
+          ? routingError.stack
+          : String(routingError),
       );
+
       channel.nack(message, false, true);
     }
   }

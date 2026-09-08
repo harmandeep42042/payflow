@@ -1,15 +1,8 @@
-import {
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+﻿import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 
-import {
-  PrismaService,
-} from '@payflow/database';
-import {
-  NotificationsGateway,
-} from './notifications.gateway';
+import { PrismaService } from '@payflow/database';
+import { NotificationIdempotencyService } from './notification-idempotency.service';
+import { NotificationsGateway } from './notifications.gateway';
 
 export type NotificationEvent = {
   eventId?: string;
@@ -33,92 +26,74 @@ type NotificationContent = {
 
 @Injectable()
 export class NotificationsService {
-  private readonly logger =
-    new Logger(
-      NotificationsService.name,
-    );
+  private readonly logger = new Logger(NotificationsService.name);
 
   private readonly mailEnabled =
-    (
-      process.env['MAIL_ENABLED'] ??
-      'false'
-    ).toLowerCase() === 'true';
+    (process.env['MAIL_ENABLED'] ?? 'false').toLowerCase() === 'true';
 
   constructor(
-    private readonly prisma:
-      PrismaService,
+    private readonly prisma: PrismaService,
 
-    private readonly notificationsGateway:
-      NotificationsGateway,
+    private readonly idempotency: NotificationIdempotencyService,
+
+    private readonly notificationsGateway: NotificationsGateway,
   ) {}
 
-  async process(
-    eventName: string,
-    event: NotificationEvent,
-  ): Promise<void> {
-    const preferences =
-      event.userId
-        ? await this.prisma
-            .notificationPreference
-            .findUnique({
-              where: {
-                userId: event.userId,
-              },
-            })
-        : null;
+  async process(eventName: string, event: NotificationEvent): Promise<void> {
+    const preferences = event.userId
+      ? await this.prisma.notificationPreference.findUnique({
+          where: {
+            userId: event.userId,
+          },
+        })
+      : null;
 
     if (preferences) {
-      const normalizedEvent =
-        eventName.toLowerCase();
+      const normalizedEvent = eventName.toLowerCase();
 
       const disabledCategory =
         (normalizedEvent.includes('transfer') &&
           !preferences.transfersEnabled) ||
-        (normalizedEvent.includes('deposit') &&
-          !preferences.depositsEnabled) ||
+        (normalizedEvent.includes('deposit') && !preferences.depositsEnabled) ||
         (normalizedEvent.includes('withdraw') &&
           !preferences.withdrawalsEnabled) ||
-        (normalizedEvent.includes('payment') &&
-          !preferences.paymentsEnabled);
+        (normalizedEvent.includes('payment') && !preferences.paymentsEnabled);
 
       if (disabledCategory) {
         this.logger.log(
-          '[NOTIFICATION SKIPPED] event=' + eventName + ' | userId=' + (event.userId ?? 'unknown') + ' | reason=category-preference',
+          '[NOTIFICATION SKIPPED] event=' +
+            eventName +
+            ' | userId=' +
+            (event.userId ?? 'unknown') +
+            ' | reason=category-preference',
         );
 
         return;
       }
     }
 
-    const inAppEnabled =
-      preferences?.inAppEnabled ??
-      true;
+    const inAppEnabled = preferences?.inAppEnabled ?? true;
 
     const emailEnabled =
-      (preferences?.emailEnabled ?? true) &&
-      this.mailEnabled;
+      (preferences?.emailEnabled ?? true) && this.mailEnabled;
 
-    if (
-      !inAppEnabled &&
-      !emailEnabled
-    ) {
+    if (!inAppEnabled && !emailEnabled) {
       this.logger.log(
-        '[NOTIFICATION SKIPPED] event=' + eventName + ' | userId=' + (event.userId ?? 'unknown') + ' | reason=no-enabled-channel',
+        '[NOTIFICATION SKIPPED] event=' +
+          eventName +
+          ' | userId=' +
+          (event.userId ?? 'unknown') +
+          ' | reason=no-enabled-channel',
       );
 
       return;
     }
 
-    const nestedUser =
-      event['user'];
+    const nestedUser = event['user'];
 
     const nestedUserEmail =
-      nestedUser &&
-      typeof nestedUser === 'object'
-        ? (
-            nestedUser as
-              Record<string, unknown>
-          )['email']
+      nestedUser && typeof nestedUser === 'object'
+        ? (nestedUser as Record<string, unknown>)['email']
         : undefined;
 
     const notificationEmail =
@@ -128,135 +103,192 @@ export class NotificationsService {
           ? nestedUserEmail
           : undefined;
 
-    const content =
-      this.createContent(
-        eventName,
-        event,
-      );
+    const content = this.createContent(eventName, event);
 
-    const notification =
-      await this.prisma.notification.create({
+    const eventId =
+      typeof event.eventId === 'string' ? event.eventId.trim() : '';
+
+    /*
+     * Legacy events without eventId cannot be
+     * safely deduplicated. Preserve their current
+     * behaviour instead of generating a random key.
+     */
+    let dedupeKey: string | null = null;
+
+    if (eventId) {
+      const recipientIdentity = notificationEmail ?? event.userId ?? 'unknown';
+
+      dedupeKey = [eventId, eventName, recipientIdentity].join(':');
+
+      const claim = await this.idempotency.begin({
+        eventId,
+        dedupeKey,
+        eventType: eventName,
+        recipient: String(recipientIdentity),
+        subject: content.title,
+      });
+
+      if (claim.action === 'SKIP_SENT') {
+        this.logger.log(
+          '[NOTIFICATION DUPLICATE SKIPPED] dedupeKey=' + dedupeKey,
+        );
+
+        return;
+      }
+
+      if (claim.action === 'BUSY') {
+        this.logger.log('[NOTIFICATION CLAIM BUSY] dedupeKey=' + dedupeKey);
+
+        return;
+      }
+    }
+    try {
+      /*
+       * Controlled E2E failure hook.
+       *
+       * This is intentionally restricted to one explicit
+       * test reference and does not affect normal events.
+       *
+       * First delivery:
+       *   claim -> throw -> markFailed()
+       *
+       * Replay:
+       *   FAILED -> PROCESS -> continue normally
+       */
+      if (event.reference === 'NOTIFICATION-RETRY-E2E-FAIL-ONCE' && dedupeKey) {
+        const currentClaim = await this.idempotency.getByDedupeKey(dedupeKey);
+
+        if (currentClaim && currentClaim.attempts === 1) {
+          throw new Error('CONTROLLED_NOTIFICATION_RETRY_E2E_FAILURE');
+        }
+      }
+
+      /*
+       * Controlled permanent-failure E2E hook.
+       *
+       * This reference intentionally fails every processing attempt so
+       * RabbitMQ retry exhaustion and final DLQ routing can be verified.
+       *
+       * It is restricted to one explicit E2E reference and therefore
+       * does not affect normal notification events.
+       */
+      if (
+        event.reference === 'NOTIFICATION-RETRY-E2E-ALWAYS-FAIL' &&
+        dedupeKey
+      ) {
+        throw new Error('CONTROLLED_NOTIFICATION_PERMANENT_E2E_FAILURE');
+      }
+      const notification = await this.prisma.notification.create({
         data: {
-          userId:
-            event.userId ??
-            null,
+          userId: event.userId ?? null,
 
-          email:
-            notificationEmail ??
-            null,
+          email: notificationEmail ?? null,
 
-          type:
-            eventName,
+          type: eventName,
 
-          title:
-            content.title,
+          title: content.title,
 
-          message:
-            content.message,
+          message: content.message,
 
-          channel:
-            inAppEnabled
-              ? 'IN_APP'
-              : 'EMAIL',
+          channel: inAppEnabled ? 'IN_APP' : 'EMAIL',
 
-          status:
-            emailEnabled && !inAppEnabled
-              ? 'QUEUED'
-              : 'CREATED',
+          status: emailEnabled && !inAppEnabled ? 'QUEUED' : 'CREATED',
 
-          metadata:
-            event as never,
+          metadata: event as never,
         },
       });
 
-    if (inAppEnabled) {
-      this.notificationsGateway
-        .emitNotificationCreated(
-          notification,
+      if (inAppEnabled) {
+        this.notificationsGateway.emitNotificationCreated(notification);
+      }
+
+      if (emailEnabled) {
+        this.logger.log(
+          '[EMAIL QUEUED] id=' +
+            notification.id +
+            ' | event=' +
+            eventName +
+            ' | email=' +
+            (notificationEmail ?? 'unavailable'),
         );
-    }
+      }
 
-    if (emailEnabled) {
       this.logger.log(
-        '[EMAIL QUEUED] id=' + notification.id + ' | event=' + eventName + ' | email=' + (notificationEmail ?? 'unavailable'),
+        [
+          '[NOTIFICATION PROCESSED]',
+          'id=' + notification.id,
+          'event=' + eventName,
+          'userId=' + (event.userId ?? 'unknown'),
+          'inApp=' + String(inAppEnabled),
+          'email=' + String(emailEnabled),
+        ].join(' | '),
       );
-    }
 
-    this.logger.log(
-      [
-        '[NOTIFICATION PROCESSED]',
-        'id=' + notification.id,
-        'event=' + eventName,
-        'userId=' + (event.userId ?? 'unknown'),
-        'inApp=' + String(inAppEnabled),
-        'email=' + String(emailEnabled),
-      ].join(' | '),
-    );
+      if (dedupeKey) {
+        await this.idempotency.markSent(dedupeKey);
+      }
+    } catch (error) {
+      if (dedupeKey) {
+        try {
+          await this.idempotency.markFailed(dedupeKey, error);
+        } catch (markFailedError) {
+          this.logger.error(
+            '[NOTIFICATION IDEMPOTENCY MARK FAILED ERROR] dedupeKey=' +
+              dedupeKey,
+            markFailedError instanceof Error
+              ? markFailedError.stack
+              : String(markFailedError),
+          );
+        }
+      }
+
+      throw error;
+    }
   }
 
-  async findAll(
-    input: {
-      userId: string;
-      page?: number;
-      limit?: number;
-      unreadOnly?: boolean;
-      type?: string;
-    },
-  ) {
+  async findAll(input: {
+    userId: string;
+    page?: number;
+    limit?: number;
+    unreadOnly?: boolean;
+    type?: string;
+  }) {
     const page =
-      Number.isFinite(input.page) &&
-      Number(input.page) > 0
-        ? Math.floor(
-            Number(input.page),
-          )
+      Number.isFinite(input.page) && Number(input.page) > 0
+        ? Math.floor(Number(input.page))
         : 1;
 
     const limit =
-      Number.isFinite(input.limit) &&
-      Number(input.limit) > 0
-        ? Math.min(
-            Math.floor(
-              Number(input.limit),
-            ),
-            100,
-          )
+      Number.isFinite(input.limit) && Number(input.limit) > 0
+        ? Math.min(Math.floor(Number(input.limit)), 100)
         : 20;
 
     const where = {
-      userId:
-        input.userId,
+      userId: input.userId,
 
       ...(input.unreadOnly
         ? {
-            isRead:
-              false,
+            isRead: false,
           }
         : {}),
 
       ...(input.type
         ? {
-            type:
-              input.type,
+            type: input.type,
           }
         : {}),
     };
 
-    const [
-      total,
-      unreadCount,
-      notifications,
-    ] = await Promise.all([
+    const [total, unreadCount, notifications] = await Promise.all([
       this.prisma.notification.count({
         where,
       }),
 
       this.prisma.notification.count({
         where: {
-          userId:
-            input.userId,
+          userId: input.userId,
 
-          isRead:
-            false,
+          isRead: false,
         },
       }),
 
@@ -264,25 +296,16 @@ export class NotificationsService {
         where,
 
         orderBy: {
-          createdAt:
-            'desc',
+          createdAt: 'desc',
         },
 
-        skip:
-          (page - 1) *
-          limit,
+        skip: (page - 1) * limit,
 
-        take:
-          limit,
+        take: limit,
       }),
     ]);
 
-    const totalPages =
-      total === 0
-        ? 0
-        : Math.ceil(
-            total / limit,
-          );
+    const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
 
     return {
       notifications,
@@ -298,294 +321,196 @@ export class NotificationsService {
         limit,
         totalPages,
 
-        hasNextPage:
-          page < totalPages,
+        hasNextPage: page < totalPages,
 
-        hasPreviousPage:
-          page > 1,
+        hasPreviousPage: page > 1,
       },
 
       filters: {
-        userId:
-          input.userId,
+        userId: input.userId,
 
-        unreadOnly:
-          Boolean(
-            input.unreadOnly,
-          ),
+        unreadOnly: Boolean(input.unreadOnly),
 
-        type:
-          input.type ?? '',
+        type: input.type ?? '',
       },
     };
   }
 
-  async findByIdForUser(
-    notificationId: string,
-    userId: string,
-  ) {
-    const notification =
-      await this.prisma.notification
-        .findFirst({
-          where: {
-            id:
-              notificationId,
+  async findByIdForUser(notificationId: string, userId: string) {
+    const notification = await this.prisma.notification.findFirst({
+      where: {
+        id: notificationId,
 
-            userId,
-          },
-        });
+        userId,
+      },
+    });
 
     if (!notification) {
-      throw new NotFoundException(
-        'Notification not found',
-      );
+      throw new NotFoundException('Notification not found');
     }
 
     return notification;
   }
 
-  async markAsRead(
-    notificationId: string,
-    userId: string,
-  ) {
-    const notification =
-      await this.findByIdForUser(
-        notificationId,
-        userId,
-      );
+  async markAsRead(notificationId: string, userId: string) {
+    const notification = await this.findByIdForUser(notificationId, userId);
 
     if (notification.isRead) {
       return {
-        message:
-          'Notification is already read',
+        message: 'Notification is already read',
 
         notification,
       };
     }
 
-    const updatedNotification =
-      await this.prisma.notification
-        .update({
-          where: {
-            id:
-              notificationId,
-          },
+    const updatedNotification = await this.prisma.notification.update({
+      where: {
+        id: notificationId,
+      },
 
-          data: {
-            isRead:
-              true,
+      data: {
+        isRead: true,
 
-            readAt:
-              new Date(),
-          },
-        });
+        readAt: new Date(),
+      },
+    });
 
     return {
-      message:
-        'Notification marked as read',
+      message: 'Notification marked as read',
 
-      notification:
-        updatedNotification,
+      notification: updatedNotification,
     };
   }
 
-  async markAllAsRead(
-    userId: string,
-  ) {
-    const result =
-      await this.prisma.notification
-        .updateMany({
-          where: {
-            userId,
+  async markAllAsRead(userId: string) {
+    const result = await this.prisma.notification.updateMany({
+      where: {
+        userId,
 
-            isRead:
-              false,
-          },
+        isRead: false,
+      },
 
-          data: {
-            isRead:
-              true,
+      data: {
+        isRead: true,
 
-            readAt:
-              new Date(),
-          },
-        });
+        readAt: new Date(),
+      },
+    });
 
     return {
-      message:
-        'All notifications marked as read',
+      message: 'All notifications marked as read',
 
-      updatedCount:
-        result.count,
+      updatedCount: result.count,
     };
   }
 
+  async deleteForUser(notificationId: string, userId: string) {
+    const notification = await this.prisma.notification.findFirst({
+      where: {
+        id: notificationId,
 
-  async deleteForUser(
-    notificationId: string,
-    userId: string,
-  ) {
-    const notification =
-      await this.prisma.notification
-        .findFirst({
-          where: {
-            id:
-              notificationId,
-
-            userId,
-          },
-        });
+        userId,
+      },
+    });
 
     if (!notification) {
-      throw new NotFoundException(
-        'Notification not found',
-      );
+      throw new NotFoundException('Notification not found');
     }
 
-    await this.prisma.notification
-      .delete({
-        where: {
-          id:
-            notificationId,
-        },
-      });
+    await this.prisma.notification.delete({
+      where: {
+        id: notificationId,
+      },
+    });
 
     return {
-      message:
-        'Notification deleted',
+      message: 'Notification deleted',
 
       notificationId,
     };
   }
 
-  async deleteAllForUser(
-    userId: string,
-  ) {
-    const result =
-      await this.prisma.notification
-        .deleteMany({
-          where: {
-            userId,
-          },
-        });
+  async deleteAllForUser(userId: string) {
+    const result = await this.prisma.notification.deleteMany({
+      where: {
+        userId,
+      },
+    });
 
     return {
-      message:
-        'Notification history cleared',
+      message: 'Notification history cleared',
 
-      deletedCount:
-        result.count,
+      deletedCount: result.count,
     };
   }
   private createContent(
     eventName: string,
     event: NotificationEvent,
   ): NotificationContent {
-    const amount =
-      event.amount ?? '0';
+    const amount = event.amount ?? '0';
 
-    const currency =
-      event.currency ?? 'INR';
+    const currency = event.currency ?? 'INR';
 
-    if (
-      eventName ===
-      'wallet.deposit.completed'
-    ) {
+    if (eventName === 'wallet.deposit.completed') {
       return {
-        title:
-          'Money added successfully',
+        title: 'Money added successfully',
 
-        message:
-          `${currency} ${amount} was added to your wallet.`,
+        message: `${currency} ${amount} was added to your wallet.`,
       };
     }
 
-    if (
-      eventName ===
-      'wallet.withdrawal.completed'
-    ) {
+    if (eventName === 'wallet.withdrawal.completed') {
       return {
-        title:
-          'Withdrawal completed',
+        title: 'Withdrawal completed',
 
-        message:
-          `${currency} ${amount} was withdrawn from your wallet.`,
+        message: `${currency} ${amount} was withdrawn from your wallet.`,
       };
     }
 
-    if (
-      eventName ===
-      'wallet.transfer.sent'
-    ) {
+    if (eventName === 'wallet.transfer.sent') {
       return {
-        title:
-          'Money sent',
+        title: 'Money sent',
 
-        message:
-          `${currency} ${amount} was sent successfully.`,
+        message: `${currency} ${amount} was sent successfully.`,
       };
     }
 
-    if (
-      eventName ===
-      'wallet.transfer.received'
-    ) {
+    if (eventName === 'wallet.transfer.received') {
       return {
-        title:
-          'Money received',
+        title: 'Money received',
 
-        message:
-          `${currency} ${amount} was received successfully.`,
+        message: `${currency} ${amount} was received successfully.`,
       };
     }
 
-    if (
-      eventName ===
-      'wallet.transfer.completed'
-    ) {
+    if (eventName === 'wallet.transfer.completed') {
       return {
-        title:
-          'Money transfer completed',
+        title: 'Money transfer completed',
 
-        message:
-          `${currency} ${amount} was transferred successfully.`,
+        message: `${currency} ${amount} was transferred successfully.`,
       };
     }
 
-    if (
-      eventName ===
-      'payment.completed'
-    ) {
+    if (eventName === 'payment.completed') {
       return {
-        title:
-          'Payment completed',
+        title: 'Payment completed',
 
-        message:
-          `Your payment of ${currency} ${amount} was successful.`,
+        message: `Your payment of ${currency} ${amount} was successful.`,
       };
     }
 
-    if (
-      eventName ===
-      'user.registered'
-    ) {
+    if (eventName === 'user.registered') {
       return {
-        title:
-          'Welcome to Payflow',
+        title: 'Welcome to Payflow',
 
-        message:
-          'Your Payflow account was created successfully.',
+        message: 'Your Payflow account was created successfully.',
       };
     }
 
     return {
-      title:
-        'Payflow notification',
+      title: 'Payflow notification',
 
-      message:
-        event.description ??
-        `A new ${eventName} event was received.`,
+      message: event.description ?? `A new ${eventName} event was received.`,
     };
   }
 }
-

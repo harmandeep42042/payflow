@@ -1,4 +1,5 @@
 import {
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -29,4 +30,7 @@ export class CreatePaymentOrderDto {
   @IsString()
   @IsNotEmpty()
   idempotencyKey!: string;
+  @IsOptional()
+  @IsIn(['MOCK', 'RAZORPAY'])
+  provider?: 'MOCK' | 'RAZORPAY';
 }

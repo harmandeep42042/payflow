@@ -16,6 +16,9 @@ import { RateLimit } from '../auth/decorators/rate-limit.decorator';
 import { RedisRateLimitGuard } from '../auth/guards/redis-rate-limit.guard';
 import { RequestOtpDto } from './dto/request-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { RequestMobileOtpDto } from './dto/request-mobile-otp.dto';
+import { VerifyMobileOtpDto } from './dto/verify-mobile-otp.dto';
+import { CompleteMobileRegistrationDto } from './dto/complete-mobile-registration.dto';
 import { OtpService } from './otp.service';
 
 @ApiTags('OTP Authentication')
@@ -84,4 +87,46 @@ export class OtpController {
       dto,
     );
   }
+
+  @Post('mobile/request')
+  @UseGuards(RedisRateLimitGuard)
+  @RateLimit({
+    prefix: 'mobile-otp-request',
+    limit: 3,
+    windowSeconds: 300,
+  })
+  requestMobileOtp(
+    @Body() dto: RequestMobileOtpDto,
+  ) {
+    return this.otpService.requestMobileOtp(dto);
+  }
+
+  @Post('mobile/verify')
+  @UseGuards(RedisRateLimitGuard)
+  @RateLimit({
+    prefix: 'mobile-otp-verify',
+    limit: 10,
+    windowSeconds: 300,
+  })
+  verifyMobileOtp(
+    @Body() dto: VerifyMobileOtpDto,
+  ) {
+    return this.otpService.verifyMobileOtp(dto);
+  }
+  @Post('mobile/register')
+  @UseGuards(RedisRateLimitGuard)
+  @RateLimit({
+    prefix: 'mobile-otp-register',
+    limit: 5,
+    windowSeconds: 600,
+  })
+  completeMobileRegistration(
+    @Body()
+    dto: CompleteMobileRegistrationDto,
+  ) {
+    return this.otpService
+      .completeMobileRegistration(dto);
+  }
+
+
 }

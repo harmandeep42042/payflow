@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
 } from '@nestjs/common';
+
 import {
   ApiOperation,
   ApiTags,
@@ -10,7 +11,10 @@ import {
 import {
   Public,
 } from './gateway-auth/decorators/public.decorator';
-import { AppService } from './app.service';
+
+import {
+  AppService,
+} from './app.service';
 
 @ApiTags('Gateway')
 @Controller()
@@ -28,5 +32,25 @@ export class AppController {
   })
   getHealth() {
     return this.appService.getHealth();
+  }
+
+  @Public()
+  @Get('health/live')
+  @ApiOperation({
+    summary:
+      'Check API Gateway liveness',
+  })
+  getLiveness() {
+    return this.appService.getLiveness();
+  }
+
+  @Public()
+  @Get('health/ready')
+  @ApiOperation({
+    summary:
+      'Check API Gateway readiness',
+  })
+  getReadiness() {
+    return this.appService.getReadiness();
   }
 }

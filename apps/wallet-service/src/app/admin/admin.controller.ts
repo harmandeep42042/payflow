@@ -1,4 +1,4 @@
-﻿import {
+import {
   Request,
   Body,
   Controller,
@@ -6,6 +6,7 @@
   Param,
   ParseUUIDPipe,
   Patch,
+  Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -18,29 +19,15 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 
-import {
-  AuditLogService,
-} from '../audit-log/audit-log.service';
-import {
-  AdminService,
-  AdminUserRole,
-  AdminUserStatus,
-} from './admin.service';
-import {
-  WalletRoles,
-} from '../wallet-auth/decorators/wallet-roles.decorator';
-import {
-  WalletJwtAuthGuard,
-} from '../wallet-auth/guards/wallet-jwt-auth.guard';
-import {
-  WalletRolesGuard,
-} from '../wallet-auth/guards/wallet-roles.guard';
+import { AuditLogService } from '../audit-log/audit-log.service';
+import { AdminService, AdminUserRole, AdminUserStatus } from './admin.service';
+import { WalletRoles } from '../wallet-auth/decorators/wallet-roles.decorator';
+import { WalletJwtAuthGuard } from '../wallet-auth/guards/wallet-jwt-auth.guard';
+import { WalletRolesGuard } from '../wallet-auth/guards/wallet-roles.guard';
 import {
   UpdateAdminUserStatusDto,
   UpdateAdminWalletStatusDto,
 } from './dto/update-admin-status.dto';
-
-
 
 type AdminAuthenticatedRequest = {
   user: {
@@ -50,34 +37,23 @@ type AdminAuthenticatedRequest = {
   };
 };
 
-type AdminWalletStatus =
-  | 'ALL'
-  | 'ACTIVE'
-  | 'FROZEN'
-  | 'CLOSED';
-
+type AdminWalletStatus = 'ALL' | 'ACTIVE' | 'FROZEN' | 'CLOSED';
 
 @ApiTags('Admin')
 @ApiBearerAuth('access-token')
-@UseGuards(
-  WalletJwtAuthGuard,
-  WalletRolesGuard,
-)
+@UseGuards(WalletJwtAuthGuard, WalletRolesGuard)
 @WalletRoles('ADMIN')
 @Controller('admin')
 export class AdminController {
   constructor(
-    private readonly adminService:
-      AdminService,
+    private readonly adminService: AdminService,
 
-    private readonly auditLogService:
-      AuditLogService,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   @Get('dashboard')
   @ApiOperation({
-    summary:
-      'Get live Payflow administration dashboard data',
+    summary: 'Get live Payflow administration dashboard data',
   })
   getDashboard() {
     return this.adminService.getDashboard();
@@ -85,8 +61,7 @@ export class AdminController {
 
   @Get('users')
   @ApiOperation({
-    summary:
-      'Get paginated users for administration',
+    summary: 'Get paginated users for administration',
   })
   getUsers(
     @Query('page')
@@ -113,41 +88,31 @@ export class AdminController {
     });
   }
 
-
   @Get('users/:userId')
   @ApiOperation({
-    summary:
-      'Get complete administration user details',
+    summary: 'Get complete administration user details',
   })
   @ApiParam({
     name: 'userId',
     description: 'User UUID',
   })
   getUserById(
-    @Param(
-      'userId',
-      new ParseUUIDPipe(),
-    )
+    @Param('userId', new ParseUUIDPipe())
     userId: string,
   ) {
-    return this.adminService
-      .getUserById(userId);
+    return this.adminService.getUserById(userId);
   }
 
   @Patch('users/:userId/status')
   @ApiOperation({
-    summary:
-      'Block, suspend or reactivate a user',
+    summary: 'Block, suspend or reactivate a user',
   })
   @ApiParam({
     name: 'userId',
     description: 'User UUID',
   })
   updateUserStatus(
-    @Param(
-      'userId',
-      new ParseUUIDPipe(),
-    )
+    @Param('userId', new ParseUUIDPipe())
     userId: string,
 
     @Body()
@@ -156,17 +121,15 @@ export class AdminController {
     @Request()
     request: AdminAuthenticatedRequest,
   ) {
-    return this.adminService
-      .updateUserStatus(
-        userId,
-        body.status,
-        request.user,
-      );
+    return this.adminService.updateUserStatus(
+      userId,
+      body.status,
+      request.user,
+    );
   }
   @Get('wallets')
   @ApiOperation({
-    summary:
-      'Get paginated wallets for administration',
+    summary: 'Get paginated wallets for administration',
   })
   @ApiQuery({
     name: 'page',
@@ -185,12 +148,7 @@ export class AdminController {
   @ApiQuery({
     name: 'status',
     required: false,
-    enum: [
-      'ALL',
-      'ACTIVE',
-      'FROZEN',
-      'CLOSED',
-    ],
+    enum: ['ALL', 'ACTIVE', 'FROZEN', 'CLOSED'],
   })
   @ApiQuery({
     name: 'currency',
@@ -224,18 +182,14 @@ export class AdminController {
 
   @Patch('wallets/:walletId/status')
   @ApiOperation({
-    summary:
-      'Update wallet status for administration',
+    summary: 'Update wallet status for administration',
   })
   @ApiParam({
     name: 'walletId',
     description: 'Wallet UUID',
   })
   updateWalletStatus(
-    @Param(
-      'walletId',
-      new ParseUUIDPipe(),
-    )
+    @Param('walletId', new ParseUUIDPipe())
     walletId: string,
 
     @Body()
@@ -253,8 +207,7 @@ export class AdminController {
 
   @Get('transactions')
   @ApiOperation({
-    summary:
-      'Get paginated transactions for administration',
+    summary: 'Get paginated transactions for administration',
   })
   @ApiQuery({
     name: 'page',
@@ -273,12 +226,7 @@ export class AdminController {
   @ApiQuery({
     name: 'type',
     required: false,
-    enum: [
-      'ALL',
-      'DEPOSIT',
-      'WITHDRAWAL',
-      'TRANSFER',
-    ],
+    enum: ['ALL', 'DEPOSIT', 'WITHDRAWAL', 'TRANSFER'],
   })
   @ApiQuery({
     name: 'status',
@@ -289,6 +237,7 @@ export class AdminController {
       'PROCESSING',
       'COMPLETED',
       'FAILED',
+      'NEEDS_REVIEW',
       'REVERSED',
     ],
   })
@@ -303,11 +252,7 @@ export class AdminController {
     search?: string,
 
     @Query('type')
-    type?:
-      | 'ALL'
-      | 'DEPOSIT'
-      | 'WITHDRAWAL'
-      | 'TRANSFER',
+    type?: 'ALL' | 'DEPOSIT' | 'WITHDRAWAL' | 'TRANSFER',
 
     @Query('status')
     status?: string,
@@ -321,33 +266,95 @@ export class AdminController {
     });
   }
 
-  @Get('transactions/:transactionId')
+  @Get('transactions/review')
+  @ApiOperation({
+    summary: 'Get transfer transactions requiring manual accounting review',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    example: 20,
+  })
+  getTransactionReviewQueue(
+    @Query('page')
+    page?: string,
+
+    @Query('limit')
+    limit?: string,
+  ) {
+    return this.adminService.getTransactionReviewQueue({
+      page: page ? Number(page) : 1,
+      limit: limit ? Number(limit) : 20,
+    });
+  }
+
+  @Get('transactions/:transactionId/review')
   @ApiOperation({
     summary:
-      'Get complete transaction details for administration',
+      'Inspect complete accounting evidence for a transfer requiring review',
+  })
+  @ApiParam({
+    name: 'transactionId',
+    description: 'Transfer UUID',
+  })
+  getTransactionReview(
+    @Param('transactionId', new ParseUUIDPipe())
+    transactionId: string,
+  ) {
+    return this.adminService.getTransactionReview(transactionId);
+  }
+
+  @Post('transactions/:transactionId/review/fail')
+  @ApiOperation({
+    summary:
+      'Resolve a reviewed transfer as failed without moving wallet funds',
+  })
+  @ApiParam({
+    name: 'transactionId',
+    description: 'Transfer UUID',
+  })
+  failTransactionReview(
+    @Param('transactionId', new ParseUUIDPipe())
+    transactionId: string,
+
+    @Body()
+    body: {
+      reason?: string;
+    },
+
+    @Request()
+    request: AdminAuthenticatedRequest,
+  ) {
+    return this.adminService.failTransactionReview(
+      transactionId,
+      body?.reason,
+      request.user,
+    );
+  }
+
+  @Get('transactions/:transactionId')
+  @ApiOperation({
+    summary: 'Get complete transaction details for administration',
   })
   @ApiParam({
     name: 'transactionId',
     description: 'Transaction UUID',
   })
   getTransactionById(
-    @Param(
-      'transactionId',
-      new ParseUUIDPipe(),
-    )
+    @Param('transactionId', new ParseUUIDPipe())
     transactionId: string,
   ) {
-    return this.adminService
-      .getTransactionById(
-        transactionId,
-      );
+    return this.adminService.getTransactionById(transactionId);
   }
-
 
   @Get('audit-logs')
   @ApiOperation({
-    summary:
-      'Get paginated administration audit logs',
+    summary: 'Get paginated administration audit logs',
   })
   @ApiQuery({
     name: 'page',
@@ -389,54 +396,35 @@ export class AdminController {
     @Query('actorUserId')
     actorUserId?: string,
   ) {
-    return this.auditLogService
-      .findAll({
-        page:
-          page
-            ? Number(page)
-            : 1,
+    return this.auditLogService.findAll({
+      page: page ? Number(page) : 1,
 
-        limit:
-          limit
-            ? Number(limit)
-            : 20,
+      limit: limit ? Number(limit) : 20,
 
-        action:
-          action?.trim() ||
-          undefined,
+      action: action?.trim() || undefined,
 
-        targetType:
-          targetType?.trim() ||
-          undefined,
+      targetType: targetType?.trim() || undefined,
 
-        actorUserId:
-          actorUserId?.trim() ||
-          undefined,
-      });
+      actorUserId: actorUserId?.trim() || undefined,
+    });
   }
   @Get('analytics')
   @ApiOperation({
-    summary:
-      'Get administration analytics data',
+    summary: 'Get administration analytics data',
   })
   @ApiQuery({
     name: 'days',
     required: false,
     type: Number,
     example: 7,
-    description:
-      'Analytics period between 1 and 90 days',
+    description: 'Analytics period between 1 and 90 days',
   })
   getAnalytics(
     @Query('days')
     days?: string,
   ) {
     return this.adminService.getAnalytics({
-      days: days
-        ? Number(days)
-        : 7,
+      days: days ? Number(days) : 7,
     });
   }
 }
-
-

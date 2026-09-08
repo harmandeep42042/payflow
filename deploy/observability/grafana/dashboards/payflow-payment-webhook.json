@@ -1,0 +1,456 @@
+{
+    "schemaVersion":  41,
+    "id":  null,
+    "templating":  {
+                       "list":  [
+
+                                ]
+                   },
+    "annotations":  {
+                        "list":  [
+
+                                 ]
+                    },
+    "version":  1,
+    "panels":  [
+                   {
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "mappings":  [
+                                                                             {
+                                                                                 "options":  {
+                                                                                                 "1":  {
+                                                                                                           "text":  "UP"
+                                                                                                       },
+                                                                                                 "0":  {
+                                                                                                           "text":  "DOWN"
+                                                                                                       }
+                                                                                             },
+                                                                                 "type":  "value"
+                                                                             }
+                                                                         ]
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "id":  1,
+                       "gridPos":  {
+                                       "y":  0,
+                                       "w":  6,
+                                       "x":  0,
+                                       "h":  5
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "payflow-prometheus"
+                                      },
+                       "title":  "Payment Service UP",
+                       "targets":  [
+                                       {
+                                           "instant":  true,
+                                           "expr":  "up{job=\"payflow-payment\"}",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "type":  "stat",
+                       "options":  {
+                                       "textMode":  "auto",
+                                       "colorMode":  "value",
+                                       "graphMode":  "none",
+                                       "reduceOptions":  {
+                                                             "values":  false,
+                                                             "calcs":  [
+                                                                           "lastNotNull"
+                                                                       ],
+                                                             "fields":  ""
+                                                         },
+                                       "justifyMode":  "auto",
+                                       "orientation":  "auto"
+                                   }
+                   },
+                   {
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "ops"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "id":  2,
+                       "gridPos":  {
+                                       "y":  0,
+                                       "w":  9,
+                                       "x":  6,
+                                       "h":  8
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "payflow-prometheus"
+                                      },
+                       "title":  "Payment Operation Rate",
+                       "targets":  [
+                                       {
+                                           "legendFormat":  "operations/sec",
+                                           "expr":  "sum(rate(payflow_payment_operations_total[5m]))",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "type":  "timeseries",
+                       "options":  {
+                                       "legend":  {
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true,
+                                                      "displayMode":  "list"
+                                                  },
+                                       "tooltip":  {
+                                                       "sort":  "desc",
+                                                       "mode":  "multi"
+                                                   }
+                                   }
+                   },
+                   {
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "s"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "id":  3,
+                       "gridPos":  {
+                                       "y":  0,
+                                       "w":  9,
+                                       "x":  15,
+                                       "h":  8
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "payflow-prometheus"
+                                      },
+                       "title":  "Payment P95 Operation Latency",
+                       "targets":  [
+                                       {
+                                           "legendFormat":  "p95",
+                                           "expr":  "histogram_quantile(0.95, sum by (le) (rate(payflow_payment_operation_duration_seconds_bucket[5m])))",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "type":  "timeseries",
+                       "options":  {
+                                       "legend":  {
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true,
+                                                      "displayMode":  "list"
+                                                  },
+                                       "tooltip":  {
+                                                       "sort":  "desc",
+                                                       "mode":  "multi"
+                                                   }
+                                   }
+                   },
+                   {
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "ops"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "id":  4,
+                       "gridPos":  {
+                                       "y":  8,
+                                       "w":  12,
+                                       "x":  0,
+                                       "h":  8
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "payflow-prometheus"
+                                      },
+                       "title":  "Webhook Event Rate",
+                       "targets":  [
+                                       {
+                                           "legendFormat":  "webhooks/sec",
+                                           "expr":  "sum(rate(payflow_payment_webhook_events_total[5m]))",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "type":  "timeseries",
+                       "options":  {
+                                       "legend":  {
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true,
+                                                      "displayMode":  "list"
+                                                  },
+                                       "tooltip":  {
+                                                       "sort":  "desc",
+                                                       "mode":  "multi"
+                                                   }
+                                   }
+                   },
+                   {
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "ops"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "id":  5,
+                       "gridPos":  {
+                                       "y":  8,
+                                       "w":  12,
+                                       "x":  12,
+                                       "h":  8
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "payflow-prometheus"
+                                      },
+                       "title":  "Recovery Event Rate",
+                       "targets":  [
+                                       {
+                                           "legendFormat":  "recovery/sec",
+                                           "expr":  "sum(rate(payflow_payment_recovery_events_total[5m]))",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "type":  "timeseries",
+                       "options":  {
+                                       "legend":  {
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true,
+                                                      "displayMode":  "list"
+                                                  },
+                                       "tooltip":  {
+                                                       "sort":  "desc",
+                                                       "mode":  "multi"
+                                                   }
+                                   }
+                   },
+                   {
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "cores"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "id":  6,
+                       "gridPos":  {
+                                       "y":  16,
+                                       "w":  12,
+                                       "x":  0,
+                                       "h":  8
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "payflow-prometheus"
+                                      },
+                       "title":  "Payment CPU",
+                       "targets":  [
+                                       {
+                                           "legendFormat":  "CPU",
+                                           "expr":  "rate(payflow_payment_runtime_process_cpu_seconds_total[5m])",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "type":  "timeseries",
+                       "options":  {
+                                       "legend":  {
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true,
+                                                      "displayMode":  "list"
+                                                  },
+                                       "tooltip":  {
+                                                       "sort":  "desc",
+                                                       "mode":  "multi"
+                                                   }
+                                   }
+                   },
+                   {
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "bytes"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "id":  7,
+                       "gridPos":  {
+                                       "y":  16,
+                                       "w":  12,
+                                       "x":  12,
+                                       "h":  8
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "payflow-prometheus"
+                                      },
+                       "title":  "Payment Resident Memory",
+                       "targets":  [
+                                       {
+                                           "legendFormat":  "resident memory",
+                                           "expr":  "payflow_payment_runtime_process_resident_memory_bytes",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "type":  "timeseries",
+                       "options":  {
+                                       "legend":  {
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true,
+                                                      "displayMode":  "list"
+                                                  },
+                                       "tooltip":  {
+                                                       "sort":  "desc",
+                                                       "mode":  "multi"
+                                                   }
+                                   }
+                   },
+                   {
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "bytes"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "id":  8,
+                       "gridPos":  {
+                                       "y":  24,
+                                       "w":  8,
+                                       "x":  0,
+                                       "h":  8
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "payflow-prometheus"
+                                      },
+                       "title":  "Payment Heap Used",
+                       "targets":  [
+                                       {
+                                           "legendFormat":  "heap used",
+                                           "expr":  "payflow_payment_runtime_nodejs_heap_size_used_bytes",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "type":  "timeseries",
+                       "options":  {
+                                       "legend":  {
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true,
+                                                      "displayMode":  "list"
+                                                  },
+                                       "tooltip":  {
+                                                       "sort":  "desc",
+                                                       "mode":  "multi"
+                                                   }
+                                   }
+                   },
+                   {
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "s"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "id":  9,
+                       "gridPos":  {
+                                       "y":  24,
+                                       "w":  8,
+                                       "x":  8,
+                                       "h":  8
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "payflow-prometheus"
+                                      },
+                       "title":  "Event Loop P99 Lag",
+                       "targets":  [
+                                       {
+                                           "legendFormat":  "p99 lag",
+                                           "expr":  "payflow_payment_runtime_nodejs_eventloop_lag_p99_seconds",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "type":  "timeseries",
+                       "options":  {
+                                       "legend":  {
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true,
+                                                      "displayMode":  "list"
+                                                  },
+                                       "tooltip":  {
+                                                       "sort":  "desc",
+                                                       "mode":  "multi"
+                                                   }
+                                   }
+                   },
+                   {
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "s"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "id":  10,
+                       "gridPos":  {
+                                       "y":  24,
+                                       "w":  8,
+                                       "x":  16,
+                                       "h":  8
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "payflow-prometheus"
+                                      },
+                       "title":  "GC P95 Duration",
+                       "targets":  [
+                                       {
+                                           "legendFormat":  "GC p95",
+                                           "expr":  "histogram_quantile(0.95, sum by (le) (rate(payflow_payment_runtime_nodejs_gc_duration_seconds_bucket[5m])))",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "type":  "timeseries",
+                       "options":  {
+                                       "legend":  {
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true,
+                                                      "displayMode":  "list"
+                                                  },
+                                       "tooltip":  {
+                                                       "sort":  "desc",
+                                                       "mode":  "multi"
+                                                   }
+                                   }
+                   }
+               ],
+    "tags":  [
+                 "payflow",
+                 "payment",
+                 "webhook",
+                 "production"
+             ],
+    "time":  {
+                 "to":  "now",
+                 "from":  "now-6h"
+             },
+    "timezone":  "browser",
+    "refresh":  "30s",
+    "title":  "Payflow - Payment and Webhook",
+    "uid":  "payflow-payment-webhook"
+}

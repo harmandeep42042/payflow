@@ -32,6 +32,7 @@ export const navigationGroups = [
       { href: '/splits', label: 'Bill Splits', icon: TransactionsIcon },
       { href: '/mandates', label: 'AutoPay', icon: WalletIcon },
       { href: '/provider-status', label: 'Provider Status', icon: AuditIcon },
+      { href: '/regulated-payments', label: 'Payment Operations', icon: WalletIcon },
     ],
   },
   {

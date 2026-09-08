@@ -20,4 +20,8 @@ COPY apps/admin-web/public ./apps/admin-web/public
 
 EXPOSE 3001
 
+USER node
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD node -e "const http=require('http');const r=http.get({host:'127.0.0.1',port:3001,path:'/',timeout:4000},res=>{res.resume();process.exit(res.statusCode>=200&&res.statusCode<400?0:1)});r.on('error',()=>process.exit(1));r.on('timeout',()=>{r.destroy();process.exit(1)})"
+
 CMD ["node", "apps/admin-web/server.js"]

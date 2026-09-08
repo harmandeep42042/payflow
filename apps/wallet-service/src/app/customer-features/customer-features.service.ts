@@ -3,7 +3,7 @@ import { PrismaService } from '@payflow/database';
 import { Decimal } from '@prisma/client/runtime/client';
 import { WalletsService } from '../wallets/wallets.service';
 import {
-  AcceptMoneyRequestDto, CreateBillPaymentDto, CreateBillSplitDto, CreateContactDto, CreateMandateDto,
+  AcceptMoneyRequestDto, CreateBillPaymentDto, CreateSavedBillerDto, CreateBillReminderDto, CreateBillSplitDto, CreateContactDto, CreateMandateDto,
   CreateMoneyRequestDto, CreateOfferDto, CreateRechargeDto, CreateSupportCaseDto, PaySplitAllocationDto,
   UpdateContactDto, UpdateOfferDto, UpdateSupportCaseDto,
 } from './customer-features.dto';
@@ -36,7 +36,7 @@ export class CustomerFeaturesService {
     return wallet;
   }
 
-  async insights(userId: string, fromValue?: string, toValue?: string, daysValue?: string) {
+  async insights(userId: string, fromValue?: string, toValue?: string, daysValue?: string, categoryValue?: string) {
     const dayPattern = /^\d{4}-\d{2}-\d{2}$/;
     const end = toValue ? new Date(`${toValue}T23:59:59.999Z`) : new Date();
     let start: Date;
@@ -59,11 +59,16 @@ export class CustomerFeaturesService {
       this.prisma.withdrawal.findMany({ where: { walletId: { in: walletIds }, createdAt }, select: { id: true, amount: true, currency: true, status: true, createdAt: true } }),
       this.prisma.transfer.findMany({ where: { OR: [{ sourceWalletId: { in: walletIds } }, { destinationWalletId: { in: walletIds } }], createdAt }, select: { id: true, sourceWalletId: true, amount: true, currency: true, status: true, createdAt: true } }),
     ]) : [[], [], []];
+    const classifications = transfers.length ? await this.prisma.transactionClassification.findMany({ where: { userId, transferId: { in: transfers.map(item=>item.id) } }, select: { transferId: true, category: true } }) : [];
+    const categoryByTransfer = new Map(classifications.map(item=>[item.transferId,item.category]));
+    const requestedCategory = categoryValue?.trim().toUpperCase();
+    const allowedCategories = ['FOOD','SHOPPING','TRAVEL','BILLS','RECHARGE','TRANSFER','RENT','ENTERTAINMENT','OTHER'];
+    if (requestedCategory && !allowedCategories.includes(requestedCategory)) throw new BadRequestException('Unknown transaction category');
     const activity = [
       ...deposits.map((item) => ({ ...item, type: 'DEPOSIT', direction: 'CREDIT' as const })),
       ...withdrawals.map((item) => ({ ...item, type: 'WITHDRAWAL', direction: 'DEBIT' as const })),
-      ...transfers.map((item) => ({ ...item, type: 'TRANSFER', direction: walletIds.includes(item.sourceWalletId) ? 'DEBIT' as const : 'CREDIT' as const })),
-    ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      ...transfers.map((item) => ({ ...item, type: 'TRANSFER', direction: walletIds.includes(item.sourceWalletId) ? 'DEBIT' as const : 'CREDIT' as const, category: categoryByTransfer.get(item.id) ?? null })),
+    ].filter(item=>!requestedCategory || ('category' in item && item.category===requestedCategory)).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     type Bucket = { currency: string; incoming: Decimal; outgoing: Decimal; successfulCount: number; failedOrReversedCount: number; successfulTotal: Decimal; largest: Decimal; trend: Map<string, { incoming: Decimal; outgoing: Decimal }> };
     const buckets = new Map<string, Bucket>();
     for (const item of activity) {
@@ -85,7 +90,10 @@ export class CustomerFeaturesService {
         trend: [...bucket.trend.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, value]) => ({ date, incoming: value.incoming.toString(), outgoing: value.outgoing.toString() })),
       })),
       recent: activity.slice(0, 10).map((item) => ({ id: item.id, type: item.type, direction: item.direction, amount: item.amount.toString(), currency: item.currency, status: item.status, createdAt: item.createdAt })),
-      categoriesAvailable: false,
+      categoriesAvailable: classifications.length > 0,
+      categoryTotals: allowedCategories.map(category=>({ category, currencies: [...new Set(activity.filter(item=>'category' in item&&item.category===category).map(item=>item.currency))].map(currency=>({ currency, amount: activity.filter(item=>'category' in item&&item.category===category&&item.currency===currency&&item.status==='COMPLETED'&&item.direction==='DEBIT').reduce((sum,item)=>sum.add(item.amount),new Decimal(0)).toString() })) })).filter(item=>item.currencies.length),
+      typeBreakdown: ['DEPOSIT','WITHDRAWAL','TRANSFER'].map(type=>({ type, count: activity.filter(item=>item.type===type).length })),
+      monthlyTrend: [...new Set(activity.map(item=>item.createdAt.toISOString().slice(0,7)))].sort().map(month=>({ month, count: activity.filter(item=>item.createdAt.toISOString().startsWith(month)).length })),
     };
   }
 
@@ -237,6 +245,157 @@ export class CustomerFeaturesService {
   }
   async billHistory(userId: string) { return this.prisma.billPaymentAttempt.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } }); }
 
+  async listSavedBillers(userId: string) {
+    return this.prisma.savedBiller.findMany({
+      where: { userId },
+      orderBy: { updatedAt: 'desc' },
+    });
+  }
+
+  async createSavedBiller(userId: string, dto: CreateSavedBillerDto) {
+    const billerId = dto.billerId.trim();
+    const customerRef = dto.customerRef.trim();
+    const nickname = dto.nickname?.trim() || null;
+
+    if (!billerId || !customerRef) {
+      throw new BadRequestException(
+        'Biller and customer reference are required',
+      );
+    }
+
+    return this.prisma.savedBiller.upsert({
+      where: {
+        userId_billerId_customerRef_category: {
+          userId,
+          billerId,
+          customerRef,
+          category: dto.category,
+        },
+      },
+      create: {
+        userId,
+        billerId,
+        category: dto.category,
+        customerRef,
+        nickname,
+      },
+      update: {
+        nickname,
+      },
+    });
+  }
+
+  async deleteSavedBiller(userId: string, id: string) {
+    const item = await this.prisma.savedBiller.findUnique({
+      where: { id },
+    });
+
+    if (!item) {
+      throw new NotFoundException('Saved biller not found');
+    }
+
+    if (item.userId !== userId) {
+      throw new ForbiddenException(
+        'Saved biller ownership is required',
+      );
+    }
+
+    return this.prisma.savedBiller.delete({
+      where: { id },
+    });
+  }
+  async listBillReminders(userId: string) {
+    return this.prisma.billReminder.findMany({
+      where: { userId },
+      orderBy: { remindAt: 'asc' },
+    });
+  }
+
+  async createBillReminder(
+    userId: string,
+    dto: CreateBillReminderDto,
+  ) {
+    const savedBiller =
+      await this.prisma.savedBiller.findUnique({
+        where: {
+          id: dto.savedBillerId,
+        },
+      });
+
+    if (!savedBiller) {
+      throw new NotFoundException(
+        'Saved biller not found',
+      );
+    }
+
+    if (savedBiller.userId !== userId) {
+      throw new ForbiddenException(
+        'Saved biller ownership is required',
+      );
+    }
+
+    const remindAt =
+      new Date(dto.remindAt);
+
+    if (
+      Number.isNaN(remindAt.getTime()) ||
+      remindAt.getTime() <= Date.now()
+    ) {
+      throw new BadRequestException(
+        'Reminder must be scheduled in the future',
+      );
+    }
+
+    const note =
+      dto.note?.trim() || null;
+
+    return this.prisma.billReminder.upsert({
+      where: {
+        userId_savedBillerId_remindAt: {
+          userId,
+          savedBillerId:
+            savedBiller.id,
+          remindAt,
+        },
+      },
+      create: {
+        userId,
+        savedBillerId:
+          savedBiller.id,
+        remindAt,
+        note,
+      },
+      update: {
+        note,
+      },
+    });
+  }
+
+  async deleteBillReminder(
+    userId: string,
+    id: string,
+  ) {
+    const reminder =
+      await this.prisma.billReminder.findUnique({
+        where: { id },
+      });
+
+    if (!reminder) {
+      throw new NotFoundException(
+        'Bill reminder not found',
+      );
+    }
+
+    if (reminder.userId !== userId) {
+      throw new ForbiddenException(
+        'Bill reminder ownership is required',
+      );
+    }
+
+    return this.prisma.billReminder.delete({
+      where: { id },
+    });
+  }
   async createMandate(userId: string, dto: CreateMandateDto) {
     if (!dto.consent) throw new BadRequestException('Explicit consent is required');
     const merchant = dto.merchant.trim(); const max = this.money(dto.maxAmount); const amount = dto.amount ? this.money(dto.amount) : null; if (amount?.gt(max)) throw new BadRequestException('Amount cannot exceed maximum amount');

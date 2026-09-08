@@ -1,4 +1,5 @@
-﻿import {
+import { NotificationRuntimeHealthState } from './app/notification-runtime-health-state.service';
+import {
   NestFactory,
 } from '@nestjs/core';
 
@@ -59,6 +60,10 @@ async function bootstrap():
 
   await app
     .startAllMicroservices();
+
+  app
+    .get(NotificationRuntimeHealthState)
+    .markRabbitMqStarted();
 
   await app.listen(
     payflowConfig

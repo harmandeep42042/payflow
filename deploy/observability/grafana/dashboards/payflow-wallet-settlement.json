@@ -1,0 +1,415 @@
+{
+    "schemaVersion":  41,
+    "id":  null,
+    "templating":  {
+                       "list":  [
+
+                                ]
+                   },
+    "annotations":  {
+                        "list":  [
+
+                                 ]
+                    },
+    "version":  1,
+    "panels":  [
+                   {
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "mappings":  [
+                                                                             {
+                                                                                 "options":  {
+                                                                                                 "1":  {
+                                                                                                           "text":  "UP"
+                                                                                                       },
+                                                                                                 "0":  {
+                                                                                                           "text":  "DOWN"
+                                                                                                       }
+                                                                                             },
+                                                                                 "type":  "value"
+                                                                             }
+                                                                         ]
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "id":  1,
+                       "gridPos":  {
+                                       "y":  0,
+                                       "w":  6,
+                                       "x":  0,
+                                       "h":  5
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "payflow-prometheus"
+                                      },
+                       "title":  "Wallet Service UP",
+                       "targets":  [
+                                       {
+                                           "instant":  true,
+                                           "expr":  "up{job=\"payflow-wallet\"}",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "type":  "stat",
+                       "options":  {
+                                       "textMode":  "auto",
+                                       "colorMode":  "value",
+                                       "graphMode":  "none",
+                                       "reduceOptions":  {
+                                                             "values":  false,
+                                                             "calcs":  [
+                                                                           "lastNotNull"
+                                                                       ],
+                                                             "fields":  ""
+                                                         },
+                                       "justifyMode":  "auto",
+                                       "orientation":  "auto"
+                                   }
+                   },
+                   {
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "ops"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "id":  2,
+                       "gridPos":  {
+                                       "y":  0,
+                                       "w":  9,
+                                       "x":  6,
+                                       "h":  8
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "payflow-prometheus"
+                                      },
+                       "title":  "Wallet Operation Rate",
+                       "targets":  [
+                                       {
+                                           "legendFormat":  "operations/sec",
+                                           "expr":  "sum(rate(payflow_wallet_operations_total[5m]))",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "type":  "timeseries",
+                       "options":  {
+                                       "legend":  {
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true,
+                                                      "displayMode":  "list"
+                                                  },
+                                       "tooltip":  {
+                                                       "sort":  "desc",
+                                                       "mode":  "multi"
+                                                   }
+                                   }
+                   },
+                   {
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "s"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "id":  3,
+                       "gridPos":  {
+                                       "y":  0,
+                                       "w":  9,
+                                       "x":  15,
+                                       "h":  8
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "payflow-prometheus"
+                                      },
+                       "title":  "Wallet P95 Operation Latency",
+                       "targets":  [
+                                       {
+                                           "legendFormat":  "p95",
+                                           "expr":  "histogram_quantile(0.95, sum by (le) (rate(payflow_wallet_operation_duration_seconds_bucket[5m])))",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "type":  "timeseries",
+                       "options":  {
+                                       "legend":  {
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true,
+                                                      "displayMode":  "list"
+                                                  },
+                                       "tooltip":  {
+                                                       "sort":  "desc",
+                                                       "mode":  "multi"
+                                                   }
+                                   }
+                   },
+                   {
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "ops"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "id":  4,
+                       "gridPos":  {
+                                       "y":  8,
+                                       "w":  12,
+                                       "x":  0,
+                                       "h":  8
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "payflow-prometheus"
+                                      },
+                       "title":  "Wallet Recovery Event Rate",
+                       "targets":  [
+                                       {
+                                           "legendFormat":  "recovery/sec",
+                                           "expr":  "sum(rate(payflow_wallet_recovery_events_total[5m]))",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "type":  "timeseries",
+                       "options":  {
+                                       "legend":  {
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true,
+                                                      "displayMode":  "list"
+                                                  },
+                                       "tooltip":  {
+                                                       "sort":  "desc",
+                                                       "mode":  "multi"
+                                                   }
+                                   }
+                   },
+                   {
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "cores"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "id":  5,
+                       "gridPos":  {
+                                       "y":  8,
+                                       "w":  12,
+                                       "x":  12,
+                                       "h":  8
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "payflow-prometheus"
+                                      },
+                       "title":  "Wallet CPU",
+                       "targets":  [
+                                       {
+                                           "legendFormat":  "CPU",
+                                           "expr":  "rate(payflow_wallet_runtime_process_cpu_seconds_total[5m])",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "type":  "timeseries",
+                       "options":  {
+                                       "legend":  {
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true,
+                                                      "displayMode":  "list"
+                                                  },
+                                       "tooltip":  {
+                                                       "sort":  "desc",
+                                                       "mode":  "multi"
+                                                   }
+                                   }
+                   },
+                   {
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "bytes"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "id":  6,
+                       "gridPos":  {
+                                       "y":  16,
+                                       "w":  12,
+                                       "x":  0,
+                                       "h":  8
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "payflow-prometheus"
+                                      },
+                       "title":  "Wallet Resident Memory",
+                       "targets":  [
+                                       {
+                                           "legendFormat":  "resident memory",
+                                           "expr":  "payflow_wallet_runtime_process_resident_memory_bytes",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "type":  "timeseries",
+                       "options":  {
+                                       "legend":  {
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true,
+                                                      "displayMode":  "list"
+                                                  },
+                                       "tooltip":  {
+                                                       "sort":  "desc",
+                                                       "mode":  "multi"
+                                                   }
+                                   }
+                   },
+                   {
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "bytes"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "id":  7,
+                       "gridPos":  {
+                                       "y":  16,
+                                       "w":  12,
+                                       "x":  12,
+                                       "h":  8
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "payflow-prometheus"
+                                      },
+                       "title":  "Wallet Heap Used",
+                       "targets":  [
+                                       {
+                                           "legendFormat":  "heap used",
+                                           "expr":  "payflow_wallet_runtime_nodejs_heap_size_used_bytes",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "type":  "timeseries",
+                       "options":  {
+                                       "legend":  {
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true,
+                                                      "displayMode":  "list"
+                                                  },
+                                       "tooltip":  {
+                                                       "sort":  "desc",
+                                                       "mode":  "multi"
+                                                   }
+                                   }
+                   },
+                   {
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "s"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "id":  8,
+                       "gridPos":  {
+                                       "y":  24,
+                                       "w":  12,
+                                       "x":  0,
+                                       "h":  8
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "payflow-prometheus"
+                                      },
+                       "title":  "Wallet Event Loop P99 Lag",
+                       "targets":  [
+                                       {
+                                           "legendFormat":  "p99 lag",
+                                           "expr":  "payflow_wallet_runtime_nodejs_eventloop_lag_p99_seconds",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "type":  "timeseries",
+                       "options":  {
+                                       "legend":  {
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true,
+                                                      "displayMode":  "list"
+                                                  },
+                                       "tooltip":  {
+                                                       "sort":  "desc",
+                                                       "mode":  "multi"
+                                                   }
+                                   }
+                   },
+                   {
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "s"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       },
+                       "id":  9,
+                       "gridPos":  {
+                                       "y":  24,
+                                       "w":  12,
+                                       "x":  12,
+                                       "h":  8
+                                   },
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "payflow-prometheus"
+                                      },
+                       "title":  "Wallet GC P95 Duration",
+                       "targets":  [
+                                       {
+                                           "legendFormat":  "GC p95",
+                                           "expr":  "histogram_quantile(0.95, sum by (le) (rate(payflow_wallet_runtime_nodejs_gc_duration_seconds_bucket[5m])))",
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "type":  "timeseries",
+                       "options":  {
+                                       "legend":  {
+                                                      "placement":  "bottom",
+                                                      "showLegend":  true,
+                                                      "displayMode":  "list"
+                                                  },
+                                       "tooltip":  {
+                                                       "sort":  "desc",
+                                                       "mode":  "multi"
+                                                   }
+                                   }
+                   }
+               ],
+    "tags":  [
+                 "payflow",
+                 "wallet",
+                 "settlement",
+                 "production"
+             ],
+    "time":  {
+                 "to":  "now",
+                 "from":  "now-6h"
+             },
+    "timezone":  "browser",
+    "refresh":  "30s",
+    "title":  "Payflow - Wallet and Settlement",
+    "uid":  "payflow-wallet-settlement"
+}

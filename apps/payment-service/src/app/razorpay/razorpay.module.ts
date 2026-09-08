@@ -1,3 +1,4 @@
+import { PaymentRailModule } from '../payment-rails/payment-rail.module';
 import {
   Module,
 } from '@nestjs/common';
@@ -11,6 +12,9 @@ import {
 } from './razorpay.service';
 
 @Module({
+  imports: [
+    PaymentRailModule,
+  ],
   controllers: [
     RazorpayController,
   ],

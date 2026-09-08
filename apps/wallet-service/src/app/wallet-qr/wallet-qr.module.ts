@@ -1,6 +1,10 @@
 ﻿import { Module } from '@nestjs/common';
 
 import {
+  WalletsModule,
+} from '../wallets/wallets.module';
+
+import {
   WalletQrController,
 } from './wallet-qr.controller';
 
@@ -9,6 +13,9 @@ import {
 } from './wallet-qr.service';
 
 @Module({
+  imports: [
+    WalletsModule,
+  ],
   controllers: [
     WalletQrController,
   ],

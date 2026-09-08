@@ -1,0 +1,2 @@
+export const PAYMENT_RAIL_PROVIDER =
+  Symbol('PAYMENT_RAIL_PROVIDER');

@@ -1,15 +1,11 @@
-﻿import {
+import {
   BadRequestException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  PrismaService,
-} from '@payflow/database';
+import { PrismaService } from '@payflow/database';
 
-import {
-  AuditLogService,
-} from '../audit-log/audit-log.service';
+import { AuditLogService } from '../audit-log/audit-log.service';
 
 type RecentTransaction = {
   id: string;
@@ -26,23 +22,15 @@ type RecentTransaction = {
   completedAt: Date | null;
 };
 
-
 type AdminActor = {
   id: string;
   email: string;
   role: string;
 };
 
-export type AdminUserStatus =
-  | 'ALL'
-  | 'ACTIVE'
-  | 'BLOCKED'
-  | 'SUSPENDED';
+export type AdminUserStatus = 'ALL' | 'ACTIVE' | 'BLOCKED' | 'SUSPENDED';
 
-export type AdminUserRole =
-  | 'ALL'
-  | 'USER'
-  | 'ADMIN';
+export type AdminUserRole = 'ALL' | 'USER' | 'ADMIN';
 
 export type GetAdminUsersInput = {
   page?: number;
@@ -56,8 +44,7 @@ export type GetAdminUsersInput = {
 export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly auditLogService:
-      AuditLogService,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   async getDashboard() {
@@ -272,23 +259,18 @@ export class AdminService {
         description: transfer.description,
         walletId: null,
         sourceWalletId: transfer.sourceWalletId,
-        destinationWalletId:
-          transfer.destinationWalletId,
+        destinationWalletId: transfer.destinationWalletId,
         createdAt: transfer.createdAt,
         completedAt: transfer.completedAt,
       })),
     ]
       .sort(
         (first, second) =>
-          second.createdAt.getTime() -
-          first.createdAt.getTime(),
+          second.createdAt.getTime() - first.createdAt.getTime(),
       )
       .slice(0, 10);
 
-    const transactionCount =
-      totalDeposits +
-      totalWithdrawals +
-      totalTransfers;
+    const transactionCount = totalDeposits + totalWithdrawals + totalTransfers;
 
     return {
       stats: {
@@ -302,35 +284,21 @@ export class AdminService {
         frozenWallets,
         closedWallets,
 
-        totalTransactions:
-          transactionCount,
+        totalTransactions: transactionCount,
         totalDeposits,
         totalWithdrawals,
         totalTransfers,
 
-        totalBalance:
-          walletBalanceAggregate
-            ._sum
-            .balance
-            ?.toString() ?? '0',
+        totalBalance: walletBalanceAggregate._sum.balance?.toString() ?? '0',
 
         totalDepositAmount:
-          depositAmountAggregate
-            ._sum
-            .amount
-            ?.toString() ?? '0',
+          depositAmountAggregate._sum.amount?.toString() ?? '0',
 
         totalWithdrawalAmount:
-          withdrawalAmountAggregate
-            ._sum
-            .amount
-            ?.toString() ?? '0',
+          withdrawalAmountAggregate._sum.amount?.toString() ?? '0',
 
         totalTransferAmount:
-          transferAmountAggregate
-            ._sum
-            .amount
-            ?.toString() ?? '0',
+          transferAmountAggregate._sum.amount?.toString() ?? '0',
       },
 
       recentUsers,
@@ -339,41 +307,26 @@ export class AdminService {
     };
   }
 
-  async getUsers(
-    input: GetAdminUsersInput = {},
-  ) {
-    const requestedPage =
-      Number(input.page ?? 1);
+  async getUsers(input: GetAdminUsersInput = {}) {
+    const requestedPage = Number(input.page ?? 1);
 
-    const requestedLimit =
-      Number(input.limit ?? 10);
+    const requestedLimit = Number(input.limit ?? 10);
 
     const page =
-      Number.isFinite(requestedPage) &&
-      requestedPage > 0
+      Number.isFinite(requestedPage) && requestedPage > 0
         ? Math.floor(requestedPage)
         : 1;
 
     const limit =
-      Number.isFinite(requestedLimit) &&
-      requestedLimit > 0
-        ? Math.min(
-            Math.floor(requestedLimit),
-            100,
-          )
+      Number.isFinite(requestedLimit) && requestedLimit > 0
+        ? Math.min(Math.floor(requestedLimit), 100)
         : 10;
 
-    const search =
-      input.search
-        ?.trim() ?? '';
+    const search = input.search?.trim() ?? '';
 
-    const status:
-      AdminUserStatus =
-        input.status ?? 'ALL';
+    const status: AdminUserStatus = input.status ?? 'ALL';
 
-    const role:
-      AdminUserRole =
-        input.role ?? 'ALL';
+    const role: AdminUserRole = input.role ?? 'ALL';
 
     const where = {
       ...(search
@@ -382,22 +335,19 @@ export class AdminService {
               {
                 email: {
                   contains: search,
-                  mode:
-                    'insensitive' as const,
+                  mode: 'insensitive' as const,
                 },
               },
               {
                 firstName: {
                   contains: search,
-                  mode:
-                    'insensitive' as const,
+                  mode: 'insensitive' as const,
                 },
               },
               {
                 lastName: {
                   contains: search,
-                  mode:
-                    'insensitive' as const,
+                  mode: 'insensitive' as const,
                 },
               },
               {
@@ -422,13 +372,9 @@ export class AdminService {
         : {}),
     };
 
-    const skip =
-      (page - 1) * limit;
+    const skip = (page - 1) * limit;
 
-    const [
-      users,
-      total,
-    ] = await Promise.all([
+    const [users, total] = await Promise.all([
       this.prisma.user.findMany({
         where,
 
@@ -467,40 +413,22 @@ export class AdminService {
       }),
     ]);
 
-    const totalPages =
-      total === 0
-        ? 0
-        : Math.ceil(total / limit);
+    const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
 
     return {
       users: users.map((user) => ({
         ...user,
 
-        wallets: user.wallets.map(
-          (wallet) => ({
-            ...wallet,
-            balance:
-              wallet.balance.toString(),
-          }),
-        ),
+        wallets: user.wallets.map((wallet) => ({
+          ...wallet,
+          balance: wallet.balance.toString(),
+        })),
 
-        walletCount:
-          user.wallets.length,
+        walletCount: user.wallets.length,
 
-        totalWalletBalance:
-          user.wallets
-            .reduce(
-              (
-                sum,
-                wallet,
-              ) =>
-                sum +
-                Number(
-                  wallet.balance,
-                ),
-              0,
-            )
-            .toFixed(2),
+        totalWalletBalance: user.wallets
+          .reduce((sum, wallet) => sum + Number(wallet.balance), 0)
+          .toFixed(2),
       })),
 
       pagination: {
@@ -509,11 +437,9 @@ export class AdminService {
         limit,
         totalPages,
 
-        hasNextPage:
-          page < totalPages,
+        hasNextPage: page < totalPages,
 
-        hasPreviousPage:
-          page > 1,
+        hasPreviousPage: page > 1,
       },
 
       filters: {
@@ -529,44 +455,29 @@ export class AdminService {
       page?: number;
       limit?: number;
       search?: string;
-      status?:
-        | 'ALL'
-        | 'ACTIVE'
-        | 'FROZEN'
-        | 'CLOSED';
+      status?: 'ALL' | 'ACTIVE' | 'FROZEN' | 'CLOSED';
       currency?: string;
     } = {},
   ) {
-    const requestedPage =
-      Number(input.page ?? 1);
+    const requestedPage = Number(input.page ?? 1);
 
-    const requestedLimit =
-      Number(input.limit ?? 10);
+    const requestedLimit = Number(input.limit ?? 10);
 
     const page =
-      Number.isFinite(requestedPage) &&
-      requestedPage > 0
+      Number.isFinite(requestedPage) && requestedPage > 0
         ? Math.floor(requestedPage)
         : 1;
 
     const limit =
-      Number.isFinite(requestedLimit) &&
-      requestedLimit > 0
-        ? Math.min(
-            Math.floor(requestedLimit),
-            100,
-          )
+      Number.isFinite(requestedLimit) && requestedLimit > 0
+        ? Math.min(Math.floor(requestedLimit), 100)
         : 10;
 
-    const search =
-      input.search?.trim() ?? '';
+    const search = input.search?.trim() ?? '';
 
-    const status =
-      input.status ?? 'ALL';
+    const status = input.status ?? 'ALL';
 
-    const currency =
-      input.currency?.trim().toUpperCase() ??
-      'ALL';
+    const currency = input.currency?.trim().toUpperCase() ?? 'ALL';
 
     const where = {
       ...(search
@@ -575,16 +486,14 @@ export class AdminService {
               {
                 id: {
                   contains: search,
-                  mode:
-                    'insensitive' as const,
+                  mode: 'insensitive' as const,
                 },
               },
               {
                 user: {
                   email: {
                     contains: search,
-                    mode:
-                      'insensitive' as const,
+                    mode: 'insensitive' as const,
                   },
                 },
               },
@@ -592,8 +501,7 @@ export class AdminService {
                 user: {
                   firstName: {
                     contains: search,
-                    mode:
-                      'insensitive' as const,
+                    mode: 'insensitive' as const,
                   },
                 },
               },
@@ -601,8 +509,7 @@ export class AdminService {
                 user: {
                   lastName: {
                     contains: search,
-                    mode:
-                      'insensitive' as const,
+                    mode: 'insensitive' as const,
                   },
                 },
               },
@@ -623,13 +530,9 @@ export class AdminService {
         : {}),
     };
 
-    const skip =
-      (page - 1) * limit;
+    const skip = (page - 1) * limit;
 
-    const [
-      wallets,
-      total,
-    ] = await Promise.all([
+    const [wallets, total] = await Promise.all([
       this.prisma.wallet.findMany({
         where,
 
@@ -688,28 +591,20 @@ export class AdminService {
       }),
     ]);
 
-    const totalPages =
-      total === 0
-        ? 0
-        : Math.ceil(total / limit);
+    const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
 
     return {
-      wallets: wallets.map(
-        (wallet) => ({
-          ...wallet,
+      wallets: wallets.map((wallet) => ({
+        ...wallet,
 
-          balance:
-            wallet.balance.toString(),
+        balance: wallet.balance.toString(),
 
-          transactionCount:
-            wallet._count.deposits +
-            wallet._count.withdrawals +
-            wallet._count
-              .outgoingTransfers +
-            wallet._count
-              .incomingTransfers,
-        }),
-      ),
+        transactionCount:
+          wallet._count.deposits +
+          wallet._count.withdrawals +
+          wallet._count.outgoingTransfers +
+          wallet._count.incomingTransfers,
+      })),
 
       pagination: {
         total,
@@ -717,11 +612,9 @@ export class AdminService {
         limit,
         totalPages,
 
-        hasNextPage:
-          page < totalPages,
+        hasNextPage: page < totalPages,
 
-        hasPreviousPage:
-          page > 1,
+        hasPreviousPage: page > 1,
       },
 
       filters: {
@@ -734,80 +627,66 @@ export class AdminService {
 
   async updateWalletStatus(
     walletId: string,
-    status:
-      | 'ACTIVE'
-      | 'FROZEN'
-      | 'CLOSED',
+    status: 'ACTIVE' | 'FROZEN' | 'CLOSED',
     actor: AdminActor,
   ) {
-    const wallet =
-      await this.prisma.wallet.findUnique({
-        where: {
-          id: walletId,
-        },
+    const wallet = await this.prisma.wallet.findUnique({
+      where: {
+        id: walletId,
+      },
 
-        select: {
-          id: true,
-          status: true,
-          userId: true,
-          currency: true,
-          balance: true,
-        },
-      });
+      select: {
+        id: true,
+        status: true,
+        userId: true,
+        currency: true,
+        balance: true,
+      },
+    });
 
     if (!wallet) {
-      throw new NotFoundException(
-        'Wallet not found',
-      );
+      throw new NotFoundException('Wallet not found');
     }
 
-    if (
-      wallet.status === 'CLOSED'
-    ) {
-      throw new BadRequestException(
-        'Closed wallet status cannot be changed',
-      );
+    if (wallet.status === 'CLOSED') {
+      throw new BadRequestException('Closed wallet status cannot be changed');
     }
 
-    if (
-      status === 'CLOSED' &&
-      Number(wallet.balance) !== 0
-    ) {
+    if (status === 'CLOSED' && Number(wallet.balance) !== 0) {
       throw new BadRequestException(
         'Wallet balance must be zero before closing',
       );
     }
 
-    const updatedWallet =
-      await this.prisma.wallet.update({
-        where: {
-          id: walletId,
-        },
+    const updatedWallet = await this.prisma.wallet.update({
+      where: {
+        id: walletId,
+      },
 
-        data: {
-          status,
-        },
+      data: {
+        status,
+      },
 
-        select: {
-          id: true,
-          userId: true,
-          currency: true,
-          balance: true,
-          version: true,
-          status: true,
-          createdAt: true,
-          updatedAt: true,
+      select: {
+        id: true,
+        userId: true,
+        currency: true,
+        balance: true,
+        version: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
 
-          user: {
-            select: {
-              id: true,
-              email: true,
-              firstName: true,
-              lastName: true,
-            },
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
           },
         },
-      });
+      },
+    });
 
     const auditAction =
       status === 'FROZEN'
@@ -823,35 +702,27 @@ export class AdminService {
       actorUserId: actor.id,
       actorEmail: actor.email,
 
-      description:
-        `Wallet status changed from ${wallet.status} to ${updatedWallet.status}`,
+      description: `Wallet status changed from ${wallet.status} to ${updatedWallet.status}`,
 
       metadata: {
-        previousStatus:
-          wallet.status,
+        previousStatus: wallet.status,
 
-        newStatus:
-          updatedWallet.status,
+        newStatus: updatedWallet.status,
 
-        userId:
-          updatedWallet.userId,
+        userId: updatedWallet.userId,
 
-        currency:
-          updatedWallet.currency,
+        currency: updatedWallet.currency,
 
-        balance:
-          updatedWallet.balance.toString(),
+        balance: updatedWallet.balance.toString(),
       },
     });
 
     return {
-      message:
-        `Wallet status changed to ${status}`,
+      message: `Wallet status changed to ${status}`,
 
       wallet: {
         ...updatedWallet,
-        balance:
-          updatedWallet.balance.toString(),
+        balance: updatedWallet.balance.toString(),
       },
     };
   }
@@ -861,43 +732,29 @@ export class AdminService {
       page?: number;
       limit?: number;
       search?: string;
-      type?:
-        | 'ALL'
-        | 'DEPOSIT'
-        | 'WITHDRAWAL'
-        | 'TRANSFER';
+      type?: 'ALL' | 'DEPOSIT' | 'WITHDRAWAL' | 'TRANSFER';
       status?: string;
     } = {},
   ) {
-    const requestedPage =
-      Number(input.page ?? 1);
+    const requestedPage = Number(input.page ?? 1);
 
-    const requestedLimit =
-      Number(input.limit ?? 10);
+    const requestedLimit = Number(input.limit ?? 10);
 
     const page =
-      Number.isFinite(requestedPage) &&
-      requestedPage > 0
+      Number.isFinite(requestedPage) && requestedPage > 0
         ? Math.floor(requestedPage)
         : 1;
 
     const limit =
-      Number.isFinite(requestedLimit) &&
-      requestedLimit > 0
-        ? Math.min(
-            Math.floor(requestedLimit),
-            100,
-          )
+      Number.isFinite(requestedLimit) && requestedLimit > 0
+        ? Math.min(Math.floor(requestedLimit), 100)
         : 10;
 
-    const search =
-      input.search?.trim() ?? '';
+    const search = input.search?.trim() ?? '';
 
-    const type =
-      input.type ?? 'ALL';
+    const type = input.type ?? 'ALL';
 
-    const status =
-      input.status?.trim() ?? 'ALL';
+    const status = input.status?.trim() ?? 'ALL';
 
     const commonSearch = search
       ? {
@@ -905,22 +762,19 @@ export class AdminService {
             {
               id: {
                 contains: search,
-                mode:
-                  'insensitive' as const,
+                mode: 'insensitive' as const,
               },
             },
             {
               walletId: {
                 contains: search,
-                mode:
-                  'insensitive' as const,
+                mode: 'insensitive' as const,
               },
             },
             {
               reference: {
                 contains: search,
-                mode:
-                  'insensitive' as const,
+                mode: 'insensitive' as const,
               },
             },
           ],
@@ -932,13 +786,12 @@ export class AdminService {
 
       ...(status !== 'ALL'
         ? {
-            status:
-              status as
-                | 'PENDING'
-                | 'PROCESSING'
-                | 'COMPLETED'
-                | 'FAILED'
-                | 'REVERSED',
+            status: status as
+              | 'PENDING'
+              | 'PROCESSING'
+              | 'COMPLETED'
+              | 'FAILED'
+              | 'REVERSED',
           }
         : {}),
     };
@@ -948,13 +801,12 @@ export class AdminService {
 
       ...(status !== 'ALL'
         ? {
-            status:
-              status as
-                | 'PENDING'
-                | 'PROCESSING'
-                | 'COMPLETED'
-                | 'FAILED'
-                | 'REVERSED',
+            status: status as
+              | 'PENDING'
+              | 'PROCESSING'
+              | 'COMPLETED'
+              | 'FAILED'
+              | 'REVERSED',
           }
         : {}),
     };
@@ -965,29 +817,25 @@ export class AdminService {
             {
               id: {
                 contains: search,
-                mode:
-                  'insensitive' as const,
+                mode: 'insensitive' as const,
               },
             },
             {
               sourceWalletId: {
                 contains: search,
-                mode:
-                  'insensitive' as const,
+                mode: 'insensitive' as const,
               },
             },
             {
               destinationWalletId: {
                 contains: search,
-                mode:
-                  'insensitive' as const,
+                mode: 'insensitive' as const,
               },
             },
             {
               description: {
                 contains: search,
-                mode:
-                  'insensitive' as const,
+                mode: 'insensitive' as const,
               },
             },
           ],
@@ -999,24 +847,18 @@ export class AdminService {
 
       ...(status !== 'ALL'
         ? {
-            status:
-              status as
-                | 'PENDING'
-                | 'PROCESSING'
-                | 'COMPLETED'
-                | 'FAILED'
-                | 'REVERSED',
+            status: status as
+              | 'PENDING'
+              | 'PROCESSING'
+              | 'COMPLETED'
+              | 'FAILED'
+              | 'REVERSED',
           }
         : {}),
     };
 
-    const [
-      deposits,
-      withdrawals,
-      transfers,
-    ] = await Promise.all([
-      type === 'ALL' ||
-      type === 'DEPOSIT'
+    const [deposits, withdrawals, transfers] = await Promise.all([
+      type === 'ALL' || type === 'DEPOSIT'
         ? this.prisma.deposit.findMany({
             where: depositWhere,
 
@@ -1051,8 +893,7 @@ export class AdminService {
           })
         : Promise.resolve([]),
 
-      type === 'ALL' ||
-      type === 'WITHDRAWAL'
+      type === 'ALL' || type === 'WITHDRAWAL'
         ? this.prisma.withdrawal.findMany({
             where: withdrawalWhere,
 
@@ -1087,8 +928,7 @@ export class AdminService {
           })
         : Promise.resolve([]),
 
-      type === 'ALL' ||
-      type === 'TRANSFER'
+      type === 'ALL' || type === 'TRANSFER'
         ? this.prisma.transfer.findMany({
             where: transferWhere,
 
@@ -1147,102 +987,65 @@ export class AdminService {
         status: deposit.status,
         reference: deposit.reference,
         description: null,
-        failureReason:
-          deposit.failureReason,
+        failureReason: deposit.failureReason,
         walletId: deposit.walletId,
         sourceWalletId: null,
         destinationWalletId: null,
         user: deposit.wallet.user,
         destinationUser: null,
         createdAt: deposit.createdAt,
-        completedAt:
-          deposit.completedAt,
+        completedAt: deposit.completedAt,
       })),
 
-      ...withdrawals.map(
-        (withdrawal) => ({
-          id: withdrawal.id,
-          type:
-            'WITHDRAWAL' as const,
-          amount:
-            withdrawal.amount.toString(),
-          currency:
-            withdrawal.currency,
-          status:
-            withdrawal.status,
-          reference:
-            withdrawal.reference,
-          description: null,
-          failureReason:
-            withdrawal.failureReason,
-          walletId:
-            withdrawal.walletId,
-          sourceWalletId: null,
-          destinationWalletId: null,
-          user:
-            withdrawal.wallet.user,
-          destinationUser: null,
-          createdAt:
-            withdrawal.createdAt,
-          completedAt:
-            withdrawal.completedAt,
-        }),
-      ),
+      ...withdrawals.map((withdrawal) => ({
+        id: withdrawal.id,
+        type: 'WITHDRAWAL' as const,
+        amount: withdrawal.amount.toString(),
+        currency: withdrawal.currency,
+        status: withdrawal.status,
+        reference: withdrawal.reference,
+        description: null,
+        failureReason: withdrawal.failureReason,
+        walletId: withdrawal.walletId,
+        sourceWalletId: null,
+        destinationWalletId: null,
+        user: withdrawal.wallet.user,
+        destinationUser: null,
+        createdAt: withdrawal.createdAt,
+        completedAt: withdrawal.completedAt,
+      })),
 
       ...transfers.map((transfer) => ({
         id: transfer.id,
         type: 'TRANSFER' as const,
-        amount:
-          transfer.amount.toString(),
-        currency:
-          transfer.currency,
-        status:
-          transfer.status,
+        amount: transfer.amount.toString(),
+        currency: transfer.currency,
+        status: transfer.status,
         reference: null,
-        description:
-          transfer.description,
-        failureReason:
-          transfer.failureReason,
+        description: transfer.description,
+        failureReason: transfer.failureReason,
         walletId: null,
-        sourceWalletId:
-          transfer.sourceWalletId,
-        destinationWalletId:
-          transfer.destinationWalletId,
-        user:
-          transfer.sourceWallet.user,
-        destinationUser:
-          transfer.destinationWallet.user,
-        createdAt:
-          transfer.createdAt,
-        completedAt:
-          transfer.completedAt,
+        sourceWalletId: transfer.sourceWalletId,
+        destinationWalletId: transfer.destinationWalletId,
+        user: transfer.sourceWallet.user,
+        destinationUser: transfer.destinationWallet.user,
+        createdAt: transfer.createdAt,
+        completedAt: transfer.completedAt,
       })),
     ].sort(
-      (first, second) =>
-        second.createdAt.getTime() -
-        first.createdAt.getTime(),
+      (first, second) => second.createdAt.getTime() - first.createdAt.getTime(),
     );
 
-    const total =
-      transactions.length;
+    const total = transactions.length;
 
-    const skip =
-      (page - 1) * limit;
+    const skip = (page - 1) * limit;
 
-    const paginatedTransactions =
-      transactions.slice(
-        skip,
-        skip + limit,
-      );
+    const paginatedTransactions = transactions.slice(skip, skip + limit);
 
-    const totalPages =
-      total === 0
-        ? 0
-        : Math.ceil(total / limit);
+    const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
 
     return {
-      transactions:
-        paginatedTransactions,
+      transactions: paginatedTransactions,
 
       pagination: {
         total,
@@ -1250,11 +1053,9 @@ export class AdminService {
         limit,
         totalPages,
 
-        hasNextPage:
-          page < totalPages,
+        hasNextPage: page < totalPages,
 
-        hasPreviousPage:
-          page > 1,
+        hasPreviousPage: page > 1,
       },
 
       filters: {
@@ -1265,14 +1066,8 @@ export class AdminService {
     };
   }
 
-  async getTransactionById(
-    transactionId: string,
-  ) {
-    const [
-      deposit,
-      withdrawal,
-      transfer,
-    ] = await Promise.all([
+  async getTransactionById(transactionId: string) {
+    const [deposit, withdrawal, transfer] = await Promise.all([
       this.prisma.deposit.findUnique({
         where: {
           id: transactionId,
@@ -1545,23 +1340,17 @@ export class AdminService {
 
         transaction: {
           ...deposit,
-          amount:
-            deposit.amount.toString(),
+          amount: deposit.amount.toString(),
 
           wallet: {
             ...deposit.wallet,
-            balance:
-              deposit.wallet.balance.toString(),
+            balance: deposit.wallet.balance.toString(),
           },
 
-          ledgerEntries:
-            deposit.ledgerEntries.map(
-              (entry) => ({
-                ...entry,
-                amount:
-                  entry.amount.toString(),
-              }),
-            ),
+          ledgerEntries: deposit.ledgerEntries.map((entry) => ({
+            ...entry,
+            amount: entry.amount.toString(),
+          })),
         },
       };
     }
@@ -1572,23 +1361,17 @@ export class AdminService {
 
         transaction: {
           ...withdrawal,
-          amount:
-            withdrawal.amount.toString(),
+          amount: withdrawal.amount.toString(),
 
           wallet: {
             ...withdrawal.wallet,
-            balance:
-              withdrawal.wallet.balance.toString(),
+            balance: withdrawal.wallet.balance.toString(),
           },
 
-          ledgerEntries:
-            withdrawal.ledgerEntries.map(
-              (entry) => ({
-                ...entry,
-                amount:
-                  entry.amount.toString(),
-              }),
-            ),
+          ledgerEntries: withdrawal.ledgerEntries.map((entry) => ({
+            ...entry,
+            amount: entry.amount.toString(),
+          })),
         },
       };
     }
@@ -1599,36 +1382,450 @@ export class AdminService {
 
         transaction: {
           ...transfer,
-          amount:
-            transfer.amount.toString(),
+          amount: transfer.amount.toString(),
 
           sourceWallet: {
             ...transfer.sourceWallet,
-            balance:
-              transfer.sourceWallet.balance.toString(),
+            balance: transfer.sourceWallet.balance.toString(),
           },
 
           destinationWallet: {
             ...transfer.destinationWallet,
-            balance:
-              transfer.destinationWallet.balance.toString(),
+            balance: transfer.destinationWallet.balance.toString(),
           },
 
-          ledgerEntries:
-            transfer.ledgerEntries.map(
-              (entry) => ({
-                ...entry,
-                amount:
-                  entry.amount.toString(),
-              }),
-            ),
+          ledgerEntries: transfer.ledgerEntries.map((entry) => ({
+            ...entry,
+            amount: entry.amount.toString(),
+          })),
         },
       };
     }
 
-    throw new Error(
-      'Transaction not found',
+    throw new Error('Transaction not found');
+  }
+
+  async getTransactionReviewQueue(
+    input: {
+      page?: number;
+      limit?: number;
+    } = {},
+  ) {
+    const requestedPage = Number(input.page ?? 1);
+
+    const requestedLimit = Number(input.limit ?? 20);
+
+    const page =
+      Number.isFinite(requestedPage) && requestedPage > 0
+        ? Math.floor(requestedPage)
+        : 1;
+
+    const limit =
+      Number.isFinite(requestedLimit) && requestedLimit > 0
+        ? Math.min(Math.floor(requestedLimit), 100)
+        : 20;
+
+    const skip = (page - 1) * limit;
+
+    const [total, transfers] = await this.prisma.$transaction([
+      this.prisma.transfer.count({
+        where: {
+          status: 'NEEDS_REVIEW',
+        },
+      }),
+
+      this.prisma.transfer.findMany({
+        where: {
+          status: 'NEEDS_REVIEW',
+        },
+
+        orderBy: {
+          updatedAt: 'asc',
+        },
+
+        skip,
+        take: limit,
+
+        include: {
+          ledgerEntries: {
+            orderBy: {
+              createdAt: 'asc',
+            },
+          },
+
+          sourceWallet: {
+            select: {
+              id: true,
+              userId: true,
+              balance: true,
+              currency: true,
+              version: true,
+              status: true,
+            },
+          },
+
+          destinationWallet: {
+            select: {
+              id: true,
+              userId: true,
+              balance: true,
+              currency: true,
+              version: true,
+              status: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      page,
+      limit,
+      total,
+
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+
+      items: transfers.map((transfer) => ({
+        id: transfer.id,
+        idempotencyKey: transfer.idempotencyKey,
+        status: transfer.status,
+
+        amount: transfer.amount.toString(),
+
+        currency: transfer.currency,
+
+        description: transfer.description,
+
+        failureReason: transfer.failureReason,
+
+        createdAt: transfer.createdAt,
+
+        updatedAt: transfer.updatedAt,
+
+        sourceWallet: {
+          ...transfer.sourceWallet,
+
+          balance: transfer.sourceWallet.balance.toString(),
+        },
+
+        destinationWallet: {
+          ...transfer.destinationWallet,
+
+          balance: transfer.destinationWallet.balance.toString(),
+        },
+
+        ledgerSummary: {
+          total: transfer.ledgerEntries.length,
+
+          debits: transfer.ledgerEntries.filter(
+            (entry) => entry.entryType === 'DEBIT',
+          ).length,
+
+          credits: transfer.ledgerEntries.filter(
+            (entry) => entry.entryType === 'CREDIT',
+          ).length,
+        },
+      })),
+    };
+  }
+
+  async getTransactionReview(transactionId: string) {
+    const transfer = await this.prisma.transfer.findUnique({
+      where: {
+        id: transactionId,
+      },
+
+      include: {
+        ledgerEntries: {
+          orderBy: {
+            createdAt: 'asc',
+          },
+        },
+
+        sourceWallet: {
+          select: {
+            id: true,
+            userId: true,
+            balance: true,
+            currency: true,
+            version: true,
+            status: true,
+          },
+        },
+
+        destinationWallet: {
+          select: {
+            id: true,
+            userId: true,
+            balance: true,
+            currency: true,
+            version: true,
+            status: true,
+          },
+        },
+      },
+    });
+
+    if (!transfer) {
+      throw new NotFoundException('Transfer not found');
+    }
+
+    if (transfer.status !== 'NEEDS_REVIEW') {
+      throw new BadRequestException(
+        `Transfer is ${transfer.status}, not NEEDS_REVIEW`,
+      );
+    }
+
+    const [sourceLedgerAccount, destinationLedgerAccount] = await Promise.all([
+      this.prisma.ledgerAccount.findUnique({
+        where: {
+          walletId: transfer.sourceWalletId,
+        },
+
+        select: {
+          id: true,
+          walletId: true,
+          currency: true,
+        },
+      }),
+
+      this.prisma.ledgerAccount.findUnique({
+        where: {
+          walletId: transfer.destinationWalletId,
+        },
+
+        select: {
+          id: true,
+          walletId: true,
+          currency: true,
+        },
+      }),
+    ]);
+
+    const debitEntries = transfer.ledgerEntries.filter(
+      (entry) => entry.entryType === 'DEBIT',
     );
+
+    const creditEntries = transfer.ledgerEntries.filter(
+      (entry) => entry.entryType === 'CREDIT',
+    );
+
+    return {
+      transfer: {
+        id: transfer.id,
+
+        idempotencyKey: transfer.idempotencyKey,
+
+        status: transfer.status,
+
+        amount: transfer.amount.toString(),
+
+        currency: transfer.currency,
+
+        description: transfer.description,
+
+        failureReason: transfer.failureReason,
+
+        createdAt: transfer.createdAt,
+
+        updatedAt: transfer.updatedAt,
+
+        completedAt: transfer.completedAt,
+
+        sourceWallet: {
+          ...transfer.sourceWallet,
+
+          balance: transfer.sourceWallet.balance.toString(),
+
+          expectedLedgerAccountId: sourceLedgerAccount?.id ?? null,
+        },
+
+        destinationWallet: {
+          ...transfer.destinationWallet,
+
+          balance: transfer.destinationWallet.balance.toString(),
+
+          expectedLedgerAccountId: destinationLedgerAccount?.id ?? null,
+        },
+      },
+
+      accountingEvidence: {
+        ledgerEntryCount: transfer.ledgerEntries.length,
+
+        debitCount: debitEntries.length,
+
+        creditCount: creditEntries.length,
+
+        entries: transfer.ledgerEntries.map((entry) => ({
+          id: entry.id,
+
+          entryType: entry.entryType,
+
+          ledgerAccountId: entry.ledgerAccountId,
+
+          amount: entry.amount.toString(),
+
+          currency: entry.currency,
+
+          createdAt: entry.createdAt,
+        })),
+      },
+
+      safety: {
+        automaticMoneyMutationAllowed: false,
+
+        message:
+          'Manual review does not automatically change wallet balances or ledger entries.',
+      },
+    };
+  }
+
+  async failTransactionReview(
+    transactionId: string,
+    rawReason: string | undefined,
+    actor: AdminActor,
+  ) {
+    const reason = rawReason?.trim();
+
+    if (!reason || reason.length < 5) {
+      throw new BadRequestException(
+        'A review resolution reason of at least 5 characters is required',
+      );
+    }
+
+    const transfer = await this.prisma.transfer.findUnique({
+      where: {
+        id: transactionId,
+      },
+
+      include: {
+        ledgerEntries: {
+          orderBy: {
+            createdAt: 'asc',
+          },
+        },
+      },
+    });
+
+    if (!transfer) {
+      throw new NotFoundException('Transfer not found');
+    }
+
+    if (transfer.status !== 'NEEDS_REVIEW') {
+      throw new BadRequestException(
+        `Only NEEDS_REVIEW transfers can be resolved here. Current status: ${transfer.status}`,
+      );
+    }
+
+    /*
+     * Deliberately do NOT touch:
+     * - wallet balances
+     * - wallet versions
+     * - ledger entries
+     *
+     * This endpoint only closes the business
+     * transaction state after manual review.
+     * Accounting evidence remains immutable
+     * for reconciliation and investigation.
+     */
+
+    const result = await this.prisma.transfer.updateMany({
+      where: {
+        id: transfer.id,
+
+        status: 'NEEDS_REVIEW',
+
+        updatedAt: transfer.updatedAt,
+      },
+
+      data: {
+        status: 'FAILED',
+
+        failureReason: `Manual review failed: ${reason}`,
+
+        completedAt: null,
+      },
+    });
+
+    if (result.count !== 1) {
+      throw new BadRequestException(
+        'Transfer review state changed concurrently. Reload and review again.',
+      );
+    }
+
+    const updated = await this.prisma.transfer.findUniqueOrThrow({
+      where: {
+        id: transfer.id,
+      },
+    });
+
+    await this.auditLogService.create({
+      action: 'RESOLVE_TRANSFER_REVIEW_FAILED',
+
+      targetType: 'TRANSFER',
+
+      targetId: transfer.id,
+
+      actorUserId: actor.id,
+
+      actorEmail: actor.email,
+
+      description:
+        'Transfer manual accounting review resolved as FAILED without automatic wallet mutation',
+
+      metadata: {
+        reason,
+
+        previousStatus: 'NEEDS_REVIEW',
+
+        newStatus: 'FAILED',
+
+        amount: transfer.amount.toString(),
+
+        currency: transfer.currency,
+
+        sourceWalletId: transfer.sourceWalletId,
+
+        destinationWalletId: transfer.destinationWalletId,
+
+        ledgerEntryCount: transfer.ledgerEntries.length,
+
+        ledgerEntries: transfer.ledgerEntries.map((entry) => ({
+          id: entry.id,
+
+          entryType: entry.entryType,
+
+          ledgerAccountId: entry.ledgerAccountId,
+
+          amount: entry.amount.toString(),
+
+          currency: entry.currency,
+        })),
+      },
+    });
+
+    return {
+      message:
+        'Transfer review resolved as FAILED. Wallet balances and ledger entries were not modified.',
+
+      transfer: {
+        id: updated.id,
+
+        status: updated.status,
+
+        amount: updated.amount.toString(),
+
+        currency: updated.currency,
+
+        failureReason: updated.failureReason,
+
+        updatedAt: updated.updatedAt,
+      },
+
+      accountingEvidencePreserved: true,
+
+      walletMutationPerformed: false,
+    };
   }
 
   async getAnalytics(
@@ -1636,152 +1833,120 @@ export class AdminService {
       days?: number;
     } = {},
   ) {
-    const requestedDays =
-      Number(input.days ?? 7);
+    const requestedDays = Number(input.days ?? 7);
 
     const days =
-      Number.isFinite(requestedDays) &&
-      requestedDays > 0
-        ? Math.min(
-            Math.floor(requestedDays),
-            90,
-          )
+      Number.isFinite(requestedDays) && requestedDays > 0
+        ? Math.min(Math.floor(requestedDays), 90)
         : 7;
 
     const startDate = new Date();
 
-    startDate.setHours(
-      0,
-      0,
-      0,
-      0,
-    );
+    startDate.setHours(0, 0, 0, 0);
 
-    startDate.setDate(
-      startDate.getDate() -
-        (days - 1),
-    );
+    startDate.setDate(startDate.getDate() - (days - 1));
 
-    const [
-      deposits,
-      withdrawals,
-      transfers,
-      newUsers,
-      newWallets,
-    ] = await Promise.all([
-      this.prisma.deposit.findMany({
-        where: {
-          createdAt: {
-            gte: startDate,
+    const [deposits, withdrawals, transfers, newUsers, newWallets] =
+      await Promise.all([
+        this.prisma.deposit.findMany({
+          where: {
+            createdAt: {
+              gte: startDate,
+            },
           },
-        },
 
-        select: {
-          id: true,
-          amount: true,
-          status: true,
-          createdAt: true,
-        },
-      }),
-
-      this.prisma.withdrawal.findMany({
-        where: {
-          createdAt: {
-            gte: startDate,
+          select: {
+            id: true,
+            amount: true,
+            status: true,
+            createdAt: true,
           },
-        },
+        }),
 
-        select: {
-          id: true,
-          amount: true,
-          status: true,
-          createdAt: true,
-        },
-      }),
-
-      this.prisma.transfer.findMany({
-        where: {
-          createdAt: {
-            gte: startDate,
+        this.prisma.withdrawal.findMany({
+          where: {
+            createdAt: {
+              gte: startDate,
+            },
           },
-        },
 
-        select: {
-          id: true,
-          amount: true,
-          status: true,
-          createdAt: true,
-        },
-      }),
-
-      this.prisma.user.findMany({
-        where: {
-          createdAt: {
-            gte: startDate,
+          select: {
+            id: true,
+            amount: true,
+            status: true,
+            createdAt: true,
           },
-        },
+        }),
 
-        select: {
-          id: true,
-          createdAt: true,
-        },
-      }),
-
-      this.prisma.wallet.findMany({
-        where: {
-          createdAt: {
-            gte: startDate,
+        this.prisma.transfer.findMany({
+          where: {
+            createdAt: {
+              gte: startDate,
+            },
           },
-        },
 
-        select: {
-          id: true,
-          createdAt: true,
-        },
-      }),
-    ]);
+          select: {
+            id: true,
+            amount: true,
+            status: true,
+            createdAt: true,
+          },
+        }),
 
-    function getDateKey(
-      value: Date,
-    ): string {
-      return value
-        .toISOString()
-        .slice(0, 10);
+        this.prisma.user.findMany({
+          where: {
+            createdAt: {
+              gte: startDate,
+            },
+          },
+
+          select: {
+            id: true,
+            createdAt: true,
+          },
+        }),
+
+        this.prisma.wallet.findMany({
+          where: {
+            createdAt: {
+              gte: startDate,
+            },
+          },
+
+          select: {
+            id: true,
+            createdAt: true,
+          },
+        }),
+      ]);
+
+    function getDateKey(value: Date): string {
+      return value.toISOString().slice(0, 10);
     }
 
-    const dailyMap =
-      new Map<
-        string,
-        {
-          date: string;
-          deposits: number;
-          withdrawals: number;
-          transfers: number;
-          transactionCount: number;
-          depositAmount: number;
-          withdrawalAmount: number;
-          transferAmount: number;
-          transactionVolume: number;
-          newUsers: number;
-          newWallets: number;
-        }
-      >();
+    const dailyMap = new Map<
+      string,
+      {
+        date: string;
+        deposits: number;
+        withdrawals: number;
+        transfers: number;
+        transactionCount: number;
+        depositAmount: number;
+        withdrawalAmount: number;
+        transferAmount: number;
+        transactionVolume: number;
+        newUsers: number;
+        newWallets: number;
+      }
+    >();
 
-    for (
-      let index = 0;
-      index < days;
-      index += 1
-    ) {
-      const currentDate =
-        new Date(startDate);
+    for (let index = 0; index < days; index += 1) {
+      const currentDate = new Date(startDate);
 
-      currentDate.setDate(
-        startDate.getDate() +
-          index,
-      );
+      currentDate.setDate(startDate.getDate() + index);
 
-      const date =
-        getDateKey(currentDate);
+      const date = getDateKey(currentDate);
 
       dailyMap.set(date, {
         date,
@@ -1799,13 +1964,9 @@ export class AdminService {
     }
 
     for (const deposit of deposits) {
-      const date =
-        getDateKey(
-          deposit.createdAt,
-        );
+      const date = getDateKey(deposit.createdAt);
 
-      const daily =
-        dailyMap.get(date);
+      const daily = dailyMap.get(date);
 
       if (!daily) {
         continue;
@@ -1814,32 +1975,19 @@ export class AdminService {
       daily.deposits += 1;
       daily.transactionCount += 1;
 
-      if (
-        deposit.status ===
-        'COMPLETED'
-      ) {
-        const amount =
-          Number(deposit.amount);
+      if (deposit.status === 'COMPLETED') {
+        const amount = Number(deposit.amount);
 
-        daily.depositAmount +=
-          amount;
+        daily.depositAmount += amount;
 
-        daily.transactionVolume +=
-          amount;
+        daily.transactionVolume += amount;
       }
     }
 
-    for (
-      const withdrawal
-      of withdrawals
-    ) {
-      const date =
-        getDateKey(
-          withdrawal.createdAt,
-        );
+    for (const withdrawal of withdrawals) {
+      const date = getDateKey(withdrawal.createdAt);
 
-      const daily =
-        dailyMap.get(date);
+      const daily = dailyMap.get(date);
 
       if (!daily) {
         continue;
@@ -1848,31 +1996,19 @@ export class AdminService {
       daily.withdrawals += 1;
       daily.transactionCount += 1;
 
-      if (
-        withdrawal.status ===
-        'COMPLETED'
-      ) {
-        const amount =
-          Number(
-            withdrawal.amount,
-          );
+      if (withdrawal.status === 'COMPLETED') {
+        const amount = Number(withdrawal.amount);
 
-        daily.withdrawalAmount +=
-          amount;
+        daily.withdrawalAmount += amount;
 
-        daily.transactionVolume +=
-          amount;
+        daily.transactionVolume += amount;
       }
     }
 
     for (const transfer of transfers) {
-      const date =
-        getDateKey(
-          transfer.createdAt,
-        );
+      const date = getDateKey(transfer.createdAt);
 
-      const daily =
-        dailyMap.get(date);
+      const daily = dailyMap.get(date);
 
       if (!daily) {
         continue;
@@ -1881,29 +2017,19 @@ export class AdminService {
       daily.transfers += 1;
       daily.transactionCount += 1;
 
-      if (
-        transfer.status ===
-        'COMPLETED'
-      ) {
-        const amount =
-          Number(transfer.amount);
+      if (transfer.status === 'COMPLETED') {
+        const amount = Number(transfer.amount);
 
-        daily.transferAmount +=
-          amount;
+        daily.transferAmount += amount;
 
-        daily.transactionVolume +=
-          amount;
+        daily.transactionVolume += amount;
       }
     }
 
     for (const user of newUsers) {
-      const date =
-        getDateKey(
-          user.createdAt,
-        );
+      const date = getDateKey(user.createdAt);
 
-      const daily =
-        dailyMap.get(date);
+      const daily = dailyMap.get(date);
 
       if (daily) {
         daily.newUsers += 1;
@@ -1911,423 +2037,271 @@ export class AdminService {
     }
 
     for (const wallet of newWallets) {
-      const date =
-        getDateKey(
-          wallet.createdAt,
-        );
+      const date = getDateKey(wallet.createdAt);
 
-      const daily =
-        dailyMap.get(date);
+      const daily = dailyMap.get(date);
 
       if (daily) {
         daily.newWallets += 1;
       }
     }
 
-    const allTransactions = [
-      ...deposits,
-      ...withdrawals,
-      ...transfers,
-    ];
+    const allTransactions = [...deposits, ...withdrawals, ...transfers];
 
-    const completedTransactions =
-      allTransactions.filter(
-        (transaction) =>
-          transaction.status ===
-          'COMPLETED',
-      ).length;
+    const completedTransactions = allTransactions.filter(
+      (transaction) => transaction.status === 'COMPLETED',
+    ).length;
 
-    const failedTransactions =
-      allTransactions.filter(
-        (transaction) =>
-          transaction.status ===
-          'FAILED',
-      ).length;
+    const failedTransactions = allTransactions.filter(
+      (transaction) => transaction.status === 'FAILED',
+    ).length;
 
-    const pendingTransactions =
-      allTransactions.filter(
-        (transaction) =>
-          transaction.status ===
-            'PENDING' ||
-          transaction.status ===
-            'PROCESSING',
-      ).length;
+    const pendingTransactions = allTransactions.filter(
+      (transaction) =>
+        transaction.status === 'PENDING' || transaction.status === 'PROCESSING',
+    ).length;
 
-    const reversedTransactions =
-      allTransactions.filter(
-        (transaction) =>
-          transaction.status ===
-          'REVERSED',
-      ).length;
+    const reversedTransactions = allTransactions.filter(
+      (transaction) => transaction.status === 'REVERSED',
+    ).length;
 
-    const totalDepositAmount =
-      deposits
-        .filter(
-          (deposit) =>
-            deposit.status ===
-            'COMPLETED',
-        )
-        .reduce(
-          (sum, deposit) =>
-            sum +
-            Number(
-              deposit.amount,
-            ),
-          0,
-        );
+    const totalDepositAmount = deposits
+      .filter((deposit) => deposit.status === 'COMPLETED')
+      .reduce((sum, deposit) => sum + Number(deposit.amount), 0);
 
-    const totalWithdrawalAmount =
-      withdrawals
-        .filter(
-          (withdrawal) =>
-            withdrawal.status ===
-            'COMPLETED',
-        )
-        .reduce(
-          (
-            sum,
-            withdrawal,
-          ) =>
-            sum +
-            Number(
-              withdrawal.amount,
-            ),
-          0,
-        );
+    const totalWithdrawalAmount = withdrawals
+      .filter((withdrawal) => withdrawal.status === 'COMPLETED')
+      .reduce((sum, withdrawal) => sum + Number(withdrawal.amount), 0);
 
-    const totalTransferAmount =
-      transfers
-        .filter(
-          (transfer) =>
-            transfer.status ===
-            'COMPLETED',
-        )
-        .reduce(
-          (sum, transfer) =>
-            sum +
-            Number(
-              transfer.amount,
-            ),
-          0,
-        );
+    const totalTransferAmount = transfers
+      .filter((transfer) => transfer.status === 'COMPLETED')
+      .reduce((sum, transfer) => sum + Number(transfer.amount), 0);
 
     const totalVolume =
-      totalDepositAmount +
-      totalWithdrawalAmount +
-      totalTransferAmount;
+      totalDepositAmount + totalWithdrawalAmount + totalTransferAmount;
 
     const successRate =
       allTransactions.length === 0
         ? 0
         : Number(
-            (
-              completedTransactions /
-              allTransactions.length *
-              100
-            ).toFixed(2),
+            ((completedTransactions / allTransactions.length) * 100).toFixed(2),
           );
 
     return {
       period: {
         days,
-        startDate:
-          startDate.toISOString(),
-        endDate:
-          new Date().toISOString(),
+        startDate: startDate.toISOString(),
+        endDate: new Date().toISOString(),
       },
 
       summary: {
-        totalTransactions:
-          allTransactions.length,
+        totalTransactions: allTransactions.length,
 
         completedTransactions,
         failedTransactions,
         pendingTransactions,
         reversedTransactions,
 
-        totalDeposits:
-          deposits.length,
+        totalDeposits: deposits.length,
 
-        totalWithdrawals:
-          withdrawals.length,
+        totalWithdrawals: withdrawals.length,
 
-        totalTransfers:
-          transfers.length,
+        totalTransfers: transfers.length,
 
-        totalDepositAmount:
-          totalDepositAmount.toFixed(
-            2,
-          ),
+        totalDepositAmount: totalDepositAmount.toFixed(2),
 
-        totalWithdrawalAmount:
-          totalWithdrawalAmount.toFixed(
-            2,
-          ),
+        totalWithdrawalAmount: totalWithdrawalAmount.toFixed(2),
 
-        totalTransferAmount:
-          totalTransferAmount.toFixed(
-            2,
-          ),
+        totalTransferAmount: totalTransferAmount.toFixed(2),
 
-        totalVolume:
-          totalVolume.toFixed(2),
+        totalVolume: totalVolume.toFixed(2),
 
         successRate,
 
-        newUsers:
-          newUsers.length,
+        newUsers: newUsers.length,
 
-        newWallets:
-          newWallets.length,
+        newWallets: newWallets.length,
       },
 
       transactionTypes: [
         {
           type: 'DEPOSIT',
           count: deposits.length,
-          amount:
-            totalDepositAmount.toFixed(
-              2,
-            ),
+          amount: totalDepositAmount.toFixed(2),
         },
         {
           type: 'WITHDRAWAL',
-          count:
-            withdrawals.length,
-          amount:
-            totalWithdrawalAmount.toFixed(
-              2,
-            ),
+          count: withdrawals.length,
+          amount: totalWithdrawalAmount.toFixed(2),
         },
         {
           type: 'TRANSFER',
           count: transfers.length,
-          amount:
-            totalTransferAmount.toFixed(
-              2,
-            ),
+          amount: totalTransferAmount.toFixed(2),
         },
       ],
 
       transactionStatuses: [
         {
           status: 'COMPLETED',
-          count:
-            completedTransactions,
+          count: completedTransactions,
         },
         {
           status: 'FAILED',
-          count:
-            failedTransactions,
+          count: failedTransactions,
         },
         {
           status: 'PENDING',
-          count:
-            pendingTransactions,
+          count: pendingTransactions,
         },
         {
           status: 'REVERSED',
-          count:
-            reversedTransactions,
+          count: reversedTransactions,
         },
       ],
 
-      dailyActivity:
-        Array.from(
-          dailyMap.values(),
-        ).map((daily) => ({
-          ...daily,
+      dailyActivity: Array.from(dailyMap.values()).map((daily) => ({
+        ...daily,
 
-          depositAmount:
-            daily.depositAmount.toFixed(
-              2,
-            ),
+        depositAmount: daily.depositAmount.toFixed(2),
 
-          withdrawalAmount:
-            daily.withdrawalAmount.toFixed(
-              2,
-            ),
+        withdrawalAmount: daily.withdrawalAmount.toFixed(2),
 
-          transferAmount:
-            daily.transferAmount.toFixed(
-              2,
-            ),
+        transferAmount: daily.transferAmount.toFixed(2),
 
-          transactionVolume:
-            daily.transactionVolume.toFixed(
-              2,
-            ),
-        })),
+        transactionVolume: daily.transactionVolume.toFixed(2),
+      })),
     };
   }
 
-  async getUserById(
-    userId: string,
-  ) {
-    const user =
-      await this.prisma.user.findUnique({
-        where: {
-          id: userId,
-        },
+  async getUserById(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
 
-        select: {
-          id: true,
-          email: true,
-          phone: true,
-          firstName: true,
-          lastName: true,
-          role: true,
-          status: true,
-          createdAt: true,
-          updatedAt: true,
+      select: {
+        id: true,
+        email: true,
+        phone: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
 
-          wallets: {
-            orderBy: {
-              createdAt: 'desc',
+        wallets: {
+          orderBy: {
+            createdAt: 'desc',
+          },
+
+          select: {
+            id: true,
+            userId: true,
+            currency: true,
+            balance: true,
+            status: true,
+            version: true,
+            createdAt: true,
+            updatedAt: true,
+
+            ledgerAccount: {
+              select: {
+                id: true,
+                code: true,
+                name: true,
+                type: true,
+                currency: true,
+                status: true,
+              },
             },
 
-            select: {
-              id: true,
-              userId: true,
-              currency: true,
-              balance: true,
-              status: true,
-              version: true,
-              createdAt: true,
-              updatedAt: true,
-
-              ledgerAccount: {
-                select: {
-                  id: true,
-                  code: true,
-                  name: true,
-                  type: true,
-                  currency: true,
-                  status: true,
-                },
-              },
-
-              _count: {
-                select: {
-                  deposits: true,
-                  withdrawals: true,
-                  outgoingTransfers: true,
-                  incomingTransfers: true,
-                },
+            _count: {
+              select: {
+                deposits: true,
+                withdrawals: true,
+                outgoingTransfers: true,
+                incomingTransfers: true,
               },
             },
           },
         },
-      });
+      },
+    });
 
     if (!user) {
-      throw new NotFoundException(
-        'User not found',
-      );
+      throw new NotFoundException('User not found');
     }
 
-    const totalWalletBalance =
-      user.wallets.reduce(
-        (total, wallet) =>
-          total + Number(wallet.balance),
-        0,
-      );
+    const totalWalletBalance = user.wallets.reduce(
+      (total, wallet) => total + Number(wallet.balance),
+      0,
+    );
 
     return {
       ...user,
 
-      wallets: user.wallets.map(
-        ({
-          _count,
-          ...wallet
-        }) => ({
-          ...wallet,
+      wallets: user.wallets.map(({ _count, ...wallet }) => ({
+        ...wallet,
 
-          balance:
-            wallet.balance.toString(),
+        balance: wallet.balance.toString(),
 
-          transactionCounts: {
-            deposits:
-              _count.deposits,
+        transactionCounts: {
+          deposits: _count.deposits,
 
-            withdrawals:
-              _count.withdrawals,
+          withdrawals: _count.withdrawals,
 
-            outgoingTransfers:
-              _count.outgoingTransfers,
+          outgoingTransfers: _count.outgoingTransfers,
 
-            incomingTransfers:
-              _count.incomingTransfers,
+          incomingTransfers: _count.incomingTransfers,
 
-            total:
-              _count.deposits +
-              _count.withdrawals +
-              _count.outgoingTransfers +
-              _count.incomingTransfers,
-          },
-        }),
-      ),
+          total:
+            _count.deposits +
+            _count.withdrawals +
+            _count.outgoingTransfers +
+            _count.incomingTransfers,
+        },
+      })),
 
-      walletCount:
-        user.wallets.length,
+      walletCount: user.wallets.length,
 
-      totalWalletBalance:
-        totalWalletBalance.toFixed(2),
+      totalWalletBalance: totalWalletBalance.toFixed(2),
     };
   }
 
   async updateUserStatus(
     userId: string,
-    status:
-      | 'ACTIVE'
-      | 'BLOCKED'
-      | 'SUSPENDED',
+    status: 'ACTIVE' | 'BLOCKED' | 'SUSPENDED',
     actor: AdminActor,
   ) {
-    const allowedStatuses = [
-      'ACTIVE',
-      'BLOCKED',
-      'SUSPENDED',
-    ] as const;
+    const allowedStatuses = ['ACTIVE', 'BLOCKED', 'SUSPENDED'] as const;
 
-    if (
-      !allowedStatuses.includes(
-        status,
-      )
-    ) {
+    if (!allowedStatuses.includes(status)) {
       throw new BadRequestException(
         'User status must be ACTIVE, BLOCKED or SUSPENDED',
       );
     }
 
-    const user =
-      await this.prisma.user.findUnique({
-        where: {
-          id: userId,
-        },
-      });
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+    });
 
     if (!user) {
-      throw new NotFoundException(
-        'User not found',
-      );
+      throw new NotFoundException('User not found');
     }
 
-    if (
-      user.role === 'ADMIN' &&
-      status !== 'ACTIVE'
-    ) {
+    if (user.role === 'ADMIN' && status !== 'ACTIVE') {
       throw new BadRequestException(
         'Admin users cannot be blocked or suspended from this endpoint',
       );
     }
 
-    if (
-      user.status === status
-    ) {
+    if (user.status === status) {
       return {
-        message:
-          `User is already ${status}`,
+        message: `User is already ${status}`,
         user: {
           id: user.id,
           email: user.email,
@@ -2340,53 +2314,46 @@ export class AdminService {
       };
     }
 
-    const now =
-      new Date();
+    const now = new Date();
 
-    const updatedUser =
-      await this.prisma.$transaction(
-        async (transaction) => {
-          const result =
-            await transaction.user.update({
-              where: {
-                id: user.id,
-              },
-
-              data: {
-                status,
-              },
-
-              select: {
-                id: true,
-                email: true,
-                phone: true,
-                firstName: true,
-                lastName: true,
-                role: true,
-                status: true,
-                createdAt: true,
-                updatedAt: true,
-              },
-            });
-
-          if (
-            status !== 'ACTIVE'
-          ) {
-            await transaction.refreshToken.updateMany({
-              where: {
-                userId: user.id,
-                revokedAt: null,
-              },
-
-              data: {
-                revokedAt: now,
-              },
-            });
-          }
-
-          return result;
+    const updatedUser = await this.prisma.$transaction(async (transaction) => {
+      const result = await transaction.user.update({
+        where: {
+          id: user.id,
         },
-      );
+
+        data: {
+          status,
+        },
+
+        select: {
+          id: true,
+          email: true,
+          phone: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      if (status !== 'ACTIVE') {
+        await transaction.refreshToken.updateMany({
+          where: {
+            userId: user.id,
+            revokedAt: null,
+          },
+
+          data: {
+            revokedAt: now,
+          },
+        });
+      }
+
+      return result;
+    });
 
     const auditAction =
       status === 'BLOCKED'
@@ -2402,27 +2369,21 @@ export class AdminService {
       actorUserId: actor.id,
       actorEmail: actor.email,
 
-      description:
-        `User status changed from ${user.status} to ${updatedUser.status}`,
+      description: `User status changed from ${user.status} to ${updatedUser.status}`,
 
       metadata: {
-        previousStatus:
-          user.status,
+        previousStatus: user.status,
 
-        newStatus:
-          updatedUser.status,
+        newStatus: updatedUser.status,
 
-        targetEmail:
-          updatedUser.email,
+        targetEmail: updatedUser.email,
 
-        targetRole:
-          updatedUser.role,
+        targetRole: updatedUser.role,
       },
     });
 
     return {
-      message:
-        `User status updated to ${status}`,
+      message: `User status updated to ${status}`,
 
       user: updatedUser,
     };

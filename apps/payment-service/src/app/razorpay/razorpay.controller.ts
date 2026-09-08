@@ -24,17 +24,4 @@ export class RazorpayController {
     private readonly razorpayService:
       RazorpayService,
   ) {}
-
-  @Post('orders')
-  @ApiOperation({
-    summary:
-      'Create a Razorpay payment order',
-  })
-  createOrder(
-    @Body()
-    dto: CreateRazorpayOrderDto,
-  ) {
-    return this.razorpayService
-      .createOrder(dto);
-  }
 }

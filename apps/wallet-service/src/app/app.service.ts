@@ -37,4 +37,13 @@ export class AppService {
       });
     }
   }
+
+  async checkDatabaseReadiness(): Promise<boolean> {
+    try {
+      await this.prisma.user.count();
+      return true;
+    } catch {
+      return false;
+    }
+  }
 }

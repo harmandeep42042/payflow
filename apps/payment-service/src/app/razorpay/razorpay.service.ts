@@ -1,12 +1,17 @@
+import type {
+  PaymentRailProvider,
+} from '../payment-rails/payment-rail-provider';
+
 import {
+  PAYMENT_RAIL_PROVIDER,
+} from '../payment-rails/payment-rail.tokens';
+import {
+  Inject,
   BadGatewayException,
   BadRequestException,
   Injectable,
   ServiceUnavailableException,
 } from '@nestjs/common';
-
-import Razorpay from 'razorpay';
-
 import {
   razorpayConfig,
 } from '@payflow/shared-config';
@@ -17,27 +22,16 @@ import {
 
 @Injectable()
 export class RazorpayService {
-  private readonly razorpay:
-    Razorpay | null;
+  constructor(
+    @Inject(PAYMENT_RAIL_PROVIDER)
+    private readonly paymentRail: PaymentRailProvider,
+  ) {}
 
-  constructor() {
-    this.razorpay =
-      razorpayConfig.keyId &&
-      razorpayConfig.keySecret
-        ? new Razorpay({
-            key_id:
-              razorpayConfig.keyId,
-
-            key_secret:
-              razorpayConfig.keySecret,
-          })
-        : null;
-  }
 
   async createOrder(
     dto: CreateRazorpayOrderDto,
   ) {
-    if (!this.razorpay) {
+    if (!this.paymentRail.isConfigured()) {
       throw new ServiceUnavailableException(
         'Razorpay keys are not configured',
       );
@@ -62,24 +56,30 @@ export class RazorpayService {
       `payflow_${Date.now()}`;
 
     try {
-      const order =
-        await this.razorpay.orders.create({
-          amount:
-            dto.amountInPaise,
-
-          currency,
-
-          receipt,
-
+      const railOrder =
+        await this.paymentRail.createOrder({
+          amountMinor: dto.amountInPaise,
+          currency: currency,
+          receipt: receipt,
           notes: {
+
             source:
               'PAYFLOW',
 
             description:
               dto.description?.trim() ??
               'Payflow wallet deposit',
+          
           },
         });
+
+      const order =
+        (railOrder.raw ?? {
+          id: railOrder.providerOrderId,
+          amount: railOrder.amountMinor,
+          currency: railOrder.currency,
+          status: railOrder.status,
+        }) as Record<string, unknown>;
 
       return {
         message:

@@ -1,12 +1,14 @@
 import {
   CallHandler,
   ExecutionContext,
+  HttpException,
+  HttpStatus,
   Injectable,
   Logger,
   NestInterceptor,
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
-import { finalize } from 'rxjs/operators';
+import { finalize, tap } from 'rxjs/operators';
 
 @Injectable()
 export class LoggingInterceptor implements NestInterceptor {
@@ -30,12 +32,24 @@ export class LoggingInterceptor implements NestInterceptor {
     const url = request.originalUrl ?? request.url;
     const startedAt = Date.now();
 
+    let finalStatusCode: number | undefined;
+
     return next.handle().pipe(
+      tap({
+        error: (error) => {
+          finalStatusCode =
+            error instanceof HttpException
+              ? error.getStatus()
+              : HttpStatus.INTERNAL_SERVER_ERROR;
+        },
+      }),
       finalize(() => {
         const duration = Date.now() - startedAt;
+        const statusCode =
+          finalStatusCode ?? response.statusCode;
 
         this.logger.log(
-          `${method} ${url} ${response.statusCode} - ${duration}ms`,
+          `${method} ${url} ${statusCode} - ${duration}ms`,
         );
       }),
     );

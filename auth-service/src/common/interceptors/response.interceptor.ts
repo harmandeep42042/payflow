@@ -19,6 +19,13 @@ export class ResponseInterceptor<T>
       .switchToHttp()
       .getRequest();
 
+    if (
+      request.url === '/api/metrics' ||
+      request.url.startsWith('/api/metrics?')
+    ) {
+      return next.handle();
+    }
+
     return next.handle().pipe(
       map((data) => ({
         success: true,
